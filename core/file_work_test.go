@@ -425,9 +425,9 @@ type fileWorkCUJAgent struct{ cujAgent }
 
 func (a *fileWorkCUJAgent) ForFileWork(string) (Agent, error) { return a, nil }
 
-func TestFileOldReplyRefreshesProjectWithoutChangingPrivateSource(t *testing.T) {
+func TestFileOldReplyRefreshesProjectWithoutChangingChatScope(t *testing.T) {
 	for _, enabled := range []bool{false, true} {
-		for _, mode := range []string{"new", "reply", "selected-upload", "recovery"} {
+		for _, mode := range []string{"new", "reply", "group-reply", "group-no-share", "selected-upload", "recovery"} {
 			t.Run(fmt.Sprintf("enabled=%v/%s", enabled, mode), func(t *testing.T) {
 				p := &filePlatformStub{stubPlatformEngine: stubPlatformEngine{n: "fixture"}}
 				a := &fileWorkCUJAgent{}
@@ -449,7 +449,16 @@ func TestFileOldReplyRefreshesProjectWithoutChangingPrivateSource(t *testing.T) 
 				}
 				original := "这份加一桌，仅改私人草稿，别同步。"
 				msg := Message{Platform: "fixture", SessionKey: "fixture:chat:user", UserID: "user", ChannelID: "chat", MessageID: "revision", Content: original, ControlledFileWork: true, FileWorkPrivate: true}
-				if mode == "reply" || mode == "selected-upload" {
+				if mode == "group-reply" || mode == "group-no-share" {
+					original = "这份改为23桌，按群里这场婚宴更新。"
+					msg.FileWorkPrivate = false
+					if mode == "group-no-share" {
+						original = "这份加一桌，别同步项目记录。"
+					}
+					msg.Content = original
+				}
+				isReply := mode == "reply" || mode == "group-reply" || mode == "group-no-share"
+				if isReply || mode == "selected-upload" {
 					msg.ParentMessageID = "old-receipt"
 				}
 				if mode == "recovery" {
@@ -477,17 +486,29 @@ func TestFileOldReplyRefreshesProjectWithoutChangingPrivateSource(t *testing.T) 
 				if len(h.bindings) != 1 || msg.fileTurn == nil {
 					t.Fatal("expected a bound revision")
 				}
-				if mode == "reply" && h.bindings[0].SessionID != fileNativeSessionID(old) {
+				if isReply && h.bindings[0].SessionID != fileNativeSessionID(old) {
 					t.Fatal("reference changed the selected work")
 				}
-				if strings.Contains(msg.Content, "call case-read again") != (enabled && mode == "reply") || msg.fileTurn.Content != msg.Content {
+				if h.bindings[0].Group == msg.FileWorkPrivate {
+					t.Fatal("reference changed the trusted chat scope")
+				}
+				if strings.Contains(msg.Content, "call case-read again") != (enabled && isReply) || msg.fileTurn.Content != msg.Content {
 					t.Fatalf("fresh-read reminder or durable content mismatch: %q", msg.Content)
 				}
 				a.mu.Lock()
 				sessions := append([]*cujAgentSession(nil), a.sessions...)
 				a.mu.Unlock()
-				if len(sessions) != 1 || len(sessions[0].getSentPrompts()) != 1 || strings.Contains(sessions[0].getSentPrompts()[0], "call case-read again") != (enabled && mode == "reply") {
+				if len(sessions) != 1 || len(sessions[0].getSentPrompts()) != 1 || strings.Contains(sessions[0].getSentPrompts()[0], "call case-read again") != (enabled && isReply) {
 					t.Fatal("actual model prompt did not preserve the scoped reminder")
+				}
+				prompt := sessions[0].getSentPrompts()[0]
+				if enabled && isReply {
+					if strings.Contains(strings.ToLower(prompt), "preserve private scope") != msg.FileWorkPrivate || strings.Contains(prompt, "A reply is not permission to share") != msg.FileWorkPrivate {
+						t.Fatalf("referenced-work privacy reminder contradicts trusted chat scope: %q", prompt)
+					}
+					if !msg.FileWorkPrivate && !strings.Contains(prompt, "original group conversation") {
+						t.Fatal("group revision lacks its original group delivery scope")
+					}
 				}
 				if !strings.Contains(sessions[0].getSentPrompts()[0], "reread the current installed file and domain Skills") {
 					t.Fatal("this model turn lacks current Skill guidance")
@@ -495,7 +516,7 @@ func TestFileOldReplyRefreshesProjectWithoutChangingPrivateSource(t *testing.T) 
 				if mode == "recovery" && (!strings.Contains(msg.Content, "Host recovery:") || msg.fileSession.hasUnfinishedFileTurns()) {
 					t.Fatal("Skill guidance blocked explicit recovery")
 				}
-				if enabled && (len(msg.fileTurn.CaseSources) != 1 || msg.fileTurn.CaseSources[0].OriginalText != original || msg.fileTurn.CaseSources[0].Text != original || msg.fileTurn.CaseSources[0].ShareAllowed) {
+				if enabled && (len(msg.fileTurn.CaseSources) != 1 || msg.fileTurn.CaseSources[0].OriginalText != original || msg.fileTurn.CaseSources[0].Text != original || msg.fileTurn.CaseSources[0].ShareAllowed != (mode == "group-reply")) {
 					t.Fatalf("host reminder changed source or privacy: %+v", msg.fileTurn.CaseSources)
 				}
 			})
