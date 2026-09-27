@@ -453,6 +453,27 @@ func TestValidateCRMActionHostProject(t *testing.T) {
 	if err := validateCRMActionHostProject(valid); err != nil {
 		t.Fatalf("valid project rejected: %v", err)
 	}
+	t.Run("explicit Codex profile", func(t *testing.T) {
+		candidate := valid
+		candidate.Agent = config.AgentConfig{Type: "codex", Options: map[string]any{
+			"backend": "app_server", "app_server_url": "stdio", "mode": "full-auto", "permission_profile": "anc-work",
+		}}
+		if err := validateCRMActionHostProject(candidate); err != nil {
+			t.Fatal(err)
+		}
+		for key, bad := range map[string]any{"backend": "exec", "app_server_url": "ws://127.0.0.1:3845", "mode": "yolo", "permission_profile": ":danger-full-access"} {
+			original := candidate.Agent.Options[key]
+			candidate.Agent.Options[key] = bad
+			if err := validateCRMActionHostProject(candidate); err == nil {
+				t.Fatalf("unsafe Codex %s accepted", key)
+			}
+			delete(candidate.Agent.Options, key)
+			if err := validateCRMActionHostProject(candidate); err == nil {
+				t.Fatalf("missing Codex %s accepted", key)
+			}
+			candidate.Agent.Options[key] = original
+		}
+	})
 
 	tests := []struct {
 		name   string

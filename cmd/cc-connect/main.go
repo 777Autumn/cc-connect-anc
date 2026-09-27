@@ -1812,8 +1812,23 @@ func validateCRMActionHostProject(proj config.ProjectConfig) error {
 	if strings.TrimSpace(proj.RunAsUser) == "" {
 		return errors.New("run_as_user is required")
 	}
-	if strings.ToLower(strings.TrimSpace(proj.Agent.Type)) != "claudecode" {
-		return errors.New("agent type must be claudecode")
+	switch strings.ToLower(strings.TrimSpace(proj.Agent.Type)) {
+	case "claudecode":
+	case "codex":
+		// The shared host protocol needs a fixed local app-server and the
+		// deployment's named network policy. Never silently fall back to exec.
+		for key, want := range map[string]string{"backend": "app_server", "app_server_url": "stdio", "mode": "full-auto"} {
+			value, _ := proj.Agent.Options[key].(string)
+			if value != want {
+				return fmt.Errorf("Codex action host option %s must be explicitly set to %s", key, want)
+			}
+		}
+		profile, _ := proj.Agent.Options["permission_profile"].(string)
+		if strings.TrimSpace(profile) == "" || strings.HasPrefix(strings.TrimSpace(profile), ":") {
+			return errors.New("Codex action host requires a named permission_profile")
+		}
+	default:
+		return errors.New("agent type must be claudecode or isolated Codex app_server")
 	}
 	if strings.TrimSpace(proj.Mode) != "" {
 		return errors.New("multi-workspace mode is not supported")
