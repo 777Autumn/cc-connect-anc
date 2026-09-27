@@ -76,7 +76,8 @@ def main():
     shutil.copyfile(args.test_binary, binary)
     binary.chmod(0o555)
     with sudoers.open("x", encoding="utf-8") as stream:
-        stream.write(f"{gateway.pw_name} ALL=({model.pw_name}) NOPASSWD: /usr/bin/true\n"
+        stream.write(f'Defaults:{gateway.pw_name} env_keep += "CC_FILE_ACTION_TOKEN"\n'
+                     f"{gateway.pw_name} ALL=({model.pw_name}) NOPASSWD: /usr/bin/true\n"
                      f"{gateway.pw_name} ALL=({model.pw_name}) NOPASSWD: SETENV: /bin/sh -c *\n")
     sudoers.chmod(0o440)
     run("visudo", "-cf", str(sudoers))

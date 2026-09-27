@@ -39,6 +39,12 @@ func TestConfiguredCLIHelper(t *testing.T) {
 			}
 		}
 	}
+	if os.Getenv("CC_FILE_TRANSPORT") == "native" {
+		if os.Getenv("CC_FILE_ACTION_TOKEN") != "synthetic-file-capability" || os.Getenv("CC_FILE_WORK_ROOT") != os.Getenv("ANC_EXPECT_CWD") ||
+			strings.Contains(strings.Join(os.Args, " "), "synthetic-file-capability") {
+			os.Exit(8)
+		}
+	}
 	scanner := bufio.NewScanner(os.Stdin)
 	encoder := json.NewEncoder(os.Stdout)
 	if slices.Contains(os.Args, "exec") {

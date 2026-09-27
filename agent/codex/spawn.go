@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
+	"strings"
 
 	"github.com/chenhg5/cc-connect/core"
 )
@@ -27,6 +29,12 @@ func buildCodexCommand(ctx context.Context, spawn core.SpawnOptions, bin string,
 		cmd.Dir = workDir
 	}
 	env := core.MergeEnv(os.Environ(), extraEnv)
+	// Host-owned business authority must never reach a model, even if a
+	// deployment accidentally adds it to an environment allowlist.
+	env = slices.DeleteFunc(env, func(entry string) bool {
+		key, _, _ := strings.Cut(entry, "=")
+		return key == "MYANC_CRM_HOST_SECRET" || key == "MYANC_CRM_HOST_SECRET_FILE"
+	})
 	if spawn.IsolationMode() {
 		env = core.MergeEnv(env, []string{core.RunAsChdirEnv + "=" + workDir})
 	}

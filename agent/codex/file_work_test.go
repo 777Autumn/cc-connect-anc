@@ -1,0 +1,57 @@
+package codex
+
+import (
+	"context"
+	"path/filepath"
+	"runtime"
+	"slices"
+	"strings"
+	"testing"
+
+	"github.com/chenhg5/cc-connect/core"
+)
+
+func TestCodexFileWorkPreservesRuntimeWithoutOldSession(t *testing.T) {
+	base := t.TempDir()
+	a := &Agent{cmd: filepath.Join(base, "codex"), workDir: filepath.Join(base, "project"), codexHome: filepath.Join(base, "auth"),
+		fileWorkNative: true, mode: "full-auto", backend: "app_server", appServerURL: "stdio://", activeIdx: -1,
+		model: "selected-model", reasoningEffort: "medium", configEnv: []string{"HTTPS_PROXY=http://127.0.0.1:17890"},
+		spawnOpts: core.SpawnOptions{RunAsUser: "_fixture"}, sessionEnv: []string{"CC_FILE_ACTION_TOKEN=old-work"}}
+	root := filepath.Join(base, "current work")
+	clone, err := a.ForFileWork(root)
+	if runtime.GOOS == "windows" {
+		if err == nil {
+			t.Fatal("Windows native file runtime accepted")
+		}
+		return
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	child := clone.(*Agent)
+	if child.cmd != a.cmd || child.codexHome != a.codexHome || child.workDir != a.workDir || child.model != a.model || child.reasoningEffort != "medium" ||
+		child.spawnOpts.RunAsUser != "_fixture" || len(child.sessionEnv) != 0 || child.fileWorkRoot != root {
+		t.Fatal("employee runtime lost or previous capability copied")
+	}
+	if !slices.Contains(child.configEnv, "CC_FILE_WORK_ROOT="+root) || !slices.Contains(child.spawnOpts.SudoEnvKeep, "CC_FILE_ACTION_TOKEN") ||
+		!strings.Contains(strings.Join(child.cliExtraArgs, " "), "sandbox_workspace_write.writable_roots=") {
+		t.Fatal("work root or protected capability handoff lost")
+	}
+	if _, err := child.StartSession(context.Background(), ""); err == nil || !strings.Contains(err.Error(), "capability missing") {
+		t.Fatalf("file session launched without current host capability: %v", err)
+	}
+	if len(a.cliExtraArgs) != 0 || len(a.spawnOpts.EnvAllowlist) != 0 || len(a.configEnv) != 1 {
+		t.Fatal("parent configuration mutated")
+	}
+	for _, mode := range []string{"suggest", "yolo"} {
+		a.mode = mode
+		if _, err := a.ForFileWork(root); err == nil {
+			t.Fatalf("unsupported file mode accepted: %s", mode)
+		}
+	}
+	a.mode = "full-auto"
+	a.fileWorkNative = false
+	if _, err := a.ForFileWork(root); err == nil {
+		t.Fatal("disabled native runtime silently launched")
+	}
+}

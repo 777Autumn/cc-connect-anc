@@ -42,6 +42,8 @@ type Agent struct {
 	backend         string // "exec" | "app_server"
 	appServerURL    string
 	codexHome       string
+	fileWorkNative  bool
+	fileWorkRoot    string
 	systemPrompt    string
 	appendPrompt    string
 	cmd             string   // CLI binary name, default "codex"
@@ -64,6 +66,7 @@ func New(opts map[string]any) (core.Agent, error) {
 	backend, _ := opts["backend"].(string)
 	appServerURL, _ := opts["app_server_url"].(string)
 	codexHome, _ := opts["codex_home"].(string)
+	fileWorkNative, _ := opts["file_work_native"].(bool)
 	systemPrompt, _ := opts["system_prompt"].(string)
 	appendPrompt, _ := opts["append_system_prompt"].(string)
 	mode = normalizeMode(mode)
@@ -124,6 +127,7 @@ func New(opts map[string]any) (core.Agent, error) {
 		backend:         backend,
 		appServerURL:    appServerURL,
 		codexHome:       strings.TrimSpace(codexHome),
+		fileWorkNative:  fileWorkNative,
 		systemPrompt:    strings.TrimSpace(systemPrompt),
 		appendPrompt:    strings.TrimSpace(appendPrompt),
 		cmd:             cmd,
@@ -519,6 +523,10 @@ func (a *Agent) StartSession(ctx context.Context, sessionID string) (core.AgentS
 	codexHome := a.codexHome
 	systemPrompt := a.systemPrompt
 	appendPrompt := a.appendPrompt
+	fileWork := a.fileWorkRoot != ""
+	if fileWork {
+		appendPrompt = strings.TrimSpace(appendPrompt + "\n\n" + core.FileWorkPrompt)
+	}
 	cliBin := a.cmd
 	cliExtraArgs := a.cliExtraArgs
 	workDir := a.workDir
@@ -540,6 +548,17 @@ func (a *Agent) StartSession(ctx context.Context, sessionID string) (core.AgentS
 	provName, provAPIKey, provWireAPI, provHeaders := a.activeProviderCodexConfig()
 	a.mu.Unlock()
 
+	if fileWork {
+		hasToken := false
+		for _, entry := range extraEnv {
+			if value, ok := strings.CutPrefix(entry, "CC_FILE_ACTION_TOKEN="); ok {
+				hasToken = value != ""
+			}
+		}
+		if !hasToken {
+			return nil, fmt.Errorf("codex: host-bound file session capability missing")
+		}
+	}
 	if spawn.RunAsUser != "" {
 		if provName != "" {
 			return nil, fmt.Errorf("codex: isolated identities must configure providers in their own CODEX_HOME")
@@ -640,6 +659,9 @@ func (a *Agent) WorkspaceAgentOptions() map[string]any {
 	}
 	if a.codexHome != "" {
 		opts["codex_home"] = a.codexHome
+	}
+	if a.fileWorkNative {
+		opts["file_work_native"] = true
 	}
 	return opts
 }

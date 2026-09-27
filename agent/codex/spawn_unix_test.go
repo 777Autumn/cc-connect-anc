@@ -32,9 +32,9 @@ func TestCodexRunAs_FiltersSupervisorEnvironment(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("ANC_HOST_SECRET", "synthetic-host-secret")
-	opts := core.SpawnOptions{RunAsUser: "_fixture", EnvAllowlist: []string{"CODEX_HOME", "HTTPS_PROXY"}}
+	opts := core.SpawnOptions{RunAsUser: "_fixture", EnvAllowlist: []string{"CODEX_HOME", "HTTPS_PROXY", "MYANC_CRM_HOST_SECRET"}}
 	cmd, err := buildCodexCommand(context.Background(), opts, "/fixed/codex", []string{"app-server"}, "/work/with spaces",
-		[]string{"CODEX_HOME=/employee/.codex", "HTTPS_PROXY=http://127.0.0.1:17890"})
+		[]string{"CODEX_HOME=/employee/.codex", "HTTPS_PROXY=http://127.0.0.1:17890", "MYANC_CRM_HOST_SECRET=synthetic-must-not-inherit"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func TestCodexRunAs_FiltersSupervisorEnvironment(t *testing.T) {
 	if cmd.Dir != "" {
 		t.Fatal("supervisor must not enter the employee's private workspace before sudo")
 	}
-	for _, key := range []string{"HOME=", "PATH=", "ANC_HOST_SECRET="} {
+	for _, key := range []string{"HOME=", "PATH=", "ANC_HOST_SECRET=", "MYANC_CRM_HOST_SECRET="} {
 		for _, entry := range cmd.Env {
 			if strings.HasPrefix(entry, key) {
 				t.Fatalf("host environment leaked: %s", key)
@@ -80,15 +80,26 @@ func TestCodexRunAsOrdinaryIdentities(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, backend := range []string{"app_server", "exec"} {
-		t.Run(backend, func(t *testing.T) {
+	for _, variant := range []string{"app_server", "exec", "file_app_server"} {
+		t.Run(variant, func(t *testing.T) {
+			backend := variant
+			if variant == "file_app_server" {
+				backend = "app_server"
+			}
 			opts := map[string]any{"cmd": []string{bin, "-test.run=^TestConfiguredCLIHelper$", "--", "anc-fake-codex"},
-				"work_dir": f.Work, "codex_home": f.Home, "run_as_user": f.Model, "backend": backend, "app_server_url": "stdio",
+				"work_dir": f.Work, "codex_home": f.Home, "run_as_user": f.Model, "backend": backend, "app_server_url": "stdio", "mode": "full-auto", "file_work_native": true,
 				"run_as_env": []string{"ANC_EXPECT_CWD", "ANC_EXPECT_HOME", "ANC_EXPECT_UID", "ANC_FORBIDDEN"},
 				"env":        map[string]string{"ANC_EXPECT_CWD": f.Work, "ANC_EXPECT_HOME": f.Home, "ANC_EXPECT_UID": f.Model, "ANC_FORBIDDEN": f.Forbidden}}
 			a, err := New(opts)
 			if err != nil {
 				t.Fatal(err)
+			}
+			if variant == "file_app_server" {
+				a, err = a.(core.FileWorkAgent).ForFileWork(f.Work)
+				if err != nil {
+					t.Fatal(err)
+				}
+				a.(*Agent).SetSessionEnv([]string{"CC_FILE_ACTION_TOKEN=synthetic-file-capability"})
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
