@@ -131,6 +131,12 @@ func TestConfiguredCLI_AppServerAndRuntimeConfig(t *testing.T) {
 				t.Fatalf("configured CLI was not used: model=%q effort=%q", runtime.GetModel(), runtime.GetReasoningEffort())
 			}
 			if backend == "app_server" {
+				opts = a.(*Agent).WorkspaceAgentOptions()
+				opts["work_dir"] = workDir
+				a, err = New(opts)
+				if err != nil {
+					t.Fatal(err)
+				}
 				resumed, err := a.StartSession(ctx, "synthetic-thread")
 				if err != nil {
 					t.Fatal(err)

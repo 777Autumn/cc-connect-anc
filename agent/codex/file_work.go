@@ -30,7 +30,9 @@ func (a *Agent) ForFileWork(root string) (core.Agent, error) {
 	spawn.SudoEnvKeep = append(append([]string(nil), spawn.SudoEnvKeep...), "CC_FILE_ACTION_TOKEN")
 	workPolicy := fmt.Sprintf("sandbox_workspace_write.writable_roots=[%q]", root)
 	if a.permissionProfile != "" {
-		workPolicy = fmt.Sprintf("permissions.%q.workspace_roots.%q=true", a.permissionProfile, root)
+		// CLI splits dotted keys literally; dynamic names belong in the TOML
+		// value. Codex merges this table into the existing profile configuration.
+		workPolicy = fmt.Sprintf("permissions={%q={workspace_roots={%q=true}}}", a.permissionProfile, root)
 	}
 	args := append(append([]string(nil), a.cliExtraArgs...), "-c", workPolicy)
 	return &Agent{

@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/BurntSushi/toml"
+
 	"github.com/chenhg5/cc-connect/core"
 )
 
@@ -17,7 +19,7 @@ func TestCodexFileWorkPreservesRuntimeWithoutOldSession(t *testing.T) {
 		fileWorkNative: true, mode: "full-auto", backend: "app_server", appServerURL: "stdio://", activeIdx: -1,
 		model: "selected-model", reasoningEffort: "medium", configEnv: []string{"HTTPS_PROXY=http://127.0.0.1:17890"},
 		spawnOpts: core.SpawnOptions{RunAsUser: "_fixture"}, sessionEnv: []string{"CC_FILE_ACTION_TOKEN=old-work"}}
-	root := filepath.Join(base, "current work")
+	root := filepath.Join(base, "current.work with spaces")
 	clone, err := a.ForFileWork(root)
 	if runtime.GOOS == "windows" {
 		if err == nil {
@@ -50,8 +52,16 @@ func TestCodexFileWorkPreservesRuntimeWithoutOldSession(t *testing.T) {
 	}
 	profileChild := profileClone.(*Agent)
 	args := strings.Join(profileChild.cliExtraArgs, " ")
-	if profileChild.permissionProfile != "anc-work" || !strings.Contains(args, `permissions."anc-work".workspace_roots.`) || strings.Contains(args, "sandbox_workspace_write") {
+	if profileChild.permissionProfile != "anc-work" || !strings.Contains(args, "permissions={") || strings.Contains(args, "sandbox_workspace_write") {
 		t.Fatalf("named profile overwritten by legacy file policy: %s", args)
+	}
+	var policy struct {
+		Permissions map[string]struct {
+			Roots map[string]bool `toml:"workspace_roots"`
+		}
+	}
+	if _, err := toml.Decode(profileChild.cliExtraArgs[len(profileChild.cliExtraArgs)-1], &policy); err != nil || !policy.Permissions["anc-work"].Roots[root] {
+		t.Fatalf("invalid dynamic profile/root TOML: %v", err)
 	}
 	for _, mode := range []string{"suggest", "yolo"} {
 		a.mode = mode

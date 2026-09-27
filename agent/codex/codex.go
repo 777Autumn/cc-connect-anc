@@ -649,6 +649,9 @@ func (a *Agent) WorkspaceAgentOptions() map[string]any {
 		"mode":    a.mode,
 		"backend": a.backend,
 	}
+	if a.permissionProfile != "" {
+		opts["permission_profile"] = a.permissionProfile
+	}
 	opts["cmd"] = append([]string{a.cmd}, a.cliExtraArgs...)
 	if len(a.configEnv) > 0 {
 		env := make(map[string]string)
