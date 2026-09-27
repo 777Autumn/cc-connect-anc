@@ -177,13 +177,16 @@ func TestCUJ_FilePrivateConversation_SupplementTextReplyAndNewWork(t *testing.T)
 	if shared.turns.Load() != 2 {
 		t.Fatal("completed supplement replayed")
 	}
-	e.ReceiveMessage(p, naturalMessage("other", "", "换个事，做执行清单"))
+	e.ReceiveMessage(p, naturalMessage("other", "", "换件事，做执行清单"))
 	other := nextFileResult(t, shared)
 	awaitFileIdle(t, e)
 	if other.WorkID == first.WorkID {
 		t.Fatal("explicit new work reused old work")
 	}
-	e.ReceiveMessage(p, naturalMessage("back", "text-proposal", "Revise that proposal again"))
+	if other.OutputDir == first.OutputDir || len(other.Inputs) != 0 || other.LatestVersion != 0 {
+		t.Fatal("new work inherited the previous work's files or versions")
+	}
+	e.ReceiveMessage(p, naturalMessage("back", "text-proposal", "先换件事，仍按这条引用修改提案"))
 	back := nextFileResult(t, shared)
 	awaitFileIdle(t, e)
 	if back.WorkID != first.WorkID {
