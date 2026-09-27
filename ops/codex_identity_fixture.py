@@ -9,6 +9,7 @@ import platform
 import pwd
 import shutil
 import subprocess
+import sys
 import tempfile
 
 
@@ -19,6 +20,7 @@ def run(*args):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--test-binary", required=True)
+    parser.add_argument("--file-test-binary")
     args = parser.parse_args()
     if os.geteuid() != 0 or os.environ.get("GITHUB_ACTIONS") != "true":
         raise SystemExit("requires authorized disposable GitHub runner setup")
@@ -89,7 +91,39 @@ def main():
     result = subprocess.run(["sudo", "-n", "-u", gateway.pw_name, "--", "/usr/bin/env", "-i", "PATH=/usr/bin:/bin:/usr/sbin:/sbin",
         f"HOME={gateway.pw_dir}", f"ANC_CODEX_IDENTITY_FIXTURE={settings}", str(binary),
         "-test.run=^TestCodexRunAsOrdinaryIdentities$", "-test.v", "-test.timeout=90s"], cwd=root, timeout=100)
-    return result.returncode
+    if result.returncode or not args.file_test_binary:
+        return result.returncode
+    # Reuse the existing file journey with the same ordinary identities.
+    # Only setup is privileged; the gateway creates work and snapshots itself.
+    if mac:
+        run("dseditgroup", "-o", "edit", "-a", gateway.pw_name, "-t", "user", model.pw_name)
+    else:
+        run("usermod", "-a", "-G", model.pw_name, gateway.pw_name)
+    files = root / "files"
+    files.mkdir(mode=0o750)
+    os.chown(files, gateway.pw_uid, model.pw_gid)
+    for name in ("works", "tmp"):
+        directory = files / name
+        directory.mkdir(mode=0o750)
+        os.chown(directory, gateway.pw_uid, model.pw_gid)
+    for name in ("native_file_fixture.py", "file_tool.py"):
+        destination = root / name
+        shutil.copyfile(Path(__file__).with_name(name), destination)
+        destination.chmod(0o555)
+    binary = root / "files.test"
+    shutil.copyfile(args.file_test_binary, binary)
+    binary.chmod(0o555)
+    settings = root / "file-fixture.json"
+    settings.write_text(json.dumps({"Root": str(files), "Model": model.pw_name,
+        "GatewayUID": gateway.pw_uid, "ModelUID": model.pw_uid, "EmployeeWork": str(work),
+        "NativeCLI": str(root / "native_file_fixture.py"), "Client": str(root / "file_tool.py"),
+        "Agent": "codex", "Python": sys.executable, "CodexHome": str(home)}), encoding="utf-8")
+    settings.chmod(0o444)
+    return subprocess.run(["sudo", "-n", "-u", gateway.pw_name, "--", "/usr/bin/env", "-i",
+        "PATH=/usr/bin:/bin:/usr/sbin:/sbin", f"HOME={gateway.pw_dir}", f"TMPDIR={files / 'tmp'}",
+        f"CC_FILE_HANDOFF_FIXTURE={settings}", str(binary),
+        "-test.run=^TestNativeFileWorkOrdinaryIdentities$", "-test.v", "-test.timeout=150s"],
+        cwd=root, timeout=160).returncode
 
 
 if __name__ == "__main__":

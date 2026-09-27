@@ -26,7 +26,8 @@ jobs:
       - name: Verify distinct ordinary gateway and model identities
         run: |
           go test -c ./agent/codex -o "$RUNNER_TEMP/codex-identity.test"
-          sudo -n --preserve-env=GITHUB_ACTIONS python3 -B ops/codex_identity_fixture.py --test-binary "$RUNNER_TEMP/codex-identity.test"
+          go test -c ./actionhost/files -o "$RUNNER_TEMP/codex-files.test"
+          sudo -n --preserve-env=GITHUB_ACTIONS python3 -B ops/codex_identity_fixture.py --test-binary "$RUNNER_TEMP/codex-identity.test" --file-test-binary "$RUNNER_TEMP/codex-files.test"
 
   lint:
     runs-on: ubuntu-latest
