@@ -261,7 +261,10 @@ func (s *appServerSession) connect() error {
 	if s.codexHome != "" {
 		env = append(env, "CODEX_HOME="+s.codexHome)
 	}
-	cmd := buildCodexCommand(s.ctx, s.spawnOpts, s.cliBin, args, s.workDir, env)
+	cmd, err := buildCodexCommand(s.ctx, s.spawnOpts, s.cliBin, args, s.workDir, env)
+	if err != nil {
+		return err
+	}
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -275,7 +278,7 @@ func (s *appServerSession) connect() error {
 	if err != nil {
 		return fmt.Errorf("codex app-server stderr pipe: %w", err)
 	}
-	if err := startCodexCommand(cmd, s.ctx, s.spawnOpts); err != nil {
+	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("codex app-server start: %w", err)
 	}
 

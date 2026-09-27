@@ -55,6 +55,9 @@ func TestCodexRunAs_DoesNotReadSupervisorCatalogOrSkills(t *testing.T) {
 	t.Setenv("CODEX_HOME", t.TempDir())
 	a := &Agent{workDir: t.TempDir(), codexHome: t.TempDir(), model: "selected-model", activeIdx: -1,
 		spawnOpts: core.SpawnOptions{RunAsUser: "_fixture"}}
+	if a.GlobalMemoryFile() != "" {
+		t.Fatal("isolated memory command exposes supervisor file")
+	}
 	if got := a.AvailableModels(context.Background()); len(got) != 1 || got[0].Name != "selected-model" {
 		t.Fatalf("isolated model choices: %v", got)
 	}

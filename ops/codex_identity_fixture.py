@@ -69,8 +69,6 @@ def main():
     work = root / "work"
     work.mkdir(mode=0o700)
     os.chown(work, model.pw_uid, model.pw_gid)
-    # Gateway needs cwd traversal only; it still cannot read the model HOME.
-    work.chmod(0o755)
     home = Path(model.pw_dir) / ".codex"
     home.mkdir(mode=0o700)
     os.chown(home, model.pw_uid, model.pw_gid)

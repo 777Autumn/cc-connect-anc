@@ -19,7 +19,7 @@ func TestConfiguredCLIHelper(t *testing.T) {
 	if !slices.Contains(os.Args, "anc-fake-codex") {
 		return
 	}
-	if !slices.Contains(os.Args, "app-server") {
+	if !slices.Contains(os.Args, "app-server") && !slices.Contains(os.Args, "exec") {
 		os.Exit(2)
 	}
 	cwd, err := os.Getwd()
@@ -41,6 +41,16 @@ func TestConfiguredCLIHelper(t *testing.T) {
 	}
 	scanner := bufio.NewScanner(os.Stdin)
 	encoder := json.NewEncoder(os.Stdout)
+	if slices.Contains(os.Args, "exec") {
+		for _, event := range []map[string]any{
+			{"type": "thread.started", "thread_id": "synthetic-thread"}, {"type": "turn.completed"},
+		} {
+			if err := encoder.Encode(event); err != nil {
+				os.Exit(5)
+			}
+		}
+		os.Exit(0)
+	}
 	for scanner.Scan() {
 		var req struct {
 			ID     any    `json:"id"`

@@ -149,7 +149,10 @@ func (cs *codexSession) Send(prompt string, messageID string, images []core.Imag
 
 	slog.Debug("codexSession: launching", "resume", isResume, "args", core.RedactArgs(args))
 
-	cmd := buildCodexCommand(cs.ctx, cs.spawnOpts, bin, args, cs.workDir, cs.extraEnv)
+	cmd, err := buildCodexCommand(cs.ctx, cs.spawnOpts, bin, args, cs.workDir, cs.extraEnv)
+	if err != nil {
+		return err
+	}
 	cmd.Stdin = strings.NewReader(prompt)
 
 	stdout, err := cmd.StdoutPipe()
@@ -160,7 +163,7 @@ func (cs *codexSession) Send(prompt string, messageID string, images []core.Imag
 	var stderrBuf bytes.Buffer
 	cmd.Stderr = &stderrBuf
 
-	if err := startCodexCommand(cmd, cs.ctx, cs.spawnOpts); err != nil {
+	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("codexSession: start: %w", err)
 	}
 	cs.addCmd(cmd)
@@ -654,7 +657,10 @@ func codexToolSuccess(status string, exitCode *int) bool {
 
 func loadCodexRuntimeConfig(ctx context.Context, cliBin string, cliExtraArgs []string, workDir string, extraEnv []string, spawn core.SpawnOptions) (string, string, error) {
 	args := append(append([]string(nil), cliExtraArgs...), "app-server")
-	cmd := buildCodexCommand(ctx, spawn, cliBin, args, workDir, extraEnv)
+	cmd, err := buildCodexCommand(ctx, spawn, cliBin, args, workDir, extraEnv)
+	if err != nil {
+		return "", "", err
+	}
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -667,7 +673,7 @@ func loadCodexRuntimeConfig(ctx context.Context, cliBin string, cliExtraArgs []s
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
-	if err := startCodexCommand(cmd, ctx, spawn); err != nil {
+	if err := cmd.Start(); err != nil {
 		return "", "", fmt.Errorf("runtime config start app-server: %w", err)
 	}
 	defer func() {

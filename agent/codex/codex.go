@@ -759,6 +759,8 @@ func uniqueCodexSkillDirs(paths []string) []string {
 // ── MemoryFileProvider implementation ─────────────────────────
 
 func (a *Agent) ProjectMemoryFile() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	absDir, err := filepath.Abs(a.workDir)
 	if err != nil {
 		absDir = a.workDir
@@ -767,6 +769,12 @@ func (a *Agent) ProjectMemoryFile() string {
 }
 
 func (a *Agent) GlobalMemoryFile() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	// Core reads/writes this path as the gateway, not as the employee.
+	if a.spawnOpts.RunAsUser != "" {
+		return ""
+	}
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return ""
