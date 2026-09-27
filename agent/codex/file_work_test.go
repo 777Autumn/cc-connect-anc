@@ -43,6 +43,16 @@ func TestCodexFileWorkPreservesRuntimeWithoutOldSession(t *testing.T) {
 	if len(a.cliExtraArgs) != 0 || len(a.spawnOpts.EnvAllowlist) != 0 || len(a.configEnv) != 1 {
 		t.Fatal("parent configuration mutated")
 	}
+	a.permissionProfile = "anc-work"
+	profileClone, err := a.ForFileWork(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	profileChild := profileClone.(*Agent)
+	args := strings.Join(profileChild.cliExtraArgs, " ")
+	if profileChild.permissionProfile != "anc-work" || !strings.Contains(args, `permissions."anc-work".workspace_roots.`) || strings.Contains(args, "sandbox_workspace_write") {
+		t.Fatalf("named profile overwritten by legacy file policy: %s", args)
+	}
 	for _, mode := range []string{"suggest", "yolo"} {
 		a.mode = mode
 		if _, err := a.ForFileWork(root); err == nil {

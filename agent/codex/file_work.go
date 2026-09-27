@@ -28,11 +28,16 @@ func (a *Agent) ForFileWork(root string) (core.Agent, error) {
 	// Reuse the deployment's env_keep rule; capability values must not appear
 	// in sudo's explicit-environment audit record.
 	spawn.SudoEnvKeep = append(append([]string(nil), spawn.SudoEnvKeep...), "CC_FILE_ACTION_TOKEN")
-	args := append(append([]string(nil), a.cliExtraArgs...), "-c", fmt.Sprintf("sandbox_workspace_write.writable_roots=[%q]", root))
+	workPolicy := fmt.Sprintf("sandbox_workspace_write.writable_roots=[%q]", root)
+	if a.permissionProfile != "" {
+		workPolicy = fmt.Sprintf("permissions.%q.workspace_roots.%q=true", a.permissionProfile, root)
+	}
+	args := append(append([]string(nil), a.cliExtraArgs...), "-c", workPolicy)
 	return &Agent{
 		cmd: a.cmd, cliExtraArgs: args, workDir: a.workDir, codexHome: a.codexHome,
 		model: a.model, reasoningEffort: a.reasoningEffort, mode: a.mode,
-		backend: a.backend, appServerURL: a.appServerURL, spawnOpts: spawn,
+		permissionProfile: a.permissionProfile,
+		backend:           a.backend, appServerURL: a.appServerURL, spawnOpts: spawn,
 		systemPrompt: a.systemPrompt, appendPrompt: a.appendPrompt,
 		configEnv: append(append([]string(nil), a.configEnv...), "CC_FILE_TRANSPORT=native", "CC_FILE_WORK_ROOT="+root),
 		providers: append([]core.ProviderConfig(nil), a.providers...), activeIdx: a.activeIdx,

@@ -34,25 +34,26 @@ func init() {
 //   - "full-auto": --sandbox workspace-write + approval_policy=never
 //   - "yolo":      --dangerously-bypass-approvals-and-sandbox
 type Agent struct {
-	spawnOpts       core.SpawnOptions
-	workDir         string
-	model           string
-	reasoningEffort string
-	mode            string // "suggest" | "auto-edit" | "full-auto" | "yolo"
-	backend         string // "exec" | "app_server"
-	appServerURL    string
-	codexHome       string
-	fileWorkNative  bool
-	fileWorkRoot    string
-	systemPrompt    string
-	appendPrompt    string
-	cmd             string   // CLI binary name, default "codex"
-	cliExtraArgs    []string // extra args parsed from cmd after the binary
-	providers       []core.ProviderConfig
-	activeIdx       int      // -1 = no provider set
-	configEnv       []string // env vars from [projects.agent.options.env] — persists across SetSessionEnv calls
-	sessionEnv      []string
-	mu              sync.RWMutex
+	spawnOpts         core.SpawnOptions
+	workDir           string
+	model             string
+	reasoningEffort   string
+	mode              string // "suggest" | "auto-edit" | "full-auto" | "yolo"
+	permissionProfile string // optional named app-server permissions policy
+	backend           string // "exec" | "app_server"
+	appServerURL      string
+	codexHome         string
+	fileWorkNative    bool
+	fileWorkRoot      string
+	systemPrompt      string
+	appendPrompt      string
+	cmd               string   // CLI binary name, default "codex"
+	cliExtraArgs      []string // extra args parsed from cmd after the binary
+	providers         []core.ProviderConfig
+	activeIdx         int      // -1 = no provider set
+	configEnv         []string // env vars from [projects.agent.options.env] — persists across SetSessionEnv calls
+	sessionEnv        []string
+	mu                sync.RWMutex
 }
 
 func New(opts map[string]any) (core.Agent, error) {
@@ -63,6 +64,8 @@ func New(opts map[string]any) (core.Agent, error) {
 	model, _ := opts["model"].(string)
 	reasoningEffort, _ := opts["reasoning_effort"].(string)
 	mode, _ := opts["mode"].(string)
+	permissionProfile, _ := opts["permission_profile"].(string)
+	permissionProfile = strings.TrimSpace(permissionProfile)
 	backend, _ := opts["backend"].(string)
 	appServerURL, _ := opts["app_server_url"].(string)
 	codexHome, _ := opts["codex_home"].(string)
@@ -72,6 +75,9 @@ func New(opts map[string]any) (core.Agent, error) {
 	mode = normalizeMode(mode)
 	backend = normalizeBackend(backend)
 	appServerURL = normalizeAppServerURL(appServerURL)
+	if permissionProfile != "" && (backend != "app_server" || (mode != "full-auto" && mode != "auto-edit") || strings.HasPrefix(permissionProfile, ":")) {
+		return nil, fmt.Errorf("codex: permission_profile requires a named policy and auto-edit/full-auto app_server")
+	}
 
 	cmd, cliExtraArgs := core.ParseCmdOpts(opts, "codex")
 	spawn := core.SpawnOptions{}
@@ -119,21 +125,22 @@ func New(opts map[string]any) (core.Agent, error) {
 	}
 
 	return &Agent{
-		spawnOpts:       spawn,
-		workDir:         workDir,
-		model:           model,
-		reasoningEffort: normalizeReasoningEffort(reasoningEffort),
-		mode:            mode,
-		backend:         backend,
-		appServerURL:    appServerURL,
-		codexHome:       strings.TrimSpace(codexHome),
-		fileWorkNative:  fileWorkNative,
-		systemPrompt:    strings.TrimSpace(systemPrompt),
-		appendPrompt:    strings.TrimSpace(appendPrompt),
-		cmd:             cmd,
-		cliExtraArgs:    cliExtraArgs,
-		configEnv:       configEnv,
-		activeIdx:       -1,
+		spawnOpts:         spawn,
+		workDir:           workDir,
+		model:             model,
+		reasoningEffort:   normalizeReasoningEffort(reasoningEffort),
+		mode:              mode,
+		permissionProfile: permissionProfile,
+		backend:           backend,
+		appServerURL:      appServerURL,
+		codexHome:         strings.TrimSpace(codexHome),
+		fileWorkNative:    fileWorkNative,
+		systemPrompt:      strings.TrimSpace(systemPrompt),
+		appendPrompt:      strings.TrimSpace(appendPrompt),
+		cmd:               cmd,
+		cliExtraArgs:      cliExtraArgs,
+		configEnv:         configEnv,
+		activeIdx:         -1,
 	}, nil
 }
 
@@ -516,6 +523,7 @@ func (a *Agent) SetSessionEnv(env []string) {
 func (a *Agent) StartSession(ctx context.Context, sessionID string) (core.AgentSession, error) {
 	a.mu.Lock()
 	mode := a.mode
+	permissionProfile := a.permissionProfile
 	model := a.model
 	reasoningEffort := a.reasoningEffort
 	backend := a.backend
@@ -547,6 +555,9 @@ func (a *Agent) StartSession(ctx context.Context, sessionID string) (core.AgentS
 	}
 	provName, provAPIKey, provWireAPI, provHeaders := a.activeProviderCodexConfig()
 	a.mu.Unlock()
+	if permissionProfile != "" && (backend != "app_server" || (mode != "full-auto" && mode != "auto-edit")) {
+		return nil, fmt.Errorf("codex: permission_profile cannot be used with the selected mode/backend")
+	}
 
 	if fileWork {
 		hasToken := false
@@ -575,7 +586,7 @@ func (a *Agent) StartSession(ctx context.Context, sessionID string) (core.AgentS
 	}
 
 	if backend == "app_server" {
-		return newAppServerSession(ctx, cliBin, cliExtraArgs, appServerURL, workDir, model, reasoningEffort, mode, sessionID, baseURL, provName, extraEnv, codexHome, systemPrompt, appendPrompt, spawn)
+		return newAppServerSession(ctx, cliBin, cliExtraArgs, appServerURL, workDir, model, reasoningEffort, mode, permissionProfile, sessionID, baseURL, provName, extraEnv, codexHome, systemPrompt, appendPrompt, spawn)
 	}
 	if codexHome != "" {
 		extraEnv = append(extraEnv, "CODEX_HOME="+codexHome)

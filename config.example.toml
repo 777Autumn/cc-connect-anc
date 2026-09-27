@@ -1620,6 +1620,10 @@ app_secret = "your-feishu-app-secret"
 # codex_home = "/path/to/employee/.codex"
 # backend = "app_server"
 # app_server_url = "stdio"
+# Optional named native Codex policy (auto-edit/full-auto app_server only).
+# Define it in this identity's protected Codex config, including network_proxy
+# and allowed domains if host tools need network. No profile means legacy behavior.
+# permission_profile = "anc-work"
 # mode = "suggest"  # "suggest" | "auto-edit" | "full-auto" | "yolo"
 #
 # Mode options / 模式说明:

@@ -12,6 +12,39 @@ import (
 	"github.com/chenhg5/cc-connect/core"
 )
 
+func TestCodexNamedPermissionsRequireExplicitAppServerMode(t *testing.T) {
+	bin, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		backend, mode, profile string
+		want                   bool
+	}{
+		{"app_server", "full-auto", "anc-work", true},
+		{"app_server", "auto-edit", "anc-work", true},
+		{"exec", "full-auto", "anc-work", false},
+		{"app_server", "suggest", "anc-work", false},
+		{"app_server", "yolo", "anc-work", false},
+		{"app_server", "full-auto", ":danger-full-access", false},
+		{"exec", "suggest", "", true},
+	} {
+		a, err := New(map[string]any{"cmd": []string{bin}, "backend": tc.backend, "mode": tc.mode, "permission_profile": tc.profile})
+		if (err == nil) != tc.want {
+			t.Fatalf("%+v: %v", tc, err)
+		}
+		if err == nil && a.(*Agent).permissionProfile != tc.profile {
+			t.Fatal("profile lost")
+		}
+		if err == nil && tc.profile != "" {
+			a.(*Agent).SetMode("yolo")
+			if _, err := a.StartSession(context.Background(), ""); err == nil || !strings.Contains(err.Error(), "permission_profile") {
+				t.Fatalf("mode change bypassed configured profile: %v", err)
+			}
+		}
+	}
+}
+
 func TestCodexRunAs_RequiresExplicitIdentityPaths(t *testing.T) {
 	bin, err := os.Executable()
 	if err != nil {

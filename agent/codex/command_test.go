@@ -63,8 +63,9 @@ func TestConfiguredCLIHelper(t *testing.T) {
 	}
 	for scanner.Scan() {
 		var req struct {
-			ID     any    `json:"id"`
-			Method string `json:"method"`
+			ID     any            `json:"id"`
+			Method string         `json:"method"`
+			Params map[string]any `json:"params"`
 		}
 		if json.Unmarshal(scanner.Bytes(), &req) != nil {
 			os.Exit(4)
@@ -77,6 +78,9 @@ func TestConfiguredCLIHelper(t *testing.T) {
 		case "config/read":
 			result = map[string]any{"config": map[string]any{"model": "synthetic-model", "model_reasoning_effort": "medium"}}
 		case "thread/start", "thread/resume":
+			if profile := os.Getenv("ANC_EXPECT_PROFILE"); profile != "" && (req.Params["permissions"] != profile || req.Params["sandbox"] != nil) {
+				os.Exit(10)
+			}
 			result = map[string]any{"thread": map[string]any{"id": "synthetic-thread"}, "cwd": cwd, "model": "synthetic-model", "reasoningEffort": "medium"}
 		}
 		if encoder.Encode(map[string]any{"id": req.ID, "result": result}) != nil {
@@ -97,9 +101,17 @@ func TestConfiguredCLI_AppServerAndRuntimeConfig(t *testing.T) {
 		t.Run(backend, func(t *testing.T) {
 			workDir := t.TempDir()
 			home := filepath.Join(workDir, "codex-home")
-			a := &Agent{cmd: bin, cliExtraArgs: []string{"-test.run=^TestConfiguredCLIHelper$", "--", "anc-fake-codex"},
-				backend: backend, appServerURL: "stdio://", workDir: workDir, codexHome: home, activeIdx: -1,
-				configEnv: []string{"ANC_EXPECT_CWD=" + workDir, "ANC_EXPECT_HOME=" + home}}
+			opts := map[string]any{"cmd": []string{bin, "-test.run=^TestConfiguredCLIHelper$", "--", "anc-fake-codex"},
+				"backend": backend, "app_server_url": "stdio", "work_dir": workDir, "codex_home": home,
+				"env": map[string]string{"ANC_EXPECT_CWD": workDir, "ANC_EXPECT_HOME": home}}
+			if backend == "app_server" {
+				opts["mode"], opts["permission_profile"] = "full-auto", "anc-fixture"
+				opts["env"].(map[string]string)["ANC_EXPECT_PROFILE"] = "anc-fixture"
+			}
+			a, err := New(opts)
+			if err != nil {
+				t.Fatal(err)
+			}
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			s, err := a.StartSession(ctx, "")
@@ -117,6 +129,15 @@ func TestConfiguredCLI_AppServerAndRuntimeConfig(t *testing.T) {
 			})
 			if runtime.GetModel() != "synthetic-model" || runtime.GetReasoningEffort() != "medium" {
 				t.Fatalf("configured CLI was not used: model=%q effort=%q", runtime.GetModel(), runtime.GetReasoningEffort())
+			}
+			if backend == "app_server" {
+				resumed, err := a.StartSession(ctx, "synthetic-thread")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := resumed.Close(); err != nil {
+					t.Fatal(err)
+				}
 			}
 		})
 	}
