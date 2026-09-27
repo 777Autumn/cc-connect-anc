@@ -183,7 +183,7 @@ func TestCaseQuestionRecoveredCancellationNeverRepublishes(t *testing.T) {
 }
 
 func TestCaseQuestionRejectsOtherWorkActorQuotesAndStoppedAnswers(t *testing.T) {
-	for _, reason := range []string{"actor", "other-work", "quote", "new-topic", "stop", "old-button"} {
+	for _, reason := range []string{"actor", "other-work", "quote", "new-topic", "short-new-topic", "short-prefixed-topic", "stop", "old-button"} {
 		t.Run(reason, func(t *testing.T) {
 			e, h, p, state, s := caseQuestionFixture(t)
 			q := askFixtureCaseQuestion(t, e, state, s)
@@ -197,6 +197,10 @@ func TestCaseQuestionRejectsOtherWorkActorQuotesAndStoppedAnswers(t *testing.T) 
 				m.ParentMessageID = "foreign-work-artifact"
 			case "new-topic":
 				m.Content = "先帮我写一个私人备注"
+			case "short-new-topic":
+				m.Content = "换件事，做内部培训准备"
+			case "short-prefixed-topic":
+				m.Content = "先换件事：做执行清单"
 			case "stop":
 				if err := e.stopFileTurns(m.SessionKey); err != nil {
 					t.Fatal(err)
@@ -205,11 +209,14 @@ func TestCaseQuestionRejectsOtherWorkActorQuotesAndStoppedAnswers(t *testing.T) 
 				m.InteractionRequestID = "case:stale:0"
 				m.Content = "askq:0:1"
 			}
-			e.handleCaseAnswer(p, m, m.Content)
+			handled := e.handleCaseAnswer(p, m, m.Content)
+			if (reason == "short-new-topic" || reason == "short-prefixed-topic") && (handled || s.caseQuestion().Status != "cancelled") {
+				t.Fatal("new work was consumed as an answer or left the previous question active")
+			}
 			if h.toolCalls != 1 {
 				t.Fatal("unexpected execution", reason)
 			}
-			if reason == "new-topic" || reason == "quote" || reason == "stop" {
+			if reason == "new-topic" || reason == "short-new-topic" || reason == "short-prefixed-topic" || reason == "quote" || reason == "stop" {
 				e.handleCaseAnswer(p, answerFixture(q, "askq:0:1", true), "askq:0:1")
 				if h.toolCalls != 1 {
 					t.Fatal("cancelled question executed")

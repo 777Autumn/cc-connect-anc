@@ -310,7 +310,7 @@ func (e *Engine) handleFileWorkMessage(p Platform, msg *Message) bool {
 	}
 	// Add after recovery intent parsing; live followups and queued turns also
 	// need current guidance, without changing the original source/authorization.
-	msg.Content += "\n[Host: for any file creation or revision this turn, first reread the current installed file and domain Skills relevant to this task, including their required references. Earlier turns may contain superseded guidance. Before delivery, reopen the actual saved file, check all sheets/pages as required by those Skills, and fix detected issues.]"
+	msg.Content += "\n[Host: for any file creation or revision this turn, first reread the current installed file and domain Skills relevant to this task, including their required references. Load complete instructions as tool-returned content; continue reading any omitted sections. Keyword matches or discarded output do not load instructions. Earlier turns may contain superseded guidance. Before delivery, reopen the actual saved file, check all sheets/pages as required by those Skills, and fix detected issues.]"
 	msg.fileTurn.Content = msg.Content
 	agent, err := e.agent.(FileWorkAgent).ForFileWork(root)
 	if err != nil {
@@ -375,7 +375,7 @@ func fileConversationIntent(content string) string {
 	})
 	if len(clause) > 0 {
 		switch strings.TrimSpace(clause[0]) {
-		case "换个事", "换一件事", "先换个事", "先换一件事", "另开一件事", "另外做一件事", "新任务", "开始一项新工作", "new task", "New task":
+		case "换个事", "换件事", "换一件事", "先换个事", "先换件事", "先换一件事", "另开一件事", "另外做一件事", "新任务", "开始一项新工作", "new task", "New task":
 			return "new"
 		}
 	}

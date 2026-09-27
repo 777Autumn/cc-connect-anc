@@ -387,7 +387,7 @@ func TestFilePrivateConversationContinuesUntilExplicitNewWork(t *testing.T) {
 		t.Fatal(err)
 	}
 	msg := Message{Platform: "fixture", SessionKey: "fixture:chat:user", UserID: "user", ChannelID: "chat", ControlledFileWork: true, FileWorkPrivate: true}
-	for i, content := range []string{"Prepare a banquet proposal", "Reduce the budget", "先换个事，准备下周获客安排"} {
+	for i, content := range []string{"Prepare a banquet proposal", "Reduce the budget", "先换件事，准备下周获客安排"} {
 		msg.MessageID, msg.Content = fmt.Sprintf("request-%d", i), content
 		e.ReceiveMessage(p, &msg)
 	}
@@ -401,7 +401,7 @@ func TestFilePrivateConversationContinuesUntilExplicitNewWork(t *testing.T) {
 	if !current.TryLock() {
 		t.Fatal("fixture is busy")
 	}
-	msg.MessageID, msg.Content = "busy-topic-change", "先换个事，查另一场婚宴"
+	msg.MessageID, msg.Content = "busy-topic-change", "换件事，查另一场婚宴"
 	e.ReceiveMessage(p, &msg)
 	current.UnlockWithoutUpdate()
 	if len(h.bindings) != 3 || len(e.sessions.ListSessions(msg.SessionKey)) != 2 {
@@ -513,6 +513,9 @@ func TestFileOldReplyRefreshesProjectWithoutChangingChatScope(t *testing.T) {
 				if !strings.Contains(sessions[0].getSentPrompts()[0], "reread the current installed file and domain Skills") {
 					t.Fatal("this model turn lacks current Skill guidance")
 				}
+				if !strings.Contains(sessions[0].getSentPrompts()[0], "complete instructions as tool-returned content") || !strings.Contains(msg.fileTurn.Content, "continue reading any omitted sections") {
+					t.Fatal("Skill loading guidance was lost before dispatch or persistence")
+				}
 				if mode == "recovery" && (!strings.Contains(msg.Content, "Host recovery:") || msg.fileSession.hasUnfinishedFileTurns()) {
 					t.Fatal("Skill guidance blocked explicit recovery")
 				}
@@ -528,6 +531,11 @@ func TestFileConversationIntentUsesOnlyExplicitUserClause(t *testing.T) {
 	for text, want := range map[string]string{
 		"换个事，做执行清单": "new", "另开一件事：做分析": "new", "新任务": "new",
 		"先换个事，林陈婚宴目前多少桌？": "new", "先换一件事：只查进度": "new",
+		"换件事，做内部培训准备": "new", "先换件事：做执行清单": "new",
+		"换件事": "new", "先换件事\n做执行清单": "new", "换件事,做分析": "new",
+		"不要换件事，继续修改": "", "先别换件事": "", "不要先换件事": "",
+		"换件事可以吗？": "", "先换件事可以吗？": "", "他说：换件事": "",
+		"“换件事”，这句话怎么改": "", "请把标题改成换件事": "", "客户回复：\n先换件事": "",
 		"先别换个事": "", "不要先换个事": "", "他说：先换个事": "",
 		"先换个事可以吗？": "", "请把标题改成先换个事": "",
 		"先停下。": "stop", "停止当前工作": "stop", "先暂停": "stop",

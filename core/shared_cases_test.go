@@ -94,6 +94,14 @@ func TestCaseSelectionPersistsAndIsPinnedAtArrivalForOnlyThisEmployee(t *testing
 	if len(msg.caseSources) != 1 || msg.caseSources[0].SelectedCase != "林陈婚宴" {
 		t.Fatal(msg.caseSources)
 	}
+	for _, content := range []string{"换件事，做内部培训准备", "先换件事：做执行清单"} {
+		next := msg
+		next.Content, next.FileWorkPrivate = content, true
+		e.captureCaseSource(&next)
+		if len(next.caseSources) != 1 || next.caseSources[0].SelectedCase != "" || next.caseSources[0].ShareAllowed {
+			t.Fatal("new private work inherited the previous project or sharing grant")
+		}
+	}
 	e.sessions.NewSession(p.SessionKey, "another work")
 	e.rememberCase(ctx, p, map[string]any{"case": map[string]any{"name": "周许婚宴"}})
 	if msg.caseSources[0].SelectedCase != "林陈婚宴" {
