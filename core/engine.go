@@ -10616,7 +10616,9 @@ func (e *Engine) runCompress(state *interactiveState, session *Session, sessions
 	// ensures the lock is released on early-return paths.
 	compressUnlocked := false
 	defer func() {
-		if !compressUnlocked {
+		// Automatic compression is nested inside an existing foreground turn;
+		// only that outer turn owns the queue and final unlock.
+		if !auto && !compressUnlocked {
 			session.Unlock()
 		}
 	}()
@@ -10748,8 +10750,11 @@ func (e *Engine) processCompressEvents(state *interactiveState, session *Session
 				}
 			}
 
-			// After compress succeeds, process any queued messages instead of dropping them.
-			e.drainQueuedMessagesAfterCompress(state, session, sessions, sessionKey, unlocked)
+			// Manual compression owns the lock. Automatic compression returns
+			// to the foreground caller, which drains its own queue before unlock.
+			if !auto {
+				e.drainQueuedMessagesAfterCompress(state, session, sessions, sessionKey, unlocked)
+			}
 			return
 		case EventError:
 			if !auto && event.Error != nil {
@@ -10759,7 +10764,7 @@ func (e *Engine) processCompressEvents(state *interactiveState, session *Session
 			// emit per-turn EventError while staying alive.
 			if !state.agentSession.Alive() {
 				e.notifyDroppedQueuedMessages(state, event.Error)
-			} else {
+			} else if !auto {
 				// Agent survived — try to process queued messages.
 				e.drainQueuedMessagesAfterCompress(state, session, sessions, sessionKey, unlocked)
 			}
