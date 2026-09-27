@@ -1,0 +1,85 @@
+package codex
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"slices"
+	"testing"
+	"time"
+)
+
+// Run this test binary as the configured CLI: no installed Codex or account is used.
+func TestConfiguredCLIHelper(t *testing.T) {
+	if !slices.Contains(os.Args, "anc-fake-codex") {
+		return
+	}
+	if !slices.Contains(os.Args, "app-server") {
+		os.Exit(2)
+	}
+	cwd, err := os.Getwd()
+	actual, statErr := os.Stat(cwd)
+	expected, expectedErr := os.Stat(os.Getenv("ANC_EXPECT_CWD"))
+	if err != nil || statErr != nil || expectedErr != nil || !os.SameFile(actual, expected) || os.Getenv("CODEX_HOME") != os.Getenv("ANC_EXPECT_HOME") {
+		os.Exit(3)
+	}
+	scanner := bufio.NewScanner(os.Stdin)
+	encoder := json.NewEncoder(os.Stdout)
+	for scanner.Scan() {
+		var req struct {
+			ID     any    `json:"id"`
+			Method string `json:"method"`
+		}
+		if json.Unmarshal(scanner.Bytes(), &req) != nil {
+			os.Exit(4)
+		}
+		if req.ID == nil {
+			continue
+		}
+		var result any = map[string]any{}
+		switch req.Method {
+		case "config/read":
+			result = map[string]any{"config": map[string]any{"model": "synthetic-model", "model_reasoning_effort": "medium"}}
+		case "thread/start", "thread/resume":
+			result = map[string]any{"thread": map[string]any{"id": "synthetic-thread"}, "cwd": cwd, "model": "synthetic-model", "reasoningEffort": "medium"}
+		}
+		if encoder.Encode(map[string]any{"id": req.ID, "result": result}) != nil {
+			os.Exit(5)
+		}
+	}
+	os.Exit(0)
+}
+
+func TestConfiguredCLI_AppServerAndRuntimeConfig(t *testing.T) {
+	bin, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// An empty PATH proves that neither path falls back to a different installed CLI.
+	t.Setenv("PATH", t.TempDir())
+	for _, backend := range []string{"app_server", "exec"} {
+		t.Run(backend, func(t *testing.T) {
+			workDir := t.TempDir()
+			home := filepath.Join(workDir, "codex-home")
+			a := &Agent{cmd: bin, cliExtraArgs: []string{"-test.run=^TestConfiguredCLIHelper$", "--", "anc-fake-codex"},
+				backend: backend, appServerURL: "stdio://", workDir: workDir, codexHome: home, activeIdx: -1,
+				configEnv: []string{"ANC_EXPECT_CWD=" + workDir, "ANC_EXPECT_HOME=" + home}}
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			s, err := a.StartSession(ctx, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer s.Close()
+			runtime := s.(interface {
+				GetModel() string
+				GetReasoningEffort() string
+			})
+			if runtime.GetModel() != "synthetic-model" || runtime.GetReasoningEffort() != "medium" {
+				t.Fatalf("configured CLI was not used: model=%q effort=%q", runtime.GetModel(), runtime.GetReasoningEffort())
+			}
+		})
+	}
+}

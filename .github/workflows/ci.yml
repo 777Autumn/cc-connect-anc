@@ -9,6 +9,17 @@ on:
     types: [published]
 
 jobs:
+  mac-codex:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+      - name: Verify native Codex adapter with synthetic CLI
+        run: go test -race ./agent/codex ./core -run 'TestConfiguredCLI|TestBuildSpawnCommand|TestFilterEnvForSpawn' -count=1
+
   lint:
     runs-on: ubuntu-latest
     steps:
