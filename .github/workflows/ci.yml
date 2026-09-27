@@ -10,7 +10,11 @@ on:
 
 jobs:
   mac-codex:
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -18,7 +22,11 @@ jobs:
           go-version-file: 'go.mod'
           cache: true
       - name: Verify native Codex adapter with synthetic CLI
-        run: go test -race ./agent/codex ./core -run 'TestConfiguredCLI|TestBuildSpawnCommand|TestFilterEnvForSpawn' -count=1
+        run: go test -race ./agent/codex ./core -run 'TestConfiguredCLI|TestCodexRunAs|TestBuildSpawnCommand|TestFilterEnvForSpawn' -count=1
+      - name: Verify distinct ordinary gateway and model identities
+        run: |
+          go test -c ./agent/codex -o "$RUNNER_TEMP/codex-identity.test"
+          sudo -n --preserve-env=GITHUB_ACTIONS python3 -B ops/codex_identity_fixture.py --test-binary "$RUNNER_TEMP/codex-identity.test"
 
   lint:
     runs-on: ubuntu-latest

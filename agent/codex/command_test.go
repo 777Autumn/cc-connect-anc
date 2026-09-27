@@ -4,9 +4,12 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
+	"os/user"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -24,6 +27,17 @@ func TestConfiguredCLIHelper(t *testing.T) {
 	expected, expectedErr := os.Stat(os.Getenv("ANC_EXPECT_CWD"))
 	if err != nil || statErr != nil || expectedErr != nil || !os.SameFile(actual, expected) || os.Getenv("CODEX_HOME") != os.Getenv("ANC_EXPECT_HOME") {
 		os.Exit(3)
+	}
+	if name := os.Getenv("ANC_EXPECT_UID"); name != "" {
+		identity, err := user.Current()
+		if err != nil || identity.Username != name || identity.Uid == "0" {
+			os.Exit(6)
+		}
+		for _, path := range strings.Split(os.Getenv("ANC_FORBIDDEN"), string(os.PathListSeparator)) {
+			if _, err := os.ReadFile(path); !errors.Is(err, os.ErrPermission) {
+				os.Exit(7)
+			}
+		}
 	}
 	scanner := bufio.NewScanner(os.Stdin)
 	encoder := json.NewEncoder(os.Stdout)

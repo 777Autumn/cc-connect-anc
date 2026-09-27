@@ -24,6 +24,7 @@ import (
 // codexSession manages a multi-turn Codex conversation.
 // First Send() uses `codex exec`, subsequent ones use `codex exec resume <threadID>`.
 type codexSession struct {
+	spawnOpts      core.SpawnOptions
 	workDir        string
 	model          string
 	effort         string
@@ -148,12 +149,7 @@ func (cs *codexSession) Send(prompt string, messageID string, images []core.Imag
 
 	slog.Debug("codexSession: launching", "resume", isResume, "args", core.RedactArgs(args))
 
-	cmd := exec.CommandContext(cs.ctx, bin, args...)
-	cmd.Dir = cs.workDir
-	prepareCmdForKill(cmd)
-	if len(cs.extraEnv) > 0 {
-		cmd.Env = core.MergeEnv(os.Environ(), cs.extraEnv)
-	}
+	cmd := buildCodexCommand(cs.ctx, cs.spawnOpts, bin, args, cs.workDir, cs.extraEnv)
 	cmd.Stdin = strings.NewReader(prompt)
 
 	stdout, err := cmd.StdoutPipe()
@@ -164,7 +160,7 @@ func (cs *codexSession) Send(prompt string, messageID string, images []core.Imag
 	var stderrBuf bytes.Buffer
 	cmd.Stderr = &stderrBuf
 
-	if err := cmd.Start(); err != nil {
+	if err := startCodexCommand(cmd, cs.ctx, cs.spawnOpts); err != nil {
 		return fmt.Errorf("codexSession: start: %w", err)
 	}
 	cs.addCmd(cmd)
@@ -656,17 +652,9 @@ func codexToolSuccess(status string, exitCode *int) bool {
 	return s == "completed" || s == "success" || s == "succeeded" || s == "ok"
 }
 
-func loadCodexRuntimeConfig(ctx context.Context, cliBin string, cliExtraArgs []string, workDir string, extraEnv []string) (string, string, error) {
-	if cliBin == "" {
-		cliBin = "codex"
-	}
+func loadCodexRuntimeConfig(ctx context.Context, cliBin string, cliExtraArgs []string, workDir string, extraEnv []string, spawn core.SpawnOptions) (string, string, error) {
 	args := append(append([]string(nil), cliExtraArgs...), "app-server")
-	cmd := exec.CommandContext(ctx, cliBin, args...)
-	cmd.Dir = workDir
-	prepareCmdForKill(cmd)
-	if len(extraEnv) > 0 {
-		cmd.Env = core.MergeEnv(os.Environ(), extraEnv)
-	}
+	cmd := buildCodexCommand(ctx, spawn, cliBin, args, workDir, extraEnv)
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -679,13 +667,13 @@ func loadCodexRuntimeConfig(ctx context.Context, cliBin string, cliExtraArgs []s
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
-	if err := cmd.Start(); err != nil {
+	if err := startCodexCommand(cmd, ctx, spawn); err != nil {
 		return "", "", fmt.Errorf("runtime config start app-server: %w", err)
 	}
 	defer func() {
 		_ = stdin.Close()
 		if cmd.Process != nil {
-			_ = cmd.Process.Kill()
+			_ = forceKillCmd(cmd)
 		}
 		_ = cmd.Wait()
 	}()
@@ -843,7 +831,7 @@ func (cs *codexSession) runtimeConfig() (string, string) {
 	ctx, cancel := context.WithTimeout(cs.ctx, codexRuntimeConfigTimeout)
 	defer cancel()
 
-	model, effort, err := loadCodexRuntimeConfig(ctx, cs.cmd, cs.cliExtraArgs, cs.workDir, cs.extraEnv)
+	model, effort, err := loadCodexRuntimeConfig(ctx, cs.cmd, cs.cliExtraArgs, cs.workDir, cs.extraEnv, cs.spawnOpts)
 	if err == nil {
 		cs.runtimeCfgModel = model
 		cs.runtimeCfgEffort = effort

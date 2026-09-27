@@ -1602,12 +1602,24 @@ app_secret = "your-feishu-app-secret"
 
 # [[projects]]
 # name = "my-codex-project"
+# Optional Unix identity isolation uses the same project-level run_as_user /
+# run_as_env settings above. For Codex, cmd, work_dir and codex_home must be
+# absolute paths. Each target identity logs in independently; the supervisor
+# does not write its provider credentials. An isolated app_server must use stdio.
+# 可选 Unix 账号隔离沿用上述项目级设置；Codex 三个路径必须为绝对路径，
+# 各账号独立登录，宿主不代写认证；隔离的 app_server 只使用 stdio。
+# run_as_user = "codex-employee"
+# run_as_env = ["HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY"]
 #
 # [projects.agent]
 # type = "codex"
 #
 # [projects.agent.options]
 # work_dir = "/path/to/project"
+# cmd = ["/path/to/pinned/codex"]
+# codex_home = "/path/to/employee/.codex"
+# backend = "app_server"
+# app_server_url = "stdio"
 # mode = "suggest"  # "suggest" | "auto-edit" | "full-auto" | "yolo"
 #
 # Mode options / 模式说明:

@@ -141,6 +141,7 @@ type appServerRequestUserInputAnswer struct {
 }
 
 type appServerSession struct {
+	spawnOpts      core.SpawnOptions
 	cliBin         string
 	cliExtraArgs   []string
 	url            string
@@ -193,9 +194,10 @@ const (
 	appServerUsageRefreshTimeout = 1500 * time.Millisecond
 )
 
-func newAppServerSession(ctx context.Context, cliBin string, cliExtraArgs []string, url, workDir, model, effort, mode, resumeID, baseURL, modelProvider string, extraEnv []string, codexHome string, systemPrompt string, appendPrompt string) (*appServerSession, error) {
+func newAppServerSession(ctx context.Context, cliBin string, cliExtraArgs []string, url, workDir, model, effort, mode, resumeID, baseURL, modelProvider string, extraEnv []string, codexHome string, systemPrompt string, appendPrompt string, spawn core.SpawnOptions) (*appServerSession, error) {
 	sessionCtx, cancel := context.WithCancel(ctx)
 	s := &appServerSession{
+		spawnOpts:        spawn,
 		cliBin:           cliBin,
 		cliExtraArgs:     append([]string(nil), cliExtraArgs...),
 		url:              url,
@@ -255,19 +257,11 @@ func (s *appServerSession) connect() error {
 	if baseURL := strings.TrimSpace(s.baseURL); baseURL != "" {
 		args = append(args, "-c", fmt.Sprintf("openai_base_url=%q", baseURL))
 	}
-	bin := s.cliBin
-	if bin == "" {
-		bin = "codex"
-	}
-	cmd := exec.CommandContext(s.ctx, bin, args...)
-	cmd.Dir = s.workDir
 	env := append([]string(nil), s.extraEnv...)
 	if s.codexHome != "" {
 		env = append(env, "CODEX_HOME="+s.codexHome)
 	}
-	if len(env) > 0 {
-		cmd.Env = core.MergeEnv(os.Environ(), env)
-	}
+	cmd := buildCodexCommand(s.ctx, s.spawnOpts, s.cliBin, args, s.workDir, env)
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -281,7 +275,7 @@ func (s *appServerSession) connect() error {
 	if err != nil {
 		return fmt.Errorf("codex app-server stderr pipe: %w", err)
 	}
-	if err := cmd.Start(); err != nil {
+	if err := startCodexCommand(cmd, s.ctx, s.spawnOpts); err != nil {
 		return fmt.Errorf("codex app-server start: %w", err)
 	}
 
@@ -955,7 +949,7 @@ func (s *appServerSession) Close() error {
 		s.stdin = nil
 	}
 	if s.cmd != nil && s.cmd.Process != nil {
-		_ = s.cmd.Process.Kill()
+		_ = forceKillCmd(s.cmd)
 	}
 	s.procMu.Unlock()
 
@@ -1694,7 +1688,7 @@ func (s *appServerSession) abortTransport() {
 		s.stdin = nil
 	}
 	if s.cmd != nil && s.cmd.Process != nil {
-		_ = s.cmd.Process.Kill()
+		_ = forceKillCmd(s.cmd)
 	}
 	s.procMu.Unlock()
 }
