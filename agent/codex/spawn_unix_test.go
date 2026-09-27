@@ -34,7 +34,8 @@ func TestCodexRunAs_FiltersSupervisorEnvironment(t *testing.T) {
 	t.Setenv("ANC_HOST_SECRET", "synthetic-host-secret")
 	opts := core.SpawnOptions{RunAsUser: "_fixture", EnvAllowlist: []string{"CODEX_HOME", "HTTPS_PROXY", "MYANC_CRM_HOST_SECRET"}}
 	cmd, err := buildCodexCommand(context.Background(), opts, "/fixed/codex", []string{"app-server"}, "/work/with spaces",
-		[]string{"CODEX_HOME=/employee/.codex", "HTTPS_PROXY=http://127.0.0.1:17890", "MYANC_CRM_HOST_SECRET=synthetic-must-not-inherit"})
+		[]string{"CODEX_HOME=/employee/.codex", "HTTPS_PROXY=http://127.0.0.1:17890", "MYANC_CRM_HOST_SECRET=synthetic-must-not-inherit",
+			"MYANC_CRM_ACTION_TOKEN=synthetic-stage-capability", "MYANC_CRM_STAGE_INPUT=/work/stage.json"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,6 +54,14 @@ func TestCodexRunAs_FiltersSupervisorEnvironment(t *testing.T) {
 	}
 	if !slices.Contains(cmd.Env, "CODEX_HOME=/employee/.codex") || !slices.Contains(cmd.Env, core.RunAsChdirEnv+"=/work/with spaces") {
 		t.Fatal("isolated auth/workspace environment lost")
+	}
+	if !slices.Contains(cmd.Env, "MYANC_CRM_ACTION_TOKEN=synthetic-stage-capability") || !slices.Contains(cmd.Env, "MYANC_CRM_STAGE_INPUT=/work/stage.json") {
+		t.Fatal("host-scoped stage environment lost")
+	}
+	for _, arg := range cmd.Args {
+		if strings.Contains(arg, "synthetic-stage-capability") || (strings.HasPrefix(arg, "--preserve-env=") && strings.Contains(arg, "MYANC_CRM_ACTION_TOKEN")) {
+			t.Fatal("stage capability would enter sudo audit arguments")
+		}
 	}
 }
 
@@ -100,6 +109,8 @@ func TestCodexRunAsOrdinaryIdentities(t *testing.T) {
 					t.Fatal(err)
 				}
 				a.(*Agent).SetSessionEnv([]string{"CC_FILE_ACTION_TOKEN=synthetic-file-capability"})
+			} else {
+				a.(*Agent).SetSessionEnv([]string{"MYANC_CRM_ACTION_TOKEN=synthetic-stage-capability", "MYANC_CRM_STAGE_INPUT=" + f.Work + "/stage.json"})
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()

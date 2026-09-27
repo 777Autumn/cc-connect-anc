@@ -35,7 +35,7 @@ func TestClaudeChildEnvStripsHostSecretsAfterExtraMerge(t *testing.T) {
 }
 
 func TestPreserveCRMStageEnvironmentAddsOnlyStageInputs(t *testing.T) {
-	opts := preserveCRMStageEnvironment(core.SpawnOptions{RunAsUser: "claude", EnvAllowlist: []string{"CUSTOM"}}, []string{
+	opts := core.PreserveCRMStageEnvironment(core.SpawnOptions{RunAsUser: "claude", EnvAllowlist: []string{"CUSTOM"}}, []string{
 		"MYANC_CRM_ACTION_TOKEN=stage-only-token",
 		"MYANC_CRM_STAGE_INPUT=/workspace/.crm-input/token.json",
 		"MYANC_CRM_HOST_SECRET=must-never-be-preserved",

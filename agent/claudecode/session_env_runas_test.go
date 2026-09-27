@@ -11,7 +11,7 @@ import (
 )
 
 func TestRunAsActionTokenDoesNotEnterSudoAuditEnvironment(t *testing.T) {
-	opts := preserveCRMStageEnvironment(core.SpawnOptions{RunAsUser: "claude"}, []string{
+	opts := core.PreserveCRMStageEnvironment(core.SpawnOptions{RunAsUser: "claude"}, []string{
 		"MYANC_CRM_ACTION_TOKEN=fixture-session-token",
 	})
 	cmd := core.BuildSpawnCommand(context.Background(), opts, "claude", "--version")
@@ -36,7 +36,7 @@ func TestRunAsFilterKeepsActionTokenAndDropsHostSecrets(t *testing.T) {
 		"MYANC_CRM_HOST_SECRET=host-secret",
 		"MYANC_CRM_HOST_SECRET_FILE=/run/secrets/host-secret",
 	}
-	opts := preserveCRMStageEnvironment(core.SpawnOptions{RunAsUser: "claude"}, extra)
+	opts := core.PreserveCRMStageEnvironment(core.SpawnOptions{RunAsUser: "claude"}, extra)
 	env := core.FilterEnvForSpawn(claudeChildEnv(nil, extra), opts)
 	if !envContains(env, "MYANC_CRM_ACTION_TOKEN", "stage-only-token") {
 		t.Fatalf("stage-only action token did not cross run_as boundary: %#v", env)

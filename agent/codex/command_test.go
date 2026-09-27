@@ -44,6 +44,10 @@ func TestConfiguredCLIHelper(t *testing.T) {
 			strings.Contains(strings.Join(os.Args, " "), "synthetic-file-capability") {
 			os.Exit(8)
 		}
+	} else if os.Getenv("ANC_EXPECT_UID") != "" {
+		if os.Getenv("MYANC_CRM_ACTION_TOKEN") != "synthetic-stage-capability" || os.Getenv("MYANC_CRM_STAGE_INPUT") != os.Getenv("ANC_EXPECT_CWD")+"/stage.json" {
+			os.Exit(9)
+		}
 	}
 	scanner := bufio.NewScanner(os.Stdin)
 	encoder := json.NewEncoder(os.Stdout)

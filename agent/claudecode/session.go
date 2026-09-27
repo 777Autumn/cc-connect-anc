@@ -366,7 +366,7 @@ func newClaudeSession(ctx context.Context, workDir, cliBin string, cliExtraArgs 
 	// spawn. WorkDir tells BuildSpawnCommand to wrap the command with a chdir;
 	// the path itself is passed through RunAsChdirEnv below.
 	spawnOpts.WorkDir = workDir
-	spawnOpts = preserveCRMStageEnvironment(spawnOpts, extraEnv)
+	spawnOpts = core.PreserveCRMStageEnvironment(spawnOpts, extraEnv)
 	cmd := core.BuildSpawnCommand(sessionCtx, spawnOpts, cliBin, allArgs...)
 	cmd.Dir = workDir
 	// Put the child into its own process group so Close() can terminate the
@@ -1382,39 +1382,4 @@ func claudeChildEnv(base, extra []string) []string {
 	// they can stage actions but cannot apply them.
 	env = filterEnv(env, "MYANC_CRM_HOST_SECRET")
 	return filterEnv(env, "MYANC_CRM_HOST_SECRET_FILE")
-}
-
-func preserveCRMStageEnvironment(opts core.SpawnOptions, env []string) core.SpawnOptions {
-	opts.EnvAllowlist = append([]string(nil), opts.EnvAllowlist...)
-	if envHasNonEmptyValue(env, "MYANC_CRM_ACTION_TOKEN") {
-		// Root-owned sudoers keeps this single session value without placing
-		// it in sudo's explicit-environment audit record. Logging stays on.
-		opts.SudoEnvKeep = append(append([]string(nil), opts.SudoEnvKeep...), "MYANC_CRM_ACTION_TOKEN")
-	}
-	for _, key := range []string{"MYANC_CRM_ACTION_TOKEN", "MYANC_CRM_STAGE_INPUT"} {
-		if !envHasNonEmptyValue(env, key) {
-			continue
-		}
-		found := false
-		for _, existing := range opts.EnvAllowlist {
-			if existing == key {
-				found = true
-				break
-			}
-		}
-		if !found {
-			opts.EnvAllowlist = append(opts.EnvAllowlist, key)
-		}
-	}
-	return opts
-}
-
-func envHasNonEmptyValue(env []string, key string) bool {
-	prefix := key + "="
-	for _, entry := range env {
-		if strings.HasPrefix(entry, prefix) && len(entry) > len(prefix) {
-			return true
-		}
-	}
-	return false
 }

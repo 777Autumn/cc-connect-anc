@@ -23,6 +23,7 @@ func buildCodexCommand(ctx context.Context, spawn core.SpawnOptions, bin string,
 	if bin == "" {
 		bin = "codex"
 	}
+	spawn = core.PreserveCRMStageEnvironment(spawn, extraEnv)
 	spawn.WorkDir = workDir
 	cmd := core.BuildSpawnCommand(ctx, spawn, bin, args...)
 	if !spawn.IsolationMode() {
