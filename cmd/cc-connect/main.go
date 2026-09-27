@@ -1820,12 +1820,12 @@ func validateCRMActionHostProject(proj config.ProjectConfig) error {
 		for key, want := range map[string]string{"backend": "app_server", "app_server_url": "stdio", "mode": "full-auto"} {
 			value, _ := proj.Agent.Options[key].(string)
 			if value != want {
-				return fmt.Errorf("Codex action host option %s must be explicitly set to %s", key, want)
+				return fmt.Errorf("codex action host option %s must be explicitly set to %s", key, want)
 			}
 		}
 		profile, _ := proj.Agent.Options["permission_profile"].(string)
 		if strings.TrimSpace(profile) == "" || strings.HasPrefix(strings.TrimSpace(profile), ":") {
-			return errors.New("Codex action host requires a named permission_profile")
+			return errors.New("codex action host requires a named permission_profile")
 		}
 	default:
 		return errors.New("agent type must be claudecode or isolated Codex app_server")
