@@ -6611,6 +6611,9 @@ func (e *Engine) drainPendingMessages(state *interactiveState, session *Session,
 		state.currentPrincipal = queued.principal
 		state.caseSources = append([]CaseSource(nil), queued.caseSources...)
 		state.mu.Unlock()
+		// The caller may have armed the idle reader before discovering this
+		// late supplement. Give the foreground turn exclusive event ownership.
+		e.stopUnsolicitedReader(state)
 		if !e.beginQueuedFileTurn(state, session, queued) {
 			return false
 		}
@@ -6648,6 +6651,13 @@ func (e *Engine) drainPendingMessages(state *interactiveState, session *Session,
 
 		slog.Info("processing queued message", "session", sessionKey)
 		e.processInteractiveEvents(state, session, sessions, sessionKey, queued.messageID, time.Now(), stopTyping, sendDone, queued.replyCtx)
+		state.mu.Lock()
+		alive := state.agentSession != nil && state.agentSession.Alive() && !state.stopped && !state.eventsNeedResync
+		workspaceDir := state.workspaceDir
+		state.mu.Unlock()
+		if alive {
+			e.startUnsolicitedReader(state, session, sessions, sessionKey, workspaceDir)
+		}
 	}
 }
 

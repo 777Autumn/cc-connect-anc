@@ -108,6 +108,44 @@ func (h *gatewaySpikeHost) receipt() ActionHostResult {
 			Markdown("Acme fixture: added 1 follow-up; current next action: send fictional proposal. Operation: chg_fixture_A.").Build()}
 }
 
+func TestDrainPendingMessages_StopsIdleReaderBeforeSending(t *testing.T) {
+	p := &stubPlatformEngine{n: "test"}
+	e := NewEngine("test", &cujAgent{}, []Platform{p}, "", LangEnglish)
+	t.Cleanup(func() { _ = e.Stop() })
+	const key = "test:queued-reader"
+	session := e.sessions.GetOrCreateActive(key)
+	if !session.TryLock() {
+		t.Fatal("session must start idle")
+	}
+	var stopped atomic.Bool
+	done := make(chan struct{})
+	close(done)
+	as := &gatewaySpikeSession{cujAgentSession: newCUJAgentSession(), tool: func(string) string {
+		if !stopped.Load() {
+			return "idle reader still owns events"
+		}
+		return "queued result"
+	}}
+	state := &interactiveState{
+		agentSession: as, platform: p, replyCtx: "reply",
+		unsolicitedCancel: func() { stopped.Store(true) }, unsolicitedDone: done,
+		pendingMessages: []queuedMessage{{platform: p, replyCtx: "queued-reply", content: "supplement"}},
+	}
+	e.interactiveStates[key] = state
+	if !e.drainPendingMessages(state, session, e.sessions, key) || session.Busy() {
+		t.Fatal("queued turn did not finish")
+	}
+	if !strings.Contains(strings.Join(p.getSent(), "\n"), "queued result") {
+		t.Fatalf("foreground send must take exclusive event ownership: %v", p.getSent())
+	}
+	state.mu.Lock()
+	readerRestored := state.unsolicitedCancel != nil
+	state.mu.Unlock()
+	if !readerRestored {
+		t.Fatal("idle reader must resume after the queued turn")
+	}
+}
+
 func TestCUJ_SPIKE1_HostCardAndResultQueryPreserveConversation(t *testing.T) {
 	p := &gatewaySpikePlatform{hostedCardPlatform: hostedCardPlatform{stubPlatformEngine: stubPlatformEngine{n: "test"}}}
 	host := &gatewaySpikeHost{actionHostStub: actionHostStub{beginResult: ActionHostResult{
