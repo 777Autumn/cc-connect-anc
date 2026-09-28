@@ -21,6 +21,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--test-binary", required=True)
     parser.add_argument("--file-test-binary")
+    parser.add_argument("--startup-test-binary")
     args = parser.parse_args()
     if os.geteuid() != 0 or os.environ.get("GITHUB_ACTIONS") != "true":
         raise SystemExit("requires authorized disposable GitHub runner setup")
@@ -80,6 +81,7 @@ def main():
     with sudoers.open("x", encoding="utf-8") as stream:
         stream.write(f'Defaults:{gateway.pw_name} env_keep += "CC_FILE_ACTION_TOKEN MYANC_CRM_ACTION_TOKEN"\n'
                      f"{gateway.pw_name} ALL=({model.pw_name}) NOPASSWD: /usr/bin/true\n"
+                     f"{gateway.pw_name} ALL=({model.pw_name}) NOPASSWD: /usr/bin/test *, /bin/test *, /usr/bin/find *, /bin/sh -s\n"
                      f"{gateway.pw_name} ALL=({model.pw_name}) NOPASSWD: SETENV: /bin/sh -c *\n")
     sudoers.chmod(0o440)
     run("visudo", "-cf", str(sudoers))
@@ -119,10 +121,30 @@ def main():
         "NativeCLI": str(root / "native_file_fixture.py"), "Client": str(root / "file_tool.py"),
         "Agent": "codex", "Python": sys.executable, "CodexHome": str(home)}), encoding="utf-8")
     settings.chmod(0o444)
-    return subprocess.run(["sudo", "-n", "-u", gateway.pw_name, "--", "/usr/bin/env", "-i",
+    result = subprocess.run(["sudo", "-n", "-u", gateway.pw_name, "--", "/usr/bin/env", "-i",
         "PATH=/usr/bin:/bin:/usr/sbin:/sbin", f"HOME={gateway.pw_dir}", f"TMPDIR={files / 'tmp'}",
         f"CC_FILE_HANDOFF_FIXTURE={settings}", str(binary),
         "-test.run=^TestNativeFileWorkOrdinaryIdentities$", "-test.v", "-test.timeout=150s"],
+        cwd=root, timeout=160).returncode
+    if result or not args.startup_test_binary:
+        return result
+    works = []
+    for i in range(4):
+        directory = root / f"shared-work-{i}"
+        directory.mkdir(mode=0o750)
+        os.chown(directory, model.pw_uid, model.pw_gid)
+        works.append(str(directory))
+    binary = root / "startup.test"
+    shutil.copyfile(args.startup_test_binary, binary)
+    binary.chmod(0o555)
+    settings = root / "startup-fixture.json"
+    settings.write_text(json.dumps({"Model": model.pw_name, "Home": str(home), "Root": str(files),
+        "Works": works, "GatewayUID": gateway.pw_uid, "ModelUID": model.pw_uid}), encoding="utf-8")
+    settings.chmod(0o444)
+    return subprocess.run(["sudo", "-n", "-u", gateway.pw_name, "--", "/usr/bin/env", "-i",
+        "PATH=/usr/bin:/bin:/usr/sbin:/sbin", f"HOME={gateway.pw_dir}", f"TMPDIR={files / 'tmp'}",
+        f"ANC_STARTUP_FIXTURE={settings}", str(binary),
+        "-test.run=^TestSharedStartupOrdinaryIdentities$", "-test.v", "-test.timeout=150s"],
         cwd=root, timeout=160).returncode
 
 

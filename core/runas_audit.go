@@ -25,8 +25,8 @@ package core
 //   - WORKDIR_WRITABLE=no is fatal (already caught by preflight, but
 //     we assert it here too as defense in depth).
 //
-// Everything else is informational and stored in the report but does
-// not block startup.
+// Unresolved accounts and incomplete probe output also block startup.
+// Missing optional files are informational; their contents are never read.
 
 import (
 	"bufio"
@@ -69,6 +69,7 @@ const (
 	tagSupervisorDenied  = "SUPERVISOR_DENIED"
 	tagSupervisorLeaked  = "SUPERVISOR_LEAKED"
 	tagSupervisorMissing = "SUPERVISOR_MISSING"
+	tagSupervisorUnknown = "SUPERVISOR_UNKNOWN"
 )
 
 // ProbeScript returns the embedded probe script. Doctor subcommand
@@ -77,12 +78,12 @@ func ProbeScript() []byte { return runasProbeScript }
 
 // IsolationReport is the structured result of running the probe.
 type IsolationReport struct {
-	Project       string            `json:"project"`
-	RunAsUser     string            `json:"run_as_user"`
-	WorkDir       string            `json:"work_dir"`
-	Timestamp     time.Time         `json:"timestamp"`
-	Identity      IdentitySnapshot  `json:"identity"`
-	WorkDirStatus WorkDirStatus     `json:"work_dir_status"`
+	Project       string           `json:"project"`
+	RunAsUser     string           `json:"run_as_user"`
+	WorkDir       string           `json:"work_dir"`
+	Timestamp     time.Time        `json:"timestamp"`
+	Identity      IdentitySnapshot `json:"identity"`
+	WorkDirStatus WorkDirStatus    `json:"work_dir_status"`
 	// TargetPaths lists existence results for files the target user is
 	// supposed to have in their own home. Missing is informational —
 	// runtime tools will fail, but it's an operator migration gap, not
@@ -91,11 +92,12 @@ type IsolationReport struct {
 	CrossUser   []CrossUserResult `json:"cross_user"`
 	Supervisor  []PathStatus      `json:"supervisor"`
 	// Fatal lists audit-level fatal problems: any CROSS_LEAKED,
-	// SUPERVISOR_LEAKED, or WORKDIR_WRITABLE=no.
+	// SUPERVISOR_LEAKED, unknown accounts, or WORKDIR_WRITABLE=no.
 	Fatal []string `json:"fatal,omitempty"`
 	// ProbeVersion is the version string from the probe's BEGIN line;
 	// bumped when the report schema changes.
 	ProbeVersion string `json:"probe_version"`
+	complete     bool
 	// RawOutput is only populated when the audit had a fatal problem,
 	// to keep clean reports small.
 	RawOutput string `json:"raw_output,omitempty"`
@@ -210,6 +212,23 @@ func RunIsolationProbe(ctx context.Context, cfg AuditConfig) (IsolationReport, e
 		return report, fmt.Errorf("probe exec failed: %w (stderr: %s)", err, strings.TrimSpace(stderr.String()))
 	}
 	parseProbeOutput(&report, stdout.String())
+	if !report.complete || report.Identity.Whoami != cfg.RunAsUser ||
+		(cfg.WorkDir != "" && report.WorkDirStatus.Path != cfg.WorkDir) ||
+		(cfg.Supervisor != "" && cfg.Supervisor != cfg.RunAsUser && len(report.Supervisor) == 0) {
+		return report, errors.New("isolation probe incomplete or identity mismatch")
+	}
+	for _, other := range filterOtherUsers(cfg.OtherUsers, cfg.RunAsUser) {
+		found := false
+		for _, result := range report.CrossUser {
+			if result.OtherUser == other {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return report, fmt.Errorf("isolation probe missing account %q", other)
+		}
+	}
 	report.Fatal = computeAuditFatal(report)
 	// RawOutput bloats the on-disk report — only keep it when something
 	// went wrong so an operator can inspect what the probe actually saw.
@@ -236,6 +255,7 @@ func parseProbeOutput(report *IsolationReport, out string) {
 				report.ProbeVersion = strings.TrimPrefix(rest, "probe-version=")
 			}
 		case tagEnd:
+			report.complete = rest == "probe-version=1" && report.ProbeVersion == "1"
 		case tagID:
 			report.Identity.ID = rest
 		case tagWhoami:
@@ -281,6 +301,8 @@ func parseProbeOutput(report *IsolationReport, out string) {
 			report.Supervisor = append(report.Supervisor, PathStatus{Path: rest, Status: "leaked"})
 		case tagSupervisorMissing:
 			report.Supervisor = append(report.Supervisor, PathStatus{Path: rest, Status: "missing"})
+		case tagSupervisorUnknown:
+			report.Supervisor = append(report.Supervisor, PathStatus{Path: rest, Status: "unknown-user"})
 		}
 	}
 }
@@ -288,6 +310,9 @@ func parseProbeOutput(report *IsolationReport, out string) {
 func computeAuditFatal(r IsolationReport) []string {
 	var fatal []string
 	for _, c := range r.CrossUser {
+		if c.Status == "unknown-user" {
+			fatal = append(fatal, fmt.Sprintf("isolation probe cannot resolve account %q", c.OtherUser))
+		}
 		if c.Status == "leaked" {
 			fatal = append(fatal, fmt.Sprintf(
 				"project %q: target user %q can read %q belonging to user %q (CROSS_LEAKED)",
@@ -295,6 +320,9 @@ func computeAuditFatal(r IsolationReport) []string {
 		}
 	}
 	for _, s := range r.Supervisor {
+		if s.Status == "unknown-user" {
+			fatal = append(fatal, fmt.Sprintf("isolation probe cannot resolve supervisor %q", s.Path))
+		}
 		if s.Status == "leaked" {
 			fatal = append(fatal, fmt.Sprintf(
 				"project %q: target user %q can read supervisor path %q (SUPERVISOR_LEAKED)",

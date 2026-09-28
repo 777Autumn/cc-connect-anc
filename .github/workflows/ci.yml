@@ -22,12 +22,13 @@ jobs:
           go-version-file: 'go.mod'
           cache: true
       - name: Verify native Codex adapter with synthetic CLI
-        run: go test -race ./agent/codex ./core -run 'TestConfiguredCLI|TestCodexRunAs|TestCodexNativeSession|TestCodexShared|TestCodexFileWork|TestOfficeSocket|TestBuildSpawnCommand|TestFilterEnvForSpawn' -count=1
+        run: go test -race ./agent/codex ./core -run 'TestConfiguredCLI|TestCodexRunAs|TestCodexNativeSession|TestCodexShared|TestCodexFileWork|TestOfficeSocket|TestBuildSpawnCommand|TestFilterEnvForSpawn|TestIsolationProbe|TestProbeUnknown|TestParseProbe|TestPreflight|TestDescendantScan|TestEmbeddedProbe' -count=1
       - name: Verify distinct ordinary gateway and model identities
         run: |
-          go test -c ./agent/codex -o "$RUNNER_TEMP/codex-identity.test"
-          go test -c ./actionhost/files -o "$RUNNER_TEMP/codex-files.test"
-          sudo -n --preserve-env=GITHUB_ACTIONS python3 -B ops/codex_identity_fixture.py --test-binary "$RUNNER_TEMP/codex-identity.test" --file-test-binary "$RUNNER_TEMP/codex-files.test"
+          CGO_ENABLED=0 go test -c ./agent/codex -o "$RUNNER_TEMP/codex-identity.test"
+          CGO_ENABLED=0 go test -c ./actionhost/files -o "$RUNNER_TEMP/codex-files.test"
+          CGO_ENABLED=0 go test -c -tags=no_web ./cmd/cc-connect -o "$RUNNER_TEMP/codex-startup.test"
+          sudo -n --preserve-env=GITHUB_ACTIONS python3 -B ops/codex_identity_fixture.py --test-binary "$RUNNER_TEMP/codex-identity.test" --file-test-binary "$RUNNER_TEMP/codex-files.test" --startup-test-binary "$RUNNER_TEMP/codex-startup.test"
 
   lint:
     runs-on: ubuntu-latest

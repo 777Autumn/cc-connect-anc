@@ -3,9 +3,48 @@
 package core
 
 import (
+	"os"
+	"os/exec"
+	"os/user"
 	"strings"
 	"testing"
 )
+
+func TestIsolationProbeNativeHomeAndUnknownUser(t *testing.T) {
+	u, err := user.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("/bin/sh", "-s")
+	cmd.Stdin = strings.NewReader(string(ProbeScript()))
+	cmd.Env = append(os.Environ(), "CC_PROBE_WORKDIR="+t.TempDir(), "CC_PROBE_SUPERVISOR="+u.Username,
+		"CC_PROBE_OTHER_USERS=_anc_missing_fixture", "HOME="+u.HomeDir)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("probe: %v: %s", err, out)
+	}
+	var r IsolationReport
+	parseProbeOutput(&r, string(out))
+	if len(computeAuditFatal(r)) == 0 {
+		t.Fatal("unknown account silently accepted")
+	}
+	// Also exercise the native account resolver without assuming getent exists.
+	cmd = exec.Command("/bin/sh", "-s")
+	cmd.Stdin = strings.NewReader(string(ProbeScript()) + "\naccount_home " + shellQuote(u.Username) + "\n")
+	cmd.Env = append(os.Environ(), "CC_PROBE_OTHER_USERS=", "CC_PROBE_SUPERVISOR=")
+	out, err = cmd.CombinedOutput()
+	if err != nil || !strings.HasSuffix(strings.TrimSpace(string(out)), u.HomeDir) {
+		t.Fatalf("native home lookup: %v: %s", err, out)
+	}
+}
+
+func TestProbeUnknownSupervisorIsFatal(t *testing.T) {
+	var r IsolationReport
+	parseProbeOutput(&r, "BEGIN probe-version=1\nSUPERVISOR_UNKNOWN missing\nEND probe-version=1\n")
+	if len(computeAuditFatal(r)) == 0 {
+		t.Fatal("unknown supervisor silently accepted")
+	}
+}
 
 // Golden-style test: feed a canned probe output through the parser and
 // assert the resulting IsolationReport looks right. No real sudo.

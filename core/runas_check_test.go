@@ -4,7 +4,10 @@ package core
 
 import (
 	"context"
+	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -14,8 +17,8 @@ import (
 func TestPreflightRunAsUser_AllPass(t *testing.T) {
 	runner := &stubSudoRunner{
 		script: map[string]stubResponse{
-			key("-n", "-iu", "target", "--", "/usr/bin/true"):                          {nil, nil},
-			key("-n", "-iu", "target", "--", "sudo", "-n", "/usr/bin/true"):            {nil, &exec.ExitError{}}, // escalation fails as required
+			key("-n", "-iu", "target", "--", "/usr/bin/true"):                                {nil, nil},
+			key("-n", "-iu", "target", "--", "sudo", "-n", "/usr/bin/true"):                  {nil, &exec.ExitError{}}, // escalation fails as required
 			key("-n", "-iu", "target", "--", "test", "-r", "/tmp/wd", "-a", "-w", "/tmp/wd"): {nil, nil},
 		},
 	}
@@ -38,13 +41,7 @@ func TestPreflightRunAsUser_AllPass(t *testing.T) {
 		"-n", "-iu", "target", "--",
 		"find", "/tmp/wd",
 		"(", "-name", ".git", ")", "-prune", "-o",
-		"(",
-		"-not", "-readable", "-printf", `noread\t%p\n`,
-		",",
-		"-type", "f", "-not", "-writable", "-printf", `nowrite\t%p\n`,
-		",",
-		"-type", "d", "-not", "-executable", "-printf", `nosearch\t%p\n`,
-		")",
+		"-exec", "/bin/sh", "-c", descendantAccessScript, "sh", "{}", "+",
 	}
 	runner.script[key(findArgs...)] = stubResponse{out: []byte(""), err: nil}
 
@@ -76,22 +73,16 @@ func TestPreflightRunAsUser_NoSudoToTargetIsFatal(t *testing.T) {
 func TestPreflightRunAsUser_TargetCanEscalateIsFatal(t *testing.T) {
 	runner := &stubSudoRunner{
 		script: map[string]stubResponse{
-			key("-n", "-iu", "target", "--", "/usr/bin/true"):               {nil, nil},
-			key("-n", "-iu", "target", "--", "sudo", "-n", "/usr/bin/true"): {nil, nil}, // BAD
-			key("-n", "-iu", "target", "--", "sudo", "-n", "-l"):        {[]byte("(ALL) NOPASSWD: ALL"), nil},
+			key("-n", "-iu", "target", "--", "/usr/bin/true"):                                {nil, nil},
+			key("-n", "-iu", "target", "--", "sudo", "-n", "/usr/bin/true"):                  {nil, nil}, // BAD
+			key("-n", "-iu", "target", "--", "sudo", "-n", "-l"):                             {[]byte("(ALL) NOPASSWD: ALL"), nil},
 			key("-n", "-iu", "target", "--", "test", "-r", "/tmp/wd", "-a", "-w", "/tmp/wd"): {nil, nil},
 		},
 	}
 	findArgs := []string{
 		"-n", "-iu", "target", "--",
 		"find", "/tmp/wd",
-		"(",
-		"-not", "-readable", "-printf", `noread\t%p\n`,
-		",",
-		"-type", "f", "-not", "-writable", "-printf", `nowrite\t%p\n`,
-		",",
-		"-type", "d", "-not", "-executable", "-printf", `nosearch\t%p\n`,
-		")",
+		"-exec", "/bin/sh", "-c", descendantAccessScript, "sh", "{}", "+",
 	}
 	runner.script[key(findArgs...)] = stubResponse{out: nil, err: nil}
 
@@ -117,8 +108,8 @@ func TestPreflightRunAsUser_TargetCanEscalateIsFatal(t *testing.T) {
 func TestPreflightRunAsUser_WorkDirInaccessibleIsFatal(t *testing.T) {
 	runner := &stubSudoRunner{
 		script: map[string]stubResponse{
-			key("-n", "-iu", "target", "--", "/usr/bin/true"):                          {nil, nil},
-			key("-n", "-iu", "target", "--", "sudo", "-n", "/usr/bin/true"):            {nil, &exec.ExitError{}},
+			key("-n", "-iu", "target", "--", "/usr/bin/true"):                                {nil, nil},
+			key("-n", "-iu", "target", "--", "sudo", "-n", "/usr/bin/true"):                  {nil, &exec.ExitError{}},
 			key("-n", "-iu", "target", "--", "test", "-r", "/tmp/wd", "-a", "-w", "/tmp/wd"): {[]byte(""), &exec.ExitError{}},
 		},
 	}
@@ -141,21 +132,15 @@ func TestPreflightRunAsUser_WorkDirInaccessibleIsFatal(t *testing.T) {
 func TestPreflightRunAsUser_DescendantWarnings(t *testing.T) {
 	runner := &stubSudoRunner{
 		script: map[string]stubResponse{
-			key("-n", "-iu", "target", "--", "/usr/bin/true"):                          {nil, nil},
-			key("-n", "-iu", "target", "--", "sudo", "-n", "/usr/bin/true"):            {nil, &exec.ExitError{}},
+			key("-n", "-iu", "target", "--", "/usr/bin/true"):                                {nil, nil},
+			key("-n", "-iu", "target", "--", "sudo", "-n", "/usr/bin/true"):                  {nil, &exec.ExitError{}},
 			key("-n", "-iu", "target", "--", "test", "-r", "/tmp/wd", "-a", "-w", "/tmp/wd"): {nil, nil},
 		},
 	}
 	findArgs := []string{
 		"-n", "-iu", "target", "--",
 		"find", "/tmp/wd",
-		"(",
-		"-not", "-readable", "-printf", `noread\t%p\n`,
-		",",
-		"-type", "f", "-not", "-writable", "-printf", `nowrite\t%p\n`,
-		",",
-		"-type", "d", "-not", "-executable", "-printf", `nosearch\t%p\n`,
-		")",
+		"-exec", "/bin/sh", "-c", descendantAccessScript, "sh", "{}", "+",
 	}
 	runner.script[key(findArgs...)] = stubResponse{
 		out: []byte("noread\t/tmp/wd/secret.env\nnowrite\t/tmp/wd/readonly.log\n"),
@@ -183,8 +168,8 @@ func TestPreflightRunAsUser_DescendantWarnings(t *testing.T) {
 func TestPreflightRunAsUser_DescendantWarningsCapped(t *testing.T) {
 	runner := &stubSudoRunner{
 		script: map[string]stubResponse{
-			key("-n", "-iu", "target", "--", "/usr/bin/true"):                          {nil, nil},
-			key("-n", "-iu", "target", "--", "sudo", "-n", "/usr/bin/true"):            {nil, &exec.ExitError{}},
+			key("-n", "-iu", "target", "--", "/usr/bin/true"):                                {nil, nil},
+			key("-n", "-iu", "target", "--", "sudo", "-n", "/usr/bin/true"):                  {nil, &exec.ExitError{}},
 			key("-n", "-iu", "target", "--", "test", "-r", "/tmp/wd", "-a", "-w", "/tmp/wd"): {nil, nil},
 		},
 	}
@@ -198,13 +183,7 @@ func TestPreflightRunAsUser_DescendantWarningsCapped(t *testing.T) {
 	findArgs := []string{
 		"-n", "-iu", "target", "--",
 		"find", "/tmp/wd",
-		"(",
-		"-not", "-readable", "-printf", `noread\t%p\n`,
-		",",
-		"-type", "f", "-not", "-writable", "-printf", `nowrite\t%p\n`,
-		",",
-		"-type", "d", "-not", "-executable", "-printf", `nosearch\t%p\n`,
-		")",
+		"-exec", "/bin/sh", "-c", descendantAccessScript, "sh", "{}", "+",
 	}
 	runner.script[key(findArgs...)] = stubResponse{out: []byte(sb.String()), err: nil}
 	cfg := PreflightConfig{
@@ -227,3 +206,39 @@ func TestPreflightRunAsUser_DescendantWarningsCapped(t *testing.T) {
 	}
 }
 
+// Exercise native find without sudo; startup CI separately verifies the UID switch.
+type localFindRunner struct{ fail bool }
+
+func (r localFindRunner) Run(ctx context.Context, args ...string) ([]byte, error) {
+	if r.fail {
+		return nil, errors.New("synthetic scan failure")
+	}
+	if len(args) < 6 || args[4] != "find" {
+		return nil, errors.New("unexpected scanner command")
+	}
+	return exec.CommandContext(ctx, args[4], args[5:]...).CombinedOutput()
+}
+func TestDescendantScanNativeFind(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("access checks require ordinary identity")
+	}
+	root := t.TempDir()
+	p := filepath.Join(root, "只读 fixture 'quoted'.txt")
+	if err := os.WriteFile(p, []byte("fixture"), 0400); err != nil {
+		t.Fatal(err)
+	}
+	pruned := filepath.Join(root, ".git")
+	if err := os.Mkdir(pruned, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pruned, "ignored"), nil, 0000); err != nil {
+		t.Fatal(err)
+	}
+	warning := scanDescendants(context.Background(), localFindRunner{}, "fixture", root, DefaultDescendantScanConfig)
+	if !strings.Contains(warning, "nowrite\t"+p) || strings.Contains(warning, "ignored") || strings.Contains(warning, "failed") {
+		t.Fatal(warning)
+	}
+	if warning = scanDescendants(context.Background(), localFindRunner{fail: true}, "fixture", root, DefaultDescendantScanConfig); !strings.Contains(warning, "audit incomplete") {
+		t.Fatal("scan error hidden:", warning)
+	}
+}

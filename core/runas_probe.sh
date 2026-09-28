@@ -27,6 +27,14 @@ emit() {
     printf '%s\n' "$*"
 }
 
+account_home() {
+    if [ "$(uname -s)" = Darwin ]; then
+        /usr/bin/dscl . -read "/Users/$1" NFSHomeDirectory 2>/dev/null | sed -n 's/^NFSHomeDirectory: //p'
+    else
+        getent passwd "$1" 2>/dev/null | cut -d: -f6
+    fi
+}
+
 emit "BEGIN probe-version=1"
 
 # ---------------------------------------------------------------- identity
@@ -85,12 +93,13 @@ if [ -n "${CC_PROBE_OTHER_USERS:-}" ]; then
         if [ "$other" = "$(whoami)" ]; then
             continue
         fi
-        other_home=$(getent passwd "$other" 2>/dev/null | cut -d: -f6)
-        if [ -z "$other_home" ]; then
+        other_home=$(account_home "$other")
+        case "$other_home" in /*) ;; *)
             emit "CROSS_UNKNOWN $other"
             continue
-        fi
+        esac
         for f in \
+            "$other_home/.codex/auth.json" \
             "$other_home/.claude/settings.json" \
             "$other_home/.claude.json" \
             "$other_home/.ssh/id_rsa" \
@@ -115,9 +124,10 @@ fi
 if [ -n "${CC_PROBE_SUPERVISOR:-}" ]; then
     sup=${CC_PROBE_SUPERVISOR}
     if [ "$sup" != "$(whoami)" ]; then
-        sup_home=$(getent passwd "$sup" 2>/dev/null | cut -d: -f6)
-        if [ -n "$sup_home" ]; then
+        sup_home=$(account_home "$sup")
+        case "$sup_home" in /*)
             for f in \
+                "$sup_home/.codex/auth.json" \
                 "$sup_home/.claude/settings.json" \
                 "$sup_home/.claude.json" \
                 "$sup_home/.ssh/id_rsa" \
@@ -134,7 +144,9 @@ if [ -n "${CC_PROBE_SUPERVISOR:-}" ]; then
                     emit "SUPERVISOR_DENIED ${f}"
                 fi
             done
-        fi
+            ;;
+        *) emit "SUPERVISOR_UNKNOWN $sup" ;;
+        esac
     fi
 fi
 
