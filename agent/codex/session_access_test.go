@@ -10,6 +10,8 @@ import (
 	"slices"
 	"testing"
 	"time"
+
+	"github.com/chenhg5/cc-connect/core"
 )
 
 // Synthetic native protocol: the gateway never receives a transcript path.
@@ -130,11 +132,11 @@ func TestCodexNativeSessionAccess(t *testing.T) {
 	if _, err := os.Stat(deleted); !os.IsNotExist(err) {
 		t.Fatal("rejected deletion reached CLI")
 	}
-	if err := a.DeleteSession(ctx, "own"); err != nil {
-		t.Fatal(err)
+	if err := a.DeleteSession(ctx, "own"); err == nil {
+		t.Fatal("unsafe cascading deletion accepted")
 	}
-	if content, err := os.ReadFile(deleted); err != nil || string(content) != "own" {
-		t.Fatal("native deletion not used", err)
+	if _, err := os.Stat(deleted); !os.IsNotExist(err) {
+		t.Fatal("refused deletion reached CLI", err)
 	}
 	a.configEnv = append(a.configEnv, "ANC_SESSION_ERROR=1")
 	if sessions, err := a.ListSessions(ctx); err == nil || len(sessions) != 0 {
@@ -145,5 +147,42 @@ func TestCodexNativeSessionAccess(t *testing.T) {
 	defer cancelShort()
 	if _, err := a.ListSessions(short); err == nil {
 		t.Fatal("native read timeout ignored")
+	}
+}
+
+// Explicit synthetic IDs only; this check never starts a model turn or deletes
+// a transcript. It complements the simulated protocol and ordinary-UID CI.
+func TestCodexNativeSessionInstalledCLI(t *testing.T) {
+	path := os.Getenv("ANC_CODEX_NATIVE_SESSION_FIXTURE")
+	if path == "" {
+		t.Skip("requires an explicitly prepared native synthetic session fixture")
+	}
+	var f struct{ Binary, Work, Home, Own, Foreign string }
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(data, &f); err != nil || f.Own == "" || f.Foreign == "" {
+		t.Fatal("invalid fixture", err)
+	}
+	a := &Agent{cmd: f.Binary, workDir: f.Work, codexHome: f.Home, backend: "app_server", appServerURL: "stdio://"}
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	sessions, err := a.ListSessions(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.ContainsFunc(sessions, func(s core.AgentSessionInfo) bool { return s.ID == f.Own }) {
+		t.Fatal("native synthetic session not listed")
+	}
+	entries, err := a.GetSessionHistory(ctx, f.Own, 2)
+	if err != nil || len(entries) == 0 {
+		t.Fatal("native history unavailable", err)
+	}
+	if _, err := a.GetSessionHistory(ctx, f.Foreign, 2); err == nil {
+		t.Fatal("foreign native history accepted")
+	}
+	if err := a.DeleteSession(ctx, f.Own); err == nil {
+		t.Fatal("unsafe native deletion accepted")
 	}
 }

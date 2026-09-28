@@ -116,8 +116,8 @@ func TestCodexRunAsOrdinaryIdentities(t *testing.T) {
 		if err != nil || len(history) != 1 || history[0].Content != "second" {
 			t.Fatalf("ordinary history: %+v / %v", history, err)
 		}
-		if err := agent.(core.SessionDeleter).DeleteSession(ctx, "own"); err != nil {
-			t.Fatal(err)
+		if err := agent.(core.SessionDeleter).DeleteSession(ctx, "own"); err == nil {
+			t.Fatal("unsafe native deletion accepted")
 		}
 		if _, err := os.ReadFile(filepath.Join(f.Home, "synthetic-session-access")); !errors.Is(err, os.ErrPermission) {
 			t.Fatal("model session storage exposed to gateway", err)

@@ -157,8 +157,10 @@ func (a *Agent) deleteNativeSession(ctx context.Context, id string) error {
 		if _, err := readNativeThread(call, work, id, false); err != nil {
 			return err
 		}
-		// Native delete removes the session; archive would silently change the
-		// existing delete contract. Unsupported servers must report the error.
-		return call("thread/delete", map[string]any{"threadId": id}, nil)
+		// 0.157.1 thread/delete cascades to descendants without a compare-and-set
+		// condition. A separate list/check races another writer. Until a single
+		// owner can exclude new descendants, preserve the single-session contract
+		// by refusing; archive and direct transcript removal are not substitutes.
+		return fmt.Errorf("codex: safe single-session deletion is unavailable through this native interface; no session was deleted")
 	})
 }

@@ -13,7 +13,7 @@ func (*failedHistoryAgent) GetSessionHistory(context.Context, string, int) ([]Hi
 	return nil, errors.New("synthetic private directory is unreadable")
 }
 
-func TestCUJ_HistoryReadFailureIsNotEmpty(t *testing.T) {
+func TestHistoryReadFailureIsNotEmpty(t *testing.T) {
 	e := newTestEngine()
 	e.agent = &failedHistoryAgent{}
 	p := &stubPlatformEngine{n: "test"}
