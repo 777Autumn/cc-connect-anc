@@ -15893,6 +15893,9 @@ func (e *Engine) deleteSingleSessionReply(msg *Message, deleter SessionDeleter, 
 	displayName := e.deleteSessionDisplayName(sessions, matched)
 
 	if err := deleter.DeleteSession(e.ctx, matched.ID); err != nil {
+		if errors.Is(err, ErrNotSupported) {
+			return e.i18n.T(MsgDeleteNotSupported)
+		}
 		return e.i18n.Tf(MsgFailedToDeleteSession, displayName, err)
 	}
 

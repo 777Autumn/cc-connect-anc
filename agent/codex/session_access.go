@@ -161,6 +161,6 @@ func (a *Agent) deleteNativeSession(ctx context.Context, id string) error {
 		// condition. A separate list/check races another writer. Until a single
 		// owner can exclude new descendants, preserve the single-session contract
 		// by refusing; archive and direct transcript removal are not substitutes.
-		return fmt.Errorf("codex: safe single-session deletion is unavailable through this native interface; no session was deleted")
+		return fmt.Errorf("codex: safe single-session deletion: %w", core.ErrNotSupported)
 	})
 }

@@ -3466,11 +3466,11 @@ var messages = map[MsgKey]map[Language]string{
 		LangSpanish:            "❌ No se puede eliminar la sesión activa. Cambie a otra sesión primero.",
 	},
 	MsgDeleteNotSupported: {
-		LangEnglish:            "❌ This agent does not support session deletion.",
-		LangChinese:            "❌ 当前 Agent 不支持删除会话。",
-		LangTraditionalChinese: "❌ 當前 Agent 不支持刪除會話。",
-		LangJapanese:           "❌ このエージェントはセッション削除をサポートしていません。",
-		LangSpanish:            "❌ Este agente no admite la eliminación de sesiones.",
+		LangEnglish:            "❌ Session deletion is currently unavailable here. No session was deleted.",
+		LangChinese:            "❌ 当前入口暂不支持删除会话，没有删除任何会话。",
+		LangTraditionalChinese: "❌ 目前入口暫不支援刪除會話，沒有刪除任何會話。",
+		LangJapanese:           "❌ ここでは現在セッションを削除できません。セッションは削除されていません。",
+		LangSpanish:            "❌ La eliminación de sesiones no está disponible aquí. No se eliminó ninguna sesión.",
 	},
 	MsgDeleteModeTitle: {
 		LangEnglish:            "Delete Sessions",
