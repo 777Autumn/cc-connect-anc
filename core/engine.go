@@ -1483,6 +1483,11 @@ func (e *Engine) ActiveSessionKeys() []string {
 // It finds the platform that owns the session key, reconstructs a reply context,
 // and processes the message as if the user sent it.
 func (e *Engine) ExecuteCronJob(job *CronJob) error {
+	if validator, ok := e.agent.(WorkDirValidator); ok && job.WorkDir != "" {
+		if err := validator.ValidateWorkDir(job.WorkDir); err != nil {
+			return fmt.Errorf("cron workspace: %w", err)
+		}
+	}
 	e.hooks.Emit(HookEvent{
 		Event:      HookEventCronTriggered,
 		SessionKey: job.SessionKey,
@@ -1691,6 +1696,11 @@ func (e *Engine) ExecuteCronJob(job *CronJob) error {
 // notification (unless muted), and either runs a shell command or injects a
 // synthetic message into the agent session.
 func (e *Engine) ExecuteTimerJob(job *TimerJob) error {
+	if validator, ok := e.agent.(WorkDirValidator); ok && job.WorkDir != "" {
+		if err := validator.ValidateWorkDir(job.WorkDir); err != nil {
+			return fmt.Errorf("timer workspace: %w", err)
+		}
+	}
 	e.hooks.Emit(HookEvent{
 		Event:      HookEventTimerTriggered,
 		SessionKey: job.SessionKey,

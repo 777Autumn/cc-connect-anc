@@ -612,6 +612,21 @@ func TestDirApply_FixedScopePreservesSession(t *testing.T) {
 	}
 }
 
+func TestScheduledJobs_FixedScopeRejectsBeforeGlobalFallback(t *testing.T) {
+	a := &fixedWorkDirAgent{stubWorkDirAgent: stubWorkDirAgent{workDir: t.TempDir()}}
+	e := NewEngine("fixed", a, nil, "", LangEnglish)
+	defer e.cancel()
+	other := t.TempDir()
+	for _, err := range []error{
+		e.ExecuteCronJob(&CronJob{WorkDir: other, Prompt: "fictional task"}),
+		e.ExecuteTimerJob(&TimerJob{WorkDir: other, Prompt: "fictional task"}),
+	} {
+		if err == nil || !strings.Contains(err.Error(), "fixed workspace") {
+			t.Fatalf("scheduled task did not stop at entry boundary: %v", err)
+		}
+	}
+}
+
 func (a *stubWorkDirAgent) SetWorkDir(dir string) {
 	a.workDir = dir
 }

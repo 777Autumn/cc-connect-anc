@@ -6,10 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os/user"
+	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -45,6 +46,21 @@ var sharedServers = struct {
 func registerSharedServer(a *Agent) (*sharedAppServer, error) {
 	sharedServers.Lock()
 	defer sharedServers.Unlock()
+	work, err := filepath.EvalSymlinks(a.workDir)
+	if err != nil {
+		return nil, fmt.Errorf("codex: resolve shared workspace: %w", err)
+	}
+	info, err := os.Stat(work)
+	if err != nil || !info.IsDir() {
+		return nil, errors.New("codex: shared workspace must be an existing directory")
+	}
+	auth, err := filepath.EvalSymlinks(a.codexHome)
+	if err != nil {
+		return nil, fmt.Errorf("codex: resolve protected authentication directory: %w", err)
+	}
+	if withinPath(strings.ToLower(work), strings.ToLower(auth)) || withinPath(strings.ToLower(auth), strings.ToLower(work)) {
+		return nil, errors.New("codex: shared workspace overlaps authentication directory")
+	}
 	// Only process-wide transport settings enter the authentication owner.
 	// Employee identity, host capabilities and work roots belong to threads.
 	var configEnv []string
@@ -60,11 +76,11 @@ func registerSharedServer(a *Agent) (*sharedAppServer, error) {
 	spawn.EnvAllowlist = append(append([]string(nil), spawn.EnvAllowlist...), "CODEX_HOME")
 	ownerUID := ""
 	if spawn.RunAsUser != "" {
-		owner, err := user.Lookup(spawn.RunAsUser)
+		uid, err := ordinaryRuntimeUID(spawn.RunAsUser)
 		if err != nil {
 			return nil, fmt.Errorf("codex: resolve shared process identity: %w", err)
 		}
-		ownerUID = owner.Uid
+		ownerUID = strconv.FormatUint(uint64(uid), 10)
 		for home, server := range sharedServers.byHome {
 			if server.ownerUID == ownerUID && home != a.codexHome {
 				return nil, errors.New("codex: one shared identity must use one exact authentication path")
@@ -77,14 +93,21 @@ func registerSharedServer(a *Agent) (*sharedAppServer, error) {
 			!reflect.DeepEqual(p.spawnOpts, spawn) || !reflect.DeepEqual(p.extraEnv, configEnv) {
 			return nil, errors.New("codex: shared CODEX_HOME has inconsistent process configuration")
 		}
-		current.refs++
 		current.mu.Lock()
-		current.workspaces[a.workDir] = true
-		current.mu.Unlock()
+		defer current.mu.Unlock()
+		for existing := range current.workspaces {
+			// Case-folding also rejects aliases on default macOS volumes. On a
+			// case-sensitive volume this conservatively rejects ambiguous names.
+			if withinPath(strings.ToLower(work), strings.ToLower(existing)) || withinPath(strings.ToLower(existing), strings.ToLower(work)) {
+				return nil, errors.New("codex: shared entry workspaces must not overlap")
+			}
+		}
+		current.refs++
+		current.workspaces[work] = true
 		return current, nil
 	}
 	p := makeAppServerSession(context.Background(), a.cmd, a.cliExtraArgs, "stdio://", "/var/empty", "", "", "full-auto", "", "", "", "", configEnv, a.codexHome, "", "", spawn)
-	hub := &sharedAppServer{prototype: p, refs: 1, threads: make(map[string]*appServerSession), closing: make(map[string]chan struct{}), unavailable: make(map[string]bool), workspaces: map[string]bool{a.workDir: true}, ownerUID: ownerUID, blocked: make(map[string]int)}
+	hub := &sharedAppServer{prototype: p, refs: 1, threads: make(map[string]*appServerSession), closing: make(map[string]chan struct{}), unavailable: make(map[string]bool), workspaces: map[string]bool{work: true}, ownerUID: ownerUID, blocked: make(map[string]int)}
 	sharedServers.byHome[a.codexHome] = hub
 	return hub, nil
 }

@@ -5,7 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -21,7 +24,7 @@ type sharedTestRequest struct {
 }
 
 // Real multiplexed JSON-RPC pipes, with only the native CLI boundary faked.
-func sharedTestServer(t *testing.T) (*sharedAppServer, <-chan sharedTestRequest, func(any)) {
+func sharedTestServer(t *testing.T, notifyClosed bool) (*sharedAppServer, <-chan sharedTestRequest, func(any), func()) {
 	t.Helper()
 	s := makeAppServerSession(context.Background(), "", nil, "stdio://", t.TempDir(), "", "", "full-auto", "", "", "", "", nil, t.TempDir(), "", "", core.SpawnOptions{})
 	h := &sharedAppServer{transport: s, threads: map[string]*appServerSession{}, closing: map[string]chan struct{}{}, unavailable: map[string]bool{}, workspaces: map[string]bool{}, blocked: map[string]int{}}
@@ -66,13 +69,13 @@ func sharedTestServer(t *testing.T) (*sharedAppServer, <-chan sharedTestRequest,
 				continue
 			}
 			write(map[string]any{"id": r.ID, "result": result})
-			if r.Method == "thread/unsubscribe" {
+			if r.Method == "thread/unsubscribe" && notifyClosed {
 				write(map[string]any{"method": "thread/closed", "params": map[string]any{"threadId": r.Params["threadId"]}})
 			}
 		}
 	}()
 	t.Cleanup(func() { s.abortTransport(); _ = requests.Close(); _ = replies.Close(); _ = stdout.Close(); s.wg.Wait() })
-	return h, turns, write
+	return h, turns, write, func() { _ = replies.Close() }
 }
 
 func sharedTestChild(t *testing.T, h *sharedAppServer, work, token, resume string) *appServerSession {
@@ -87,13 +90,14 @@ func sharedTestChild(t *testing.T, h *sharedAppServer, work, token, resume strin
 }
 
 func TestCodexSharedConcurrentStopResumeAndQuestionScope(t *testing.T) {
-	h, starts, write := sharedTestServer(t)
+	h, starts, write, _ := sharedTestServer(t, true)
 	root := t.TempDir()
 	a := sharedTestChild(t, h, filepath.Join(root, "sales"), "fictional-a", "")
 	b := sharedTestChild(t, h, filepath.Join(root, "operations"), "fictional-b", "")
 	done := make(chan error, 2)
 	go func() { done <- a.Send("sales draft", "a", nil, nil) }()
 	go func() { done <- b.Send("execution draft", "b", nil, nil) }()
+	var pending []sharedTestRequest
 	for i := 0; i < 2; i++ {
 		var r sharedTestRequest
 		select {
@@ -101,6 +105,9 @@ func TestCodexSharedConcurrentStopResumeAndQuestionScope(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Fatal("turns were serialized")
 		}
+		pending = append(pending, r)
+	}
+	for _, r := range pending {
 		id := r.Params["threadId"].(string)
 		write(map[string]any{"method": "turn/started", "params": map[string]any{"threadId": id, "turn": map[string]any{"id": "turn-" + id}}})
 		write(map[string]any{"id": r.ID, "result": map[string]any{"turn": map[string]any{"id": "turn-" + id}}})
@@ -157,43 +164,63 @@ func TestCodexSharedConcurrentStopResumeAndQuestionScope(t *testing.T) {
 	}
 }
 
-func TestCodexSharedStoppedTransportAndUnconfirmedEntry(t *testing.T) {
-	h, _, _ := sharedTestServer(t)
+func TestCodexSharedUnconfirmedUnloadBlocksFreshEntry(t *testing.T) {
+	h, _, _, _ := sharedTestServer(t, false)
 	root := t.TempDir()
 	a := sharedTestChild(t, h, filepath.Join(root, "a"), "", "")
-	b := sharedTestChild(t, h, filepath.Join(root, "b"), "", "")
-	h.mu.Lock()
-	h.blocked[a.workDir]++
-	h.mu.Unlock()
+	if err := a.Close(); err == nil || !strings.Contains(err.Error(), "unconfirmed") {
+		t.Fatalf("missing unload confirmation was accepted: %v", err)
+	}
 	s := makeAppServerSession(context.Background(), "", nil, "stdio://", a.workDir, "", "", "full-auto", "isolated", "", "", "", nil, "", "", "", core.SpawnOptions{})
 	defer s.cancel()
-	if err := h.attach(s, ""); err == nil {
+	if err := h.attach(s, ""); err == nil || !strings.Contains(err.Error(), "unconfirmed") {
 		t.Fatal("fresh start bypassed uncertain unload")
 	}
-	_ = h.transport.stdin.Close() // Fake native stdout can disappear independently.
-	h.transport.abortTransport()
-	h.failed(io.EOF)
-	h.failed(io.EOF)
-	for _, child := range []*appServerSession{a, b} {
-		if child.Alive() {
-			t.Fatal("dead owner left a live child")
-		}
-		select {
-		case event := <-child.events:
-			if event.Type != core.EventError {
-				t.Fatal(event)
+}
+
+func TestCodexSharedEOFAndBlockedQuestionFailAllThreads(t *testing.T) {
+	for _, fault := range []string{"stdout-eof", "question-write"} {
+		t.Run(fault, func(t *testing.T) {
+			h, _, write, closeOutput := sharedTestServer(t, true)
+			root := t.TempDir()
+			a := sharedTestChild(t, h, filepath.Join(root, "a"), "", "")
+			b := sharedTestChild(t, h, filepath.Join(root, "b"), "", "")
+			if fault == "stdout-eof" {
+				closeOutput()
+			} else {
+				// The native process stops consuming stdin; the question arrives over
+				// the real readLoop. No response path may block that loop indefinitely.
+				reader, blocked := io.Pipe()
+				t.Cleanup(func() { _ = reader.Close(); _ = blocked.Close() })
+				h.transport.procMu.Lock()
+				old := h.transport.stdin
+				h.transport.stdin = blocked
+				h.transport.procMu.Unlock()
+				_ = old.Close()
+				write(map[string]any{"id": "empty-question", "method": "item/tool/requestUserInput", "params": map[string]any{"threadId": "a", "questions": []any{}}})
 			}
-		default:
-			t.Fatal("missing failure")
-		}
-		select {
-		case <-child.events:
-			t.Fatal("duplicate failure")
-		default:
-		}
-	}
-	if _, err := h.connection(); err == nil {
-		t.Fatal("silently restarted authentication owner")
+			for _, child := range []*appServerSession{a, b} {
+				select {
+				case event := <-child.events:
+					if event.Type != core.EventError {
+						t.Fatal(event)
+					}
+				case <-time.After(3 * time.Second):
+					t.Fatal("missing failure")
+				}
+				if child.Alive() {
+					t.Fatal("dead owner left a live child")
+				}
+				select {
+				case <-child.events:
+					t.Fatal("duplicate failure")
+				default:
+				}
+			}
+			if _, err := h.connection(); err == nil {
+				t.Fatal("silently restarted authentication owner")
+			}
+		})
 	}
 }
 
@@ -239,6 +266,57 @@ func TestCodexSharedPermissionsAndCapabilities(t *testing.T) {
 	}
 }
 
+func TestCodexSharedFailedTurnNeverReportsSuccess(t *testing.T) {
+	h, _, write, _ := sharedTestServer(t, true)
+	root := t.TempDir()
+	a := sharedTestChild(t, h, filepath.Join(root, "a"), "", "")
+	b := sharedTestChild(t, h, filepath.Join(root, "b"), "", "")
+	write(map[string]any{"method": "turn/started", "params": map[string]any{"threadId": "a", "turn": map[string]any{"id": "failed-turn"}}})
+	write(map[string]any{"method": "error", "params": map[string]any{"threadId": "a", "willRetry": true, "error": map[string]any{"message": "temporary"}}})
+	write(map[string]any{"method": "thread/status/changed", "params": map[string]any{"threadId": "a", "status": map[string]any{"type": "idle"}}})
+	write(map[string]any{"method": "turn/completed", "params": map[string]any{"threadId": "a", "turn": map[string]any{"id": "failed-turn", "status": "failed", "error": map[string]any{"message": "synthetic failure"}}}})
+	select {
+	case event := <-a.events:
+		if event.Type != core.EventError {
+			t.Fatal(event)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("failed turn disappeared")
+	}
+	select {
+	case event := <-a.events:
+		t.Fatalf("unexpected success: %+v", event)
+	default:
+	}
+	select {
+	case event := <-b.events:
+		t.Fatalf("failure leaked to other thread: %+v", event)
+	default:
+	}
+	if !b.Alive() {
+		t.Fatal("one failed turn stopped another employee")
+	}
+	// A duplicate terminal event from the failed turn must not finish the
+	// next queued turn on the same thread.
+	write(map[string]any{"method": "turn/started", "params": map[string]any{"threadId": "a", "turn": map[string]any{"id": "new-turn"}}})
+	write(map[string]any{"method": "error", "params": map[string]any{"threadId": "a", "turnId": "failed-turn", "willRetry": false, "error": map[string]any{"message": "old failure"}}})
+	write(map[string]any{"method": "turn/completed", "params": map[string]any{"threadId": "a", "turn": map[string]any{"id": "failed-turn", "status": "completed"}}})
+	write(map[string]any{"method": "turn/completed", "params": map[string]any{"threadId": "a", "turn": map[string]any{"id": "new-turn", "status": "completed"}}})
+	select {
+	case event := <-a.events:
+		if event.Type != core.EventResult || !event.Done {
+			t.Fatal(event)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("new turn was lost")
+	}
+	select {
+	case event := <-a.events:
+		t.Fatalf("duplicate terminal event: %+v", event)
+	default:
+	}
+}
+
 func TestCodexSharedThreadOverrideRetainsVerifiedNativeBase(t *testing.T) {
 	base := map[string]any{"filesystem": map[string]any{":minimal": "read", "/opt/tools": "read", "glob_scan_max_depth": nil}, "network": map[string]any{"enabled": true, "domains": map[string]any{"127.0.0.1": "allow"}, "unix_sockets": nil}}
 	dynamic := map[string]any{"filesystem": map[string]any{"/work": "write"}, "network": map[string]any{"unix_sockets": map[string]string{"/tmp/exact-office": "allow"}}}
@@ -275,5 +353,87 @@ func TestCodexSharedRegistrationKeepsAuthAndBorrowedStop(t *testing.T) {
 	}
 	if h.refs != 1 {
 		t.Fatal("borrowed file agent released owner")
+	}
+}
+
+func TestCodexSharedRegistrationRejectsOverlappingEntrances(t *testing.T) {
+	root := t.TempDir()
+	work := filepath.Join(root, "sales")
+	child := filepath.Join(work, "nested")
+	if err := os.MkdirAll(child, 0700); err != nil {
+		t.Fatal(err)
+	}
+	a := &Agent{cmd: "synthetic", codexHome: t.TempDir(), workDir: work}
+	h, err := registerSharedServer(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = h.release() }()
+	paths := []string{work, root, child}
+	alias := filepath.Join(root, "alias")
+	if err := os.Symlink(work, alias); err == nil {
+		paths = append(paths, alias, filepath.Join(alias, "nested"))
+	} else if runtime.GOOS != "windows" {
+		t.Fatal(err)
+	}
+	for _, path := range paths {
+		a.workDir = path
+		if _, err := registerSharedServer(a); err == nil {
+			t.Fatalf("overlapping entrance accepted: %s", path)
+		}
+	}
+	if runtime.GOOS != "windows" {
+		authAlias := filepath.Join(root, "auth-alias")
+		if err := os.Symlink(a.codexHome, authAlias); err != nil {
+			t.Fatal(err)
+		}
+		a.workDir = authAlias
+		if _, err := registerSharedServer(a); err == nil {
+			t.Fatal("workspace alias exposed auth directory")
+		}
+	}
+	if h.refs != 1 {
+		t.Fatal("failed registration retained an owner reference")
+	}
+	a.workDir = t.TempDir()
+	other, err := registerSharedServer(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if other != h {
+		t.Fatal("separate login for another entrance")
+	}
+	_ = other.release()
+}
+
+func TestCodexSharedRegistryUsesNativeIdentity(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("ordinary Unix identity")
+	}
+	name, err := exec.Command("/usr/bin/id", "-un").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	username := strings.TrimSpace(string(name))
+	uid, err := ordinaryRuntimeUID(username)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if int(uid) != os.Getuid() {
+		t.Fatal("wrong native UID")
+	}
+	a := &Agent{cmd: "synthetic", codexHome: t.TempDir(), workDir: t.TempDir(), spawnOpts: core.SpawnOptions{RunAsUser: username}}
+	h, err := registerSharedServer(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = h.release() }()
+	alias := filepath.Join(t.TempDir(), "same-auth")
+	if err := os.Symlink(a.codexHome, alias); err != nil {
+		t.Fatal(err)
+	}
+	a.codexHome = alias
+	if _, err := registerSharedServer(a); err == nil {
+		t.Fatal("second path for one auth owner accepted")
 	}
 }

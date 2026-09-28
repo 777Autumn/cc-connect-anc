@@ -83,6 +83,11 @@ type itemNotification struct {
 
 type errorNotification struct {
 	Message string `json:"message"`
+	TurnID  string `json:"turnId"`
+	Error   *struct {
+		Message string `json:"message"`
+	} `json:"error"`
+	WillRetry bool `json:"willRetry"`
 }
 
 type appServerRateLimitsResponse struct {
@@ -1191,7 +1196,19 @@ func (s *appServerSession) handleNotification(method string, paramsRaw json.RawM
 	case "turn/completed":
 		var notif turnNotification
 		if err := json.Unmarshal(paramsRaw, &notif); err == nil {
-			s.completeTurn()
+			if s.transport != nil && (notif.Turn.Status == "failed" || notif.Turn.Error != nil) {
+				message := "native turn failed"
+				if notif.Turn.Error != nil {
+					message = notif.Turn.Error.Message
+				}
+				s.failTurn(notif.Turn.ID, message)
+				return
+			}
+			if s.transport != nil {
+				s.completeTurn(notif.Turn.ID)
+			} else {
+				s.completeTurn()
+			}
 		}
 
 	case "thread/status/changed":
@@ -1201,8 +1218,9 @@ func (s *appServerSession) handleNotification(method string, paramsRaw json.RawM
 				Type string `json:"type"`
 			} `json:"status"`
 		}
-		if err := json.Unmarshal(paramsRaw, &notif); err == nil && notif.Status.Type == "idle" {
+		if err := json.Unmarshal(paramsRaw, &notif); err == nil && notif.Status.Type == "idle" && s.transport == nil {
 			// In codex 0.125+, thread going idle signals turn completion.
+			// Shared 0.157.1 threads use turn/completed, including failure status.
 			s.completeTurn()
 		}
 
@@ -1220,8 +1238,12 @@ func (s *appServerSession) handleNotification(method string, paramsRaw json.RawM
 
 	case "error":
 		var notif errorNotification
-		if err := json.Unmarshal(paramsRaw, &notif); err == nil && strings.TrimSpace(notif.Message) != "" {
-			s.emitError(fmt.Errorf("%s", notif.Message))
+		if err := json.Unmarshal(paramsRaw, &notif); err == nil {
+			if s.transport != nil && notif.Error != nil && !notif.WillRetry {
+				s.failTurn(notif.TurnID, notif.Error.Message)
+			} else if strings.TrimSpace(notif.Message) != "" {
+				s.emitError(fmt.Errorf("%s", notif.Message))
+			}
 		}
 	}
 }
@@ -1573,9 +1595,21 @@ func rpcIDToInt64(v any) (int64, bool) {
 	return 0, false
 }
 
-func (s *appServerSession) completeTurn() {
+func (s *appServerSession) failTurn(turnID, message string) {
 	s.stateMu.Lock()
-	if s.currentTurn == "" {
+	if turnID == "" || s.currentTurn != turnID {
+		s.stateMu.Unlock()
+		return
+	}
+	s.currentTurn = ""
+	s.pendingMsgs = nil
+	s.stateMu.Unlock()
+	s.emitError(fmt.Errorf("codex: %s", message))
+}
+
+func (s *appServerSession) completeTurn(expectedID ...string) {
+	s.stateMu.Lock()
+	if s.currentTurn == "" || (len(expectedID) != 0 && s.currentTurn != expectedID[0]) {
 		s.stateMu.Unlock()
 		return
 	}
@@ -1794,7 +1828,11 @@ func (s *appServerSession) notify(method string, params any) error {
 
 func (s *appServerSession) writeJSON(v any) error {
 	if s.transport != nil {
-		return s.transport.writeJSON(v)
+		err := s.transport.writeJSONWithTimeout("thread response", v, appServerUsageRefreshTimeout)
+		if err != nil {
+			s.hub.failed(err)
+		}
+		return err
 	}
 	b, err := json.Marshal(v)
 	if err != nil {
