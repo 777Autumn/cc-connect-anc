@@ -591,6 +591,27 @@ type stubWorkDirAgent struct {
 	workDir string
 }
 
+type fixedWorkDirAgent struct{ stubWorkDirAgent }
+
+func (a *fixedWorkDirAgent) ValidateWorkDir(dir string) error {
+	if dir != a.workDir {
+		return errors.New("fixed workspace")
+	}
+	return nil
+}
+
+func TestDirApply_FixedScopePreservesSession(t *testing.T) {
+	a := &fixedWorkDirAgent{stubWorkDirAgent: stubWorkDirAgent{workDir: t.TempDir()}}
+	e := NewEngine("fixed", a, nil, "", LangEnglish)
+	defer e.cancel()
+	session := e.sessions.GetOrCreateActive("test:employee")
+	session.SetAgentSessionID("keep", "stub")
+	errMsg, success := e.dirApply(a, e.sessions, "test:employee", "test:employee", []string{t.TempDir()})
+	if errMsg == "" || success != "" || session.GetAgentSessionID() != "keep" {
+		t.Fatal("directory override changed fixed-scope session")
+	}
+}
+
 func (a *stubWorkDirAgent) SetWorkDir(dir string) {
 	a.workDir = dir
 }
@@ -7890,6 +7911,24 @@ func TestResumeFallback_ClearsStaleSessionID(t *testing.T) {
 	got := session.GetAgentSessionID()
 	if got != "fresh-id" {
 		t.Fatalf("AgentSessionID = %q, want %q — stale ID should be replaced", got, "fresh-id")
+	}
+}
+
+func TestResumeBlocked_PreservesBindingAndDoesNotStartFresh(t *testing.T) {
+	for _, callErr := range []error{ErrSessionResumeBlocked, fmt.Errorf("native unload: %w", ErrSessionResumeBlocked)} {
+		calls := 0
+		agent := &controllableAgent{startSessionFn: func(_ context.Context, id string) (AgentSession, error) {
+			calls++
+			return nil, callErr
+		}}
+		p := &stubPlatformEngine{n: "test"}
+		e := NewEngine("test", agent, []Platform{p}, "", LangEnglish)
+		session := &Session{AgentSessionID: "retained", AgentType: "controllable"}
+		state := e.getOrCreateInteractiveStateWith("test:user1", p, "ctx", session, e.sessions, nil, "")
+		if calls != 1 || state.agentSession != nil || session.GetAgentSessionID() != "retained" {
+			t.Fatalf("unsafe fallback: calls=%d binding=%q", calls, session.GetAgentSessionID())
+		}
+		e.cancel()
 	}
 }
 

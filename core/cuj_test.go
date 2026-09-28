@@ -671,6 +671,31 @@ func TestCUJ_C4_CancelStopsAndStartsFreshSession(t *testing.T) {
 // CUJ-B6 · /name renames current session and /list shows the new name
 // ===========================================================================
 
+func TestCUJ_C4_UnconfirmedResumeReportsFailureWithoutFreshWork(t *testing.T) {
+	env := newCUJEnv(t)
+	key := env.userSends("sales", "prepare a draft")
+	env.waitFor("first draft completed", 2*time.Second, func() bool {
+		return len(env.activeSession(key).GetHistory(0)) >= 2 && !env.activeSession(key).Busy()
+	})
+	binding := env.activeSession(key).GetAgentSessionID()
+	env.userSends("sales", "/stop")
+	env.agent.mu.Lock()
+	env.agent.failStartCount = 1
+	env.agent.failStartErr = fmt.Errorf("unload unconfirmed: %w", ErrSessionResumeBlocked)
+	starts := len(env.agent.sessions)
+	env.agent.mu.Unlock()
+	env.plat.clearSent()
+	env.userSends("sales", "continue that draft")
+	env.waitFor("employee sees failure", 2*time.Second, func() bool {
+		return env.sentContains(env.engine.i18n.T(MsgFailedToStartAgentSession))
+	})
+	env.agent.mu.Lock()
+	defer env.agent.mu.Unlock()
+	if len(env.agent.sessions) != starts || env.activeSession(key).GetAgentSessionID() != binding {
+		t.Fatal("unconfirmed resume silently started a different work")
+	}
+}
+
 func TestCUJ_B6_NameRenamesCurrentSession(t *testing.T) {
 	env := newCUJEnv(t)
 	key := "test:carol"

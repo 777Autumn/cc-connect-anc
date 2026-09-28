@@ -38,9 +38,24 @@ func (a *Agent) nativeSessionAccess() bool {
 func (a *Agent) withSessionAccess(ctx context.Context, fn func(codexRPC, string) error) error {
 	a.mu.RLock()
 	bin, args, work, home, spawn := a.cmd, append([]string(nil), a.cliExtraArgs...), a.workDir, a.codexHome, a.spawnOpts
+	shared, scope, stopped := a.sharedServer, a.sharedWorkspace, a.sharedStopped
 	// Session capabilities are for model turns, never needed for history reads.
 	env := append([]string(nil), a.configEnv...)
 	a.mu.RUnlock()
+	if shared != nil {
+		if stopped || work != scope {
+			return fmt.Errorf("codex: shared entry is stopped or its workspace changed")
+		}
+		connection, err := shared.connection()
+		if err != nil {
+			return err
+		}
+		ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		defer cancel()
+		return fn(func(method string, params any, out any) error {
+			return connection.requestWithContext(ctx, method, params, out, 15*time.Second)
+		}, work)
+	}
 	if home != "" {
 		env = append(env, "CODEX_HOME="+home)
 	}

@@ -1201,6 +1201,21 @@ func TestValidateProjectWorkDir(t *testing.T) {
 	}
 }
 
+func TestMgmt_FixedWorkDirRejectsOverrideBeforeOtherEdits(t *testing.T) {
+	a := &fixedWorkDirAgent{stubWorkDirAgent: stubWorkDirAgent{workDir: t.TempDir()}}
+	e := NewEngine("fixed", a, nil, "", LangEnglish)
+	defer e.cancel()
+	m := NewManagementServer(0, "", nil)
+	m.RegisterEngine("fixed", e)
+	body, _ := json.Marshal(map[string]any{"work_dir": t.TempDir(), "language": "zh"})
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/projects/fixed", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	m.handleProjectRoutes(w, req)
+	if w.Code != http.StatusBadRequest || e.i18n.CurrentLang() != LangEnglish {
+		t.Fatalf("fixed workspace accepted: %d %s", w.Code, w.Body.String())
+	}
+}
+
 func TestMgmt_OtherRoutesStillRequireEngine(t *testing.T) {
 	_, ts, _ := testManagementServer(t, "tok")
 

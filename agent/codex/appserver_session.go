@@ -141,6 +141,14 @@ type appServerRequestUserInputAnswer struct {
 }
 
 type appServerSession struct {
+	// Shared mode keeps process I/O on transport; each child owns one thread.
+	transport         *appServerSession
+	hub               *sharedAppServer
+	threadConfig      map[string]any
+	eventMu           sync.RWMutex
+	eventsClosed      bool
+	closeMu           sync.Mutex
+	sendMu            sync.Mutex
 	spawnOpts         core.SpawnOptions
 	cliBin            string
 	cliExtraArgs      []string
@@ -196,6 +204,26 @@ const (
 )
 
 func newAppServerSession(ctx context.Context, cliBin string, cliExtraArgs []string, url, workDir, model, effort, mode, permissionProfile, resumeID, baseURL, modelProvider string, extraEnv []string, codexHome string, systemPrompt string, appendPrompt string, spawn core.SpawnOptions) (*appServerSession, error) {
+	s := makeAppServerSession(ctx, cliBin, cliExtraArgs, url, workDir, model, effort, mode, permissionProfile, resumeID, baseURL, modelProvider, extraEnv, codexHome, systemPrompt, appendPrompt, spawn)
+	if err := s.connect(); err != nil {
+		s.cancel()
+		return nil, err
+	}
+	if err := s.initialize(); err != nil {
+		_ = s.Close()
+		return nil, err
+	}
+	if err := s.ensureThread(resumeID); err != nil {
+		_ = s.Close()
+		return nil, err
+	}
+	if err := s.refreshUsage(context.Background()); err != nil {
+		slog.Debug("codex app-server: initial rate limit fetch failed", "error", err)
+	}
+	return s, nil
+}
+
+func makeAppServerSession(ctx context.Context, cliBin string, cliExtraArgs []string, url, workDir, model, effort, mode, permissionProfile, resumeID, baseURL, modelProvider string, extraEnv []string, codexHome string, systemPrompt string, appendPrompt string, spawn core.SpawnOptions) *appServerSession {
 	sessionCtx, cancel := context.WithCancel(ctx)
 	s := &appServerSession{
 		spawnOpts:         spawn,
@@ -220,26 +248,7 @@ func newAppServerSession(ctx context.Context, cliBin string, cliExtraArgs []stri
 		preambleSent:      resumeID != "" && resumeID != core.ContinueSession,
 	}
 	s.alive.Store(true)
-
-	if err := s.connect(); err != nil {
-		cancel()
-		return nil, err
-	}
-
-	if err := s.initialize(); err != nil {
-		_ = s.Close()
-		return nil, err
-	}
-
-	if err := s.ensureThread(resumeID); err != nil {
-		_ = s.Close()
-		return nil, err
-	}
-	if err := s.refreshUsage(context.Background()); err != nil {
-		slog.Debug("codex app-server: initial rate limit fetch failed", "error", err)
-	}
-
-	return s, nil
+	return s
 }
 
 func (s *appServerSession) connect() error {
@@ -368,6 +377,10 @@ func (s *appServerSession) threadRequestParams() map[string]any {
 		"experimentalRawEvents":  false,
 		"persistExtendedHistory": false,
 	}
+	if s.transport != nil {
+		params["cwd"] = s.workDir
+		params["config"] = s.threadConfig
+	}
 	if model := s.GetModel(); model != "" {
 		params["model"] = model
 	}
@@ -456,6 +469,8 @@ func (s *appServerSession) storeContextUsage(usage *core.ContextUsage) {
 }
 
 func (s *appServerSession) Send(prompt string, messageID string, images []core.ImageAttachment, files []core.FileAttachment) error {
+	s.sendMu.Lock()
+	defer s.sendMu.Unlock()
 	if !s.alive.Load() {
 		return fmt.Errorf("session is closed")
 	}
@@ -517,10 +532,14 @@ func (s *appServerSession) Send(prompt string, messageID string, images []core.I
 		return fmt.Errorf("codex app-server turn/start returned empty turn id")
 	}
 
-	s.stateMu.Lock()
-	s.currentTurn = resp.Turn.ID
-	s.pendingMsgs = s.pendingMsgs[:0]
-	s.stateMu.Unlock()
+	// Shared mode observes turn/started before its RPC response. Do not revive
+	// an already-completed turn or erase messages which arrived before it.
+	if s.transport == nil {
+		s.stateMu.Lock()
+		s.currentTurn = resp.Turn.ID
+		s.pendingMsgs = s.pendingMsgs[:0]
+		s.stateMu.Unlock()
+	}
 
 	return nil
 }
@@ -952,6 +971,11 @@ func (s *appServerSession) Alive() bool {
 }
 
 func (s *appServerSession) Close() error {
+	s.closeMu.Lock()
+	defer s.closeMu.Unlock()
+	if s.transport != nil {
+		return s.hub.detach(s)
+	}
 	s.alive.Store(false)
 	s.cancel()
 
@@ -976,10 +1000,17 @@ func (s *appServerSession) Close() error {
 	case <-time.After(2 * time.Second):
 	}
 
+	s.closeEvents()
+	return nil
+}
+
+func (s *appServerSession) closeEvents() {
 	s.closeOnce.Do(func() {
+		s.eventMu.Lock()
+		defer s.eventMu.Unlock()
+		s.eventsClosed = true
 		close(s.events)
 	})
-	return nil
 }
 
 func (s *appServerSession) readLoop(r io.Reader) {
@@ -1019,7 +1050,11 @@ func (s *appServerSession) readLoop(r io.Reader) {
 
 		case hasID && hasMethod:
 			// Server-initiated request that requires a response (e.g. approval).
-			s.handleServerRequest(probe)
+			if s.hub != nil {
+				s.hub.serverRequest(probe)
+			} else {
+				s.handleServerRequest(probe)
+			}
 
 		default:
 			// Notification (no id).
@@ -1028,11 +1063,24 @@ func (s *appServerSession) readLoop(r io.Reader) {
 				slog.Debug("codex app-server: bad notification envelope", "error", err)
 				continue
 			}
-			s.handleNotification(notif.Method, notif.Params)
+			if s.hub != nil {
+				s.hub.notification(notif.Method, notif.Params)
+			} else {
+				s.handleNotification(notif.Method, notif.Params)
+			}
 		}
 	}
 
 	err := scanner.Err()
+	if s.hub != nil {
+		if err == nil {
+			err = io.EOF
+		}
+		s.rejectPending(err)
+		s.abortTransport()
+		s.hub.failed(err)
+		return
+	}
 	if err != nil {
 		if s.ctx.Err() == nil && !errors.Is(err, io.EOF) {
 			slog.Warn("codex app-server read failed", "error", err)
@@ -1090,6 +1138,9 @@ func (s *appServerSession) waitLoop() {
 		err = io.EOF
 	}
 	s.rejectPending(err)
+	if s.hub != nil {
+		s.hub.failed(err)
+	}
 }
 
 func (s *appServerSession) handleResponse(resp rpcResponseEnvelope) {
@@ -1561,6 +1612,11 @@ func (s *appServerSession) flushPendingAsText() {
 }
 
 func (s *appServerSession) emit(event core.Event) {
+	s.eventMu.RLock()
+	defer s.eventMu.RUnlock()
+	if s.eventsClosed {
+		return
+	}
 	select {
 	case s.events <- event:
 	default:
@@ -1592,6 +1648,19 @@ func (s *appServerSession) request(method string, params any, out any) error {
 }
 
 func (s *appServerSession) requestWithTimeout(method string, params any, out any, timeout time.Duration) error {
+	if s.transport != nil {
+		return s.transport.requestWithContext(s.ctx, method, params, out, timeout)
+	}
+	return s.requestWithContext(s.ctx, method, params, out, timeout)
+}
+
+func (s *appServerSession) requestWithContext(ctx context.Context, method string, params any, out any, timeout time.Duration) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	id := s.nextID.Add(1)
 	ch := make(chan rpcResponseEnvelope, 1)
 
@@ -1601,6 +1670,11 @@ func (s *appServerSession) requestWithTimeout(method string, params any, out any
 	}
 	s.pending[id] = ch
 	s.pendingMu.Unlock()
+	defer func() {
+		s.pendingMu.Lock()
+		delete(s.pending, id)
+		s.pendingMu.Unlock()
+	}()
 
 	payload := map[string]any{
 		"jsonrpc": "2.0",
@@ -1640,6 +1714,8 @@ func (s *appServerSession) requestWithTimeout(method string, params any, out any
 		return nil
 	case <-ctxDone:
 		return s.contextErr()
+	case <-ctx.Done():
+		return ctx.Err()
 	case <-timer.C:
 		s.pendingMu.Lock()
 		delete(s.pending, id)
@@ -1717,6 +1793,9 @@ func (s *appServerSession) notify(method string, params any) error {
 }
 
 func (s *appServerSession) writeJSON(v any) error {
+	if s.transport != nil {
+		return s.transport.writeJSON(v)
+	}
 	b, err := json.Marshal(v)
 	if err != nil {
 		return fmt.Errorf("codex app-server encode: %w", err)
