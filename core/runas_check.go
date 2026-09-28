@@ -160,10 +160,11 @@ func scanDescendants(ctx context.Context, runner SudoRunner, target, workDir str
 		}
 		prune = append(prune, "-name", p)
 	}
-	// Pruned directories are not traversed or checked.
+	// This access-only check needs the target UID/groups, not a login shell.
+	// Avoid sudo -i re-parsing the nested find -exec script and filenames.
 	args := []string{
-		"-n", "-iu", target, "--",
-		"find", workDir,
+		"-n", "-H", "-u", target, "--",
+		"/usr/bin/find", workDir,
 	}
 	if len(prune) > 0 {
 		args = append(args, "(")
@@ -177,8 +178,7 @@ func scanDescendants(ctx context.Context, runner SudoRunner, target, workDir str
 	if scanCtx.Err() == context.DeadlineExceeded {
 		return fmt.Sprintf("work_dir descendant scan timed out after %s (large repo?); skipping detailed access audit. Run `cc-connect doctor user-isolation` manually if you need it.", scan.Timeout)
 	}
-	// find exits non-zero if it couldn't stat some path — that's
-	// actually data for us, parse whatever it printed.
+	// Keep traversal/command failure distinct from per-path access warnings.
 	if err != nil {
 		return fmt.Sprintf("work_dir descendant scan failed; access audit incomplete: %v (%s)", err, strings.TrimSpace(string(out)))
 	}

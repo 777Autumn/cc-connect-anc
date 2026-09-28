@@ -22,12 +22,6 @@ import (
 // Only the network boundary is mocked: no receiver or model starts here.
 type startupFileSender struct{ core.Platform }
 
-type startupFileAgent struct{ stubMainAgent }
-
-func (*startupFileAgent) ForFileWork(string) (core.Agent, error) {
-	return nil, errors.New("offline fixture")
-}
-
 func (startupFileSender) FileReplyRoute(any) (json.RawMessage, error) {
 	return nil, errors.New("offline fixture")
 }
@@ -69,6 +63,9 @@ func TestSharedStartupOrdinaryIdentities(t *testing.T) {
 	if err := teambrain.ValidateAgentUser(f.Model); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := os.ReadDir(f.Home); !os.IsPermission(err) {
+		t.Fatal("gateway must not read authentication directory:", err)
+	}
 	if err := runRunAsUserStartupChecks(context.Background(), cfg); err != nil {
 		t.Fatal(err)
 	}
@@ -77,6 +74,18 @@ func TestSharedStartupOrdinaryIdentities(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i, p := range cfg.Projects {
+		p.Agent.Options["run_as_user"] = f.Model
+		p.Agent.Options["cmd"] = "/usr/bin/true" // Constructor only; no CLI/model process.
+		p.Agent.Options["file_work_native"] = true
+		agent, err := core.CreateAgent(p.Agent.Type, p.Agent.Options)
+		if err != nil {
+			t.Fatal("ordinary shared agent registration:", err)
+		}
+		t.Cleanup(func() {
+			if err := agent.Stop(); err != nil {
+				t.Error(err)
+			}
+		})
 		a := hosts[p.Name]
 		if err := a.EnableTools(); err != nil {
 			t.Fatal(err)
@@ -117,7 +126,7 @@ func TestSharedStartupOrdinaryIdentities(t *testing.T) {
 			t.Fatal(err)
 		}
 		p.FileWork = config.FileWorkConfig{Enabled: true, Runtime: "native", WorkBaseDir: filepath.Join(f.Root, "works"), Ledger: ledger, Snapshots: snapshots}
-		engine := core.NewEngine(p.Name, &startupFileAgent{}, nil, filepath.Join(state, "session.json"), core.LangEnglish)
+		engine := core.NewEngine(p.Name, agent, nil, filepath.Join(state, "session.json"), core.LangEnglish)
 		server, closeHost, err := configureFileWork(p, engine, []core.Platform{startupFileSender{}})
 		if err != nil || server != nil {
 			t.Fatal("ordinary file startup:", err)

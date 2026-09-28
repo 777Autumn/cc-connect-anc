@@ -169,6 +169,9 @@ func RunIsolationProbe(ctx context.Context, cfg AuditConfig) (IsolationReport, e
 	if cfg.RunAsUser == "" {
 		return report, errors.New("RunIsolationProbe: RunAsUser is empty")
 	}
+	if cfg.Supervisor == "" || cfg.Supervisor == cfg.RunAsUser {
+		return report, errors.New("RunIsolationProbe: a distinct supervisor identity is required")
+	}
 	if cfg.Runner == nil {
 		cfg.Runner = ExecSudoRunner{}
 	}

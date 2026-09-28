@@ -3,12 +3,21 @@
 package core
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"os/user"
 	"strings"
 	"testing"
 )
+
+func TestIsolationProbeRequiresSupervisor(t *testing.T) {
+	for _, supervisor := range []string{"", "model"} {
+		if _, err := RunIsolationProbe(context.Background(), AuditConfig{RunAsUser: "model", Supervisor: supervisor}); err == nil {
+			t.Fatal("supervisor audit could be skipped")
+		}
+	}
+}
 
 func TestIsolationProbeNativeHomeAndUnknownUser(t *testing.T) {
 	u, err := user.Current()

@@ -38,8 +38,8 @@ func TestPreflightRunAsUser_AllPass(t *testing.T) {
 	}
 	// Script the find call to return empty.
 	findArgs := []string{
-		"-n", "-iu", "target", "--",
-		"find", "/tmp/wd",
+		"-n", "-H", "-u", "target", "--",
+		"/usr/bin/find", "/tmp/wd",
 		"(", "-name", ".git", ")", "-prune", "-o",
 		"-exec", "/bin/sh", "-c", descendantAccessScript, "sh", "{}", "+",
 	}
@@ -80,8 +80,8 @@ func TestPreflightRunAsUser_TargetCanEscalateIsFatal(t *testing.T) {
 		},
 	}
 	findArgs := []string{
-		"-n", "-iu", "target", "--",
-		"find", "/tmp/wd",
+		"-n", "-H", "-u", "target", "--",
+		"/usr/bin/find", "/tmp/wd",
 		"-exec", "/bin/sh", "-c", descendantAccessScript, "sh", "{}", "+",
 	}
 	runner.script[key(findArgs...)] = stubResponse{out: nil, err: nil}
@@ -138,8 +138,8 @@ func TestPreflightRunAsUser_DescendantWarnings(t *testing.T) {
 		},
 	}
 	findArgs := []string{
-		"-n", "-iu", "target", "--",
-		"find", "/tmp/wd",
+		"-n", "-H", "-u", "target", "--",
+		"/usr/bin/find", "/tmp/wd",
 		"-exec", "/bin/sh", "-c", descendantAccessScript, "sh", "{}", "+",
 	}
 	runner.script[key(findArgs...)] = stubResponse{
@@ -181,8 +181,8 @@ func TestPreflightRunAsUser_DescendantWarningsCapped(t *testing.T) {
 		sb.WriteByte('\n')
 	}
 	findArgs := []string{
-		"-n", "-iu", "target", "--",
-		"find", "/tmp/wd",
+		"-n", "-H", "-u", "target", "--",
+		"/usr/bin/find", "/tmp/wd",
 		"-exec", "/bin/sh", "-c", descendantAccessScript, "sh", "{}", "+",
 	}
 	runner.script[key(findArgs...)] = stubResponse{out: []byte(sb.String()), err: nil}
@@ -213,10 +213,10 @@ func (r localFindRunner) Run(ctx context.Context, args ...string) ([]byte, error
 	if r.fail {
 		return nil, errors.New("synthetic scan failure")
 	}
-	if len(args) < 6 || args[4] != "find" {
+	if len(args) < 7 || args[5] != "/usr/bin/find" {
 		return nil, errors.New("unexpected scanner command")
 	}
-	return exec.CommandContext(ctx, args[4], args[5:]...).CombinedOutput()
+	return exec.CommandContext(ctx, args[5], args[6:]...).CombinedOutput()
 }
 func TestDescendantScanNativeFind(t *testing.T) {
 	if os.Geteuid() == 0 {

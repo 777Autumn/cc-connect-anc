@@ -128,6 +128,9 @@ def main():
         cwd=root, timeout=160).returncode
     if result or not args.startup_test_binary:
         return result
+    # Gateway can resolve the exact auth path, but cannot list HOME or auth.
+    # Its dedicated model-group membership grants traversal only here.
+    Path(model.pw_dir).chmod(0o710)
     works = []
     for i in range(4):
         directory = root / f"shared-work-{i}"
