@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -89,8 +90,8 @@ func registerSharedServer(a *Agent) (*sharedAppServer, error) {
 	}
 	if current := sharedServers.byHome[a.codexHome]; current != nil {
 		p := current.prototype
-		if p.cliBin != a.cmd || !reflect.DeepEqual(p.cliExtraArgs, a.cliExtraArgs) ||
-			!reflect.DeepEqual(p.spawnOpts, spawn) || !reflect.DeepEqual(p.extraEnv, configEnv) {
+		if p.cliBin != a.cmd || !slices.Equal(p.cliExtraArgs, a.cliExtraArgs) ||
+			!reflect.DeepEqual(p.spawnOpts, spawn) || !slices.Equal(p.extraEnv, configEnv) {
 			return nil, errors.New("codex: shared CODEX_HOME has inconsistent process configuration")
 		}
 		current.mu.Lock()
