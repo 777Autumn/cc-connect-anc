@@ -65,10 +65,11 @@ func runRunAsUserStartupChecks(ctx context.Context, cfg *config.Config) error {
 	slog.Info("run_as_user: running startup safety checks",
 		"project_count", len(pendingProjects))
 
-	supervisor := ""
-	if u, err := user.Current(); err == nil {
-		supervisor = u.Username
+	u, err := user.Current()
+	if err != nil || u.Username == "" {
+		return fmt.Errorf("run_as_user: cannot identify supervisor for isolation audit: %v", err)
 	}
+	supervisor := u.Username
 
 	// Fan out preflight + audit per project in parallel. Each project's
 	// result is independent; we collect them all before deciding to

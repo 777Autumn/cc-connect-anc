@@ -339,6 +339,7 @@ func TestCodexSharedThreadOverrideRetainsVerifiedNativeBase(t *testing.T) {
 
 func TestCodexSharedRegistrationKeepsAuthAndBorrowedStop(t *testing.T) {
 	a := &Agent{cmd: "synthetic", codexHome: t.TempDir(), workDir: t.TempDir()}
+	a.cmd, a.cliExtraArgs = core.ParseCmdOpts(map[string]any{"cmd": "synthetic"}, "codex")
 	h, err := registerSharedServer(a)
 	if err != nil {
 		t.Fatal(err)
@@ -353,6 +354,17 @@ func TestCodexSharedRegistrationKeepsAuthAndBorrowedStop(t *testing.T) {
 	}
 	if h.refs != 1 {
 		t.Fatal("borrowed file agent released owner")
+	}
+	a.workDir = t.TempDir()
+	other, err := registerSharedServer(a)
+	if err != nil || other != h {
+		t.Fatal("same CLI with no extra args rejected:", err)
+	}
+	defer func() { _ = other.release() }()
+	a.workDir = t.TempDir()
+	a.cliExtraArgs = []string{"changed"}
+	if _, err := registerSharedServer(a); err == nil {
+		t.Fatal("changed CLI arguments accepted")
 	}
 }
 

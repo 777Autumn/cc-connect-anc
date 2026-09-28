@@ -12,6 +12,23 @@ import (
 	"github.com/chenhg5/cc-connect/core"
 )
 
+func TestKnowledgeAttachedMatchesExactConfiguredSet(t *testing.T) {
+	a := &Adapter{projects: map[string]bool{"one": true, "two": true, "three": true, "four": true}}
+	if !a.AllAttached(map[string]bool{"one": true, "two": true, "three": true, "four": true}) {
+		t.Fatal("complete mapping rejected")
+	}
+	for _, attached := range []map[string]bool{
+		{"one": true, "two": true, "three": true},
+		{"one": true, "two": true, "three": true, "unknown": true},
+		{"one": true, "two": true, "three": true, "four": false},
+		{"one": true, "two": true, "three": true, "four": true, "unknown": true},
+	} {
+		if a.AllAttached(attached) {
+			t.Fatal("incomplete or substituted mapping accepted")
+		}
+	}
+}
+
 func TestDisabledHostAndSessionEnvironmentExposeNoPrivateConfiguration(t *testing.T) {
 	t.Setenv("CC_TEAM_BRAIN_COMMAND", "")
 	t.Setenv("CC_TEAM_BRAIN_PROJECTS", "")

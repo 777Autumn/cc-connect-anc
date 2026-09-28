@@ -143,6 +143,12 @@ func PreflightRunAsUser(ctx context.Context, cfg PreflightConfig) PreflightResul
 // returns a formatted warning string, or "" if nothing is flagged.
 // Respects ScanConfig.Timeout. Output format per line is
 // "MODE<TAB>PATH" where MODE is noread / nowrite / nosearch.
+const descendantAccessScript = `for p do
+    [ -r "$p" ] || printf 'noread\t%s\n' "$p"
+    if [ -f "$p" ] && [ ! -w "$p" ]; then printf 'nowrite\t%s\n' "$p"; fi
+    if [ -d "$p" ] && [ ! -x "$p" ]; then printf 'nosearch\t%s\n' "$p"; fi
+done`
+
 func scanDescendants(ctx context.Context, runner SudoRunner, target, workDir string, scan DescendantScanConfig) string {
 	scanCtx, cancel := context.WithTimeout(ctx, scan.Timeout)
 	defer cancel()
@@ -154,33 +160,28 @@ func scanDescendants(ctx context.Context, runner SudoRunner, target, workDir str
 		}
 		prune = append(prune, "-name", p)
 	}
-	// find <workDir> \( <prune exprs> \) -prune -o \( -not -readable -printf "noread\t%p\n" , -type f -not -writable -printf "nowrite\t%p\n" , -type d -not -executable -printf "nosearch\t%p\n" \) -print
+	// This access-only check needs the target UID/groups, not a login shell.
+	// Avoid sudo -i re-parsing the nested find -exec script and filenames.
 	args := []string{
-		"-n", "-iu", target, "--",
-		"find", workDir,
+		"-n", "-H", "-u", target, "--",
+		"/usr/bin/find", workDir,
 	}
 	if len(prune) > 0 {
 		args = append(args, "(")
 		args = append(args, prune...)
 		args = append(args, ")", "-prune", "-o")
 	}
-	args = append(args,
-		"(",
-		"-not", "-readable", "-printf", `noread\t%p\n`,
-		",",
-		"-type", "f", "-not", "-writable", "-printf", `nowrite\t%p\n`,
-		",",
-		"-type", "d", "-not", "-executable", "-printf", `nosearch\t%p\n`,
-		")",
-	)
+	// POSIX find works on BSD/macOS and Linux. Filenames travel as argv.
+	args = append(args, "-exec", "/bin/sh", "-c", descendantAccessScript, "sh", "{}", "+")
 
 	out, err := runner.Run(scanCtx, args...)
 	if scanCtx.Err() == context.DeadlineExceeded {
 		return fmt.Sprintf("work_dir descendant scan timed out after %s (large repo?); skipping detailed access audit. Run `cc-connect doctor user-isolation` manually if you need it.", scan.Timeout)
 	}
-	// find exits non-zero if it couldn't stat some path — that's
-	// actually data for us, parse whatever it printed.
-	_ = err
+	// Keep traversal/command failure distinct from per-path access warnings.
+	if err != nil {
+		return fmt.Sprintf("work_dir descendant scan failed; access audit incomplete: %v (%s)", err, strings.TrimSpace(string(out)))
+	}
 
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
 	if len(lines) == 0 || (len(lines) == 1 && lines[0] == "") {

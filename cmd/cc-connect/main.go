@@ -1210,8 +1210,8 @@ func main() {
 			}
 		}
 	}
-	if knowledgeHost != nil && len(knowledgeAttached) != 6 {
-		slog.Error("not all six knowledge environments were found")
+	if knowledgeHost != nil && !knowledgeHost.AllAttached(knowledgeAttached) {
+		slog.Error("not all configured knowledge environments were found")
 		os.Exit(1)
 	}
 	if len(crmActionHosts) != len(crmActionHostAttached) {
@@ -1705,6 +1705,10 @@ func validateCRMProjectSet(cfg *config.Config, hosts map[string]*crmfollowup.Ada
 	if len(hosts) == 0 {
 		return nil
 	}
+	sharedOwner, err := sharedCodexOwner(cfg)
+	if err != nil {
+		return err
+	}
 	seen := make(map[string]bool)
 	users, dirs, routes := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	appID, domain, credential := "", "", ""
@@ -1728,7 +1732,7 @@ func validateCRMProjectSet(cfg *config.Config, hosts map[string]*crmfollowup.Ada
 			continue
 		}
 		workDir, _ := proj.Agent.Options["work_dir"].(string)
-		if !filepath.IsAbs(workDir) || users[proj.RunAsUser] || dirs[filepath.Clean(workDir)] {
+		if !filepath.IsAbs(workDir) || (sharedOwner == "" && users[proj.RunAsUser]) || dirs[filepath.Clean(workDir)] {
 			return errors.New("fixed environments require distinct Unix users and absolute work directories")
 		}
 		for other := range dirs {
