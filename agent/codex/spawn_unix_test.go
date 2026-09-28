@@ -91,6 +91,38 @@ func TestCodexRunAsOrdinaryIdentities(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Run("private_session_access", func(t *testing.T) {
+		if _, err := os.ReadDir(f.Home); !errors.Is(err, os.ErrPermission) {
+			t.Fatal("gateway must not read model home", err)
+		}
+		// The native fixture runs as the model; the supervisor sees only the
+		// scoped protocol result, never credentials or transcript paths.
+		agent, err := New(map[string]any{
+			"cmd":      []string{bin, "-test.run=^TestCodexSessionCLIHelper$", "--", "anc-session-cli"},
+			"work_dir": f.Work, "codex_home": f.Home, "run_as_user": f.Model, "backend": "app_server", "app_server_url": "stdio",
+			"run_as_env": []string{"ANC_SESSION_CWD", "ANC_SESSION_UID", "ANC_SESSION_DELETE", "ANC_SESSION_HOME"},
+			"env":        map[string]string{"ANC_SESSION_CWD": f.Work, "ANC_SESSION_UID": f.Model, "ANC_SESSION_DELETE": filepath.Join(f.Home, "deleted"), "ANC_SESSION_HOME": f.Home},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		sessions, err := agent.ListSessions(ctx)
+		if err != nil || len(sessions) != 1 || sessions[0].ID != "own" {
+			t.Fatalf("ordinary native list: %+v / %v", sessions, err)
+		}
+		history, err := agent.(core.HistoryProvider).GetSessionHistory(ctx, "own", 1)
+		if err != nil || len(history) != 1 || history[0].Content != "second" {
+			t.Fatalf("ordinary history: %+v / %v", history, err)
+		}
+		if err := agent.(core.SessionDeleter).DeleteSession(ctx, "own"); err == nil {
+			t.Fatal("unsafe native deletion accepted")
+		}
+		if _, err := os.ReadFile(filepath.Join(f.Home, "synthetic-session-access")); !errors.Is(err, os.ErrPermission) {
+			t.Fatal("model session storage exposed to gateway", err)
+		}
+	})
 	for _, variant := range []string{"app_server", "exec", "file_app_server"} {
 		t.Run(variant, func(t *testing.T) {
 			backend := variant

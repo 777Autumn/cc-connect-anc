@@ -4126,6 +4126,24 @@ func TestCmdDelete_SyncsLocalSessionSnapshot(t *testing.T) {
 	}
 }
 
+func TestCmdDelete_UnsupportedKeepsSessionAndUsesLocale(t *testing.T) {
+	for _, lang := range []Language{LangEnglish, LangChinese, LangTraditionalChinese, LangJapanese, LangSpanish} {
+		p := &stubPlatformEngine{n: "plain"}
+		agent := &stubDeleteAgent{stubListAgent: stubListAgent{sessions: []AgentSessionInfo{{ID: "session-1"}}},
+			errByID: map[string]error{"session-1": fmt.Errorf("internal deletion reason: %w", ErrNotSupported)}}
+		e := NewEngine("test", agent, []Platform{p}, "", lang)
+		victim := e.sessions.NewSession("test:user2", "preserved")
+		victim.SetAgentSessionID("session-1", "stub")
+		e.cmdDelete(p, &Message{SessionKey: "test:user1"}, []string{"1"})
+		if got := strings.Join(p.getSent(), "\n"); got != e.i18n.T(MsgDeleteNotSupported) {
+			t.Fatalf("%s: unsupported deletion was not localized: %s", lang, got)
+		}
+		if e.sessions.FindByID(victim.ID) == nil || len(agent.deleted) != 0 {
+			t.Fatal("unsupported deletion removed a session")
+		}
+	}
+}
+
 func TestCmdDelete_NoArgsOnCardPlatformShowsDeleteModeCard(t *testing.T) {
 	p := &stubCardPlatform{stubPlatformEngine: stubPlatformEngine{n: "feishu"}}
 	agent := &stubDeleteAgent{stubListAgent: stubListAgent{sessions: []AgentSessionInfo{

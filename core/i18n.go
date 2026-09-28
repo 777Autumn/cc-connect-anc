@@ -221,6 +221,7 @@ const (
 	MsgListSwitchHint            MsgKey = "list_switch_hint"
 	MsgListError                 MsgKey = "list_error"
 	MsgHistoryEmpty              MsgKey = "history_empty"
+	MsgHistoryReadFailed         MsgKey = "history_read_failed"
 	MsgNameUsage                 MsgKey = "name_usage"
 	MsgNameSet                   MsgKey = "name_set"
 	MsgNameNoSession             MsgKey = "name_no_session"
@@ -1694,6 +1695,13 @@ var messages = map[MsgKey]map[Language]string{
 		LangTraditionalChinese: "當前會話暫無歷史訊息。",
 		LangJapanese:           "現在のセッションに履歴がありません。",
 		LangSpanish:            "No hay historial en la sesión actual.",
+	},
+	MsgHistoryReadFailed: {
+		LangEnglish:            "Could not read this conversation's history. Please try again later.",
+		LangChinese:            "暂时无法读取这段会话的历史，请稍后再试。",
+		LangTraditionalChinese: "暫時無法讀取這段會話的歷史，請稍後再試。",
+		LangJapanese:           "会話履歴を読み込めませんでした。後でもう一度お試しください。",
+		LangSpanish:            "No se pudo leer el historial de esta conversación. Inténtalo de nuevo más tarde.",
 	},
 	MsgNameUsage: {
 		LangEnglish:            "Usage:\n`/name <text>` — name the current session\n`/name <number> <text>` — name a session by list number",
@@ -3458,11 +3466,11 @@ var messages = map[MsgKey]map[Language]string{
 		LangSpanish:            "❌ No se puede eliminar la sesión activa. Cambie a otra sesión primero.",
 	},
 	MsgDeleteNotSupported: {
-		LangEnglish:            "❌ This agent does not support session deletion.",
-		LangChinese:            "❌ 当前 Agent 不支持删除会话。",
-		LangTraditionalChinese: "❌ 當前 Agent 不支持刪除會話。",
-		LangJapanese:           "❌ このエージェントはセッション削除をサポートしていません。",
-		LangSpanish:            "❌ Este agente no admite la eliminación de sesiones.",
+		LangEnglish:            "❌ Session deletion is currently unavailable here. No session was deleted.",
+		LangChinese:            "❌ 当前入口暂不支持删除会话，没有删除任何会话。",
+		LangTraditionalChinese: "❌ 目前入口暫不支援刪除會話，沒有刪除任何會話。",
+		LangJapanese:           "❌ ここでは現在セッションを削除できません。セッションは削除されていません。",
+		LangSpanish:            "❌ La eliminación de sesiones no está disponible aquí. No se eliminó ninguna sesión.",
 	},
 	MsgDeleteModeTitle: {
 		LangEnglish:            "Delete Sessions",

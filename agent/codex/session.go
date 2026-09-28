@@ -656,25 +656,47 @@ func codexToolSuccess(status string, exitCode *int) bool {
 }
 
 func loadCodexRuntimeConfig(ctx context.Context, cliBin string, cliExtraArgs []string, workDir string, extraEnv []string, spawn core.SpawnOptions) (string, string, error) {
+	var resp struct {
+		Config struct {
+			Model                string  `json:"model"`
+			ModelReasoningEffort *string `json:"model_reasoning_effort"`
+		} `json:"config"`
+	}
+	err := withCodexAppServer(ctx, cliBin, cliExtraArgs, workDir, extraEnv, spawn, func(call codexRPC) error {
+		return call("config/read", map[string]any{"includeLayers": false}, &resp)
+	})
+	return strings.TrimSpace(resp.Config.Model), normalizeRuntimeReasoningEffort(stringValue(resp.Config.ModelReasoningEffort)), err
+}
+
+type codexRPC func(method string, params any, out any) error
+
+// Administrative reads use the same configured binary and ordinary identity as
+// turns. This connection never starts a turn or exposes a raw RPC to the model.
+func withCodexAppServer(ctx context.Context, cliBin string, cliExtraArgs []string, workDir string, extraEnv []string, spawn core.SpawnOptions, fn func(codexRPC) error) error {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
 	args := append(append([]string(nil), cliExtraArgs...), "app-server")
 	cmd, err := buildCodexCommand(ctx, spawn, cliBin, args, workDir, extraEnv)
 	if err != nil {
-		return "", "", err
+		return err
 	}
+	cmd.Cancel = func() error { return forceKillCmd(cmd) }
+	cmd.WaitDelay = time.Second
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return "", "", fmt.Errorf("runtime config stdin pipe: %w", err)
+		return fmt.Errorf("codex native stdin pipe: %w", err)
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return "", "", fmt.Errorf("runtime config stdout pipe: %w", err)
+		_ = stdin.Close()
+		return fmt.Errorf("codex native stdout pipe: %w", err)
 	}
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
 	if err := cmd.Start(); err != nil {
-		return "", "", fmt.Errorf("runtime config start app-server: %w", err)
+		return fmt.Errorf("codex native start app-server: %w", err)
 	}
 	defer func() {
 		_ = stdin.Close()
@@ -686,35 +708,27 @@ func loadCodexRuntimeConfig(ctx context.Context, cliBin string, cliExtraArgs []s
 
 	reader := bufio.NewReader(stdout)
 	nextID := int64(1)
+	call := func(method string, params any, out any) error {
+		id := nextID
+		nextID++
+		return rpcRequestOverIO(stdin, reader, id, method, params, out)
+	}
 
-	if err := rpcRequestOverIO(stdin, reader, nextID, "initialize", map[string]any{
+	if err := call("initialize", map[string]any{
 		"clientInfo": map[string]any{
-			"name":    "cc-connect-codex-runtime-config",
-			"title":   "CC Connect Codex Runtime Config",
+			"name":    "cc-connect-codex-native",
+			"title":   "CC Connect Codex Native Access",
 			"version": "0.1.0",
 		},
+		"capabilities": map[string]any{"experimentalApi": true},
 	}, nil); err != nil {
-		return "", "", err
+		return err
 	}
-	nextID++
 
 	if err := rpcNotifyOverIO(stdin, "initialized", map[string]any{}); err != nil {
-		return "", "", err
+		return err
 	}
-
-	var resp struct {
-		Config struct {
-			Model                string  `json:"model"`
-			ModelReasoningEffort *string `json:"model_reasoning_effort"`
-		} `json:"config"`
-	}
-	if err := rpcRequestOverIO(stdin, reader, nextID, "config/read", map[string]any{
-		"includeLayers": false,
-	}, &resp); err != nil {
-		return "", "", err
-	}
-
-	return strings.TrimSpace(resp.Config.Model), normalizeRuntimeReasoningEffort(stringValue(resp.Config.ModelReasoningEffort)), nil
+	return fn(call)
 }
 
 func rpcRequestOverIO(stdin io.Writer, reader *bufio.Reader, id int64, method string, params any, out any) error {

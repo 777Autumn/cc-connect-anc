@@ -599,7 +599,10 @@ func (a *Agent) StartSession(ctx context.Context, sessionID string) (core.AgentS
 	return s, err
 }
 
-func (a *Agent) ListSessions(_ context.Context) ([]core.AgentSessionInfo, error) {
+func (a *Agent) ListSessions(ctx context.Context) ([]core.AgentSessionInfo, error) {
+	if a.nativeSessionAccess() {
+		return a.listNativeSessions(ctx)
+	}
 	a.mu.RLock()
 	codexHome := a.codexHome
 	workDir := a.workDir
@@ -607,14 +610,20 @@ func (a *Agent) ListSessions(_ context.Context) ([]core.AgentSessionInfo, error)
 	return listCodexSessions(workDir, codexHome)
 }
 
-func (a *Agent) GetSessionHistory(_ context.Context, sessionID string, limit int) ([]core.HistoryEntry, error) {
+func (a *Agent) GetSessionHistory(ctx context.Context, sessionID string, limit int) ([]core.HistoryEntry, error) {
+	if a.nativeSessionAccess() {
+		return a.nativeSessionHistory(ctx, sessionID, limit)
+	}
 	a.mu.RLock()
 	codexHome := a.codexHome
 	a.mu.RUnlock()
 	return getSessionHistory(sessionID, codexHome, limit)
 }
 
-func (a *Agent) DeleteSession(_ context.Context, sessionID string) error {
+func (a *Agent) DeleteSession(ctx context.Context, sessionID string) error {
+	if a.nativeSessionAccess() {
+		return a.deleteNativeSession(ctx, sessionID)
+	}
 	a.mu.RLock()
 	codexHome := a.codexHome
 	a.mu.RUnlock()
