@@ -6,8 +6,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -99,6 +101,9 @@ func TestCodexRunAsOrdinaryIdentities(t *testing.T) {
 				"work_dir": f.Work, "codex_home": f.Home, "run_as_user": f.Model, "backend": backend, "app_server_url": "stdio", "mode": "full-auto", "file_work_native": true,
 				"run_as_env": []string{"ANC_EXPECT_CWD", "ANC_EXPECT_HOME", "ANC_EXPECT_UID", "ANC_FORBIDDEN"},
 				"env":        map[string]string{"ANC_EXPECT_CWD": f.Work, "ANC_EXPECT_HOME": f.Home, "ANC_EXPECT_UID": f.Model, "ANC_FORBIDDEN": f.Forbidden}}
+			if variant == "file_app_server" {
+				opts["permission_profile"] = "anc-work"
+			}
 			a, err := New(opts)
 			if err != nil {
 				t.Fatal(err)
@@ -107,6 +112,9 @@ func TestCodexRunAsOrdinaryIdentities(t *testing.T) {
 				a, err = a.(core.FileWorkAgent).ForFileWork(f.Work)
 				if err != nil {
 					t.Fatal(err)
+				}
+				if runtime.GOOS == "darwin" && !strings.Contains(strings.Join(a.(*Agent).cliExtraArgs, " "), fmt.Sprintf("/OSL_PIPE_%d_", f.ModelUID)) {
+					t.Fatal("Office permission must use the model UID, not the ordinary gateway UID")
 				}
 				a.(*Agent).SetSessionEnv([]string{"CC_FILE_ACTION_TOKEN=synthetic-file-capability"})
 			} else {
