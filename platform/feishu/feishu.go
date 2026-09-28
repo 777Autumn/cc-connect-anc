@@ -892,6 +892,9 @@ func (p *Platform) onCardAction(event *callback.CardActionTriggerEvent) (*callba
 	// askq: — AskUserQuestion option selected, forward as user message
 	if strings.HasPrefix(actionVal, "askq:") {
 		rctx := replyContext{messageID: messageID, chatID: chatID, sessionKey: sessionKey}
+		// Only the consumed host-owned case binding resumes controlled work.
+		// Keep its physical card receipt so subsequent replies join that work.
+		rctx.controlledFileWork = strings.HasPrefix(interactionID, "case:")
 		go p.dispatchCoreMessage(&core.Message{
 			SessionKey:           sessionKey,
 			Platform:             p.platformName,
