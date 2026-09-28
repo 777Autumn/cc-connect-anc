@@ -45,6 +45,10 @@ type Agent struct {
 	codexHome         string
 	fileWorkNative    bool
 	fileWorkRoot      string
+	sharedServer      *sharedAppServer
+	sharedWorkspace   string // immutable entry scope, including workspace clones
+	sharedStopped     bool
+	sharedBorrowed    bool
 	systemPrompt      string
 	appendPrompt      string
 	cmd               string   // CLI binary name, default "codex"
@@ -70,6 +74,8 @@ func New(opts map[string]any) (core.Agent, error) {
 	appServerURL, _ := opts["app_server_url"].(string)
 	codexHome, _ := opts["codex_home"].(string)
 	fileWorkNative, _ := opts["file_work_native"].(bool)
+	shared, _ := opts["shared_app_server"].(bool)
+	sharedWorkspace, _ := opts["shared_workspace"].(string)
 	systemPrompt, _ := opts["system_prompt"].(string)
 	appendPrompt, _ := opts["append_system_prompt"].(string)
 	mode = normalizeMode(mode)
@@ -124,7 +130,18 @@ func New(opts map[string]any) (core.Agent, error) {
 		}
 	}
 
-	return &Agent{
+	if shared {
+		if spawn.RunAsUser == "" || backend != "app_server" || appServerURL != "stdio://" || permissionProfile == "" {
+			return nil, fmt.Errorf("codex: shared app-server requires an ordinary stdio identity and protected named permissions")
+		}
+		// Fixed trusted entrances only; a chat-selected workspace must not
+		// register a new authentication owner or extend an entry's file scope.
+		if sharedWorkspace != "" || filepath.Clean(workDir) != workDir || filepath.Clean(codexHome) != codexHome || withinPath(codexHome, workDir) || withinPath(workDir, codexHome) {
+			return nil, fmt.Errorf("codex: shared workspace cannot be changed by a chat workspace override")
+		}
+		sharedWorkspace = workDir
+	}
+	a := &Agent{
 		spawnOpts:         spawn,
 		workDir:           workDir,
 		model:             model,
@@ -135,13 +152,22 @@ func New(opts map[string]any) (core.Agent, error) {
 		appServerURL:      appServerURL,
 		codexHome:         strings.TrimSpace(codexHome),
 		fileWorkNative:    fileWorkNative,
+		sharedWorkspace:   sharedWorkspace,
 		systemPrompt:      strings.TrimSpace(systemPrompt),
 		appendPrompt:      strings.TrimSpace(appendPrompt),
 		cmd:               cmd,
 		cliExtraArgs:      cliExtraArgs,
 		configEnv:         configEnv,
 		activeIdx:         -1,
-	}, nil
+	}
+	if shared {
+		var err error
+		a.sharedServer, err = registerSharedServer(a)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return a, nil
 }
 
 func normalizeBackend(raw string) string {
@@ -199,8 +225,20 @@ func (a *Agent) Name() string { return "codex" }
 func (a *Agent) SetWorkDir(dir string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	if a.sharedServer != nil && dir != a.sharedWorkspace {
+		return
+	}
 	a.workDir = dir
 	slog.Info("codex: work_dir changed", "work_dir", dir)
+}
+
+func (a *Agent) ValidateWorkDir(dir string) error {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	if a.sharedServer != nil && dir != a.sharedWorkspace {
+		return fmt.Errorf("codex: shared entry has a fixed workspace")
+	}
+	return nil
 }
 
 func (a *Agent) GetWorkDir() string {
@@ -520,7 +558,7 @@ func (a *Agent) SetSessionEnv(env []string) {
 	a.sessionEnv = env
 }
 
-func (a *Agent) StartSession(ctx context.Context, sessionID string) (core.AgentSession, error) {
+func (a *Agent) StartSession(ctx context.Context, sessionID string) (result core.AgentSession, err error) {
 	a.mu.Lock()
 	mode := a.mode
 	permissionProfile := a.permissionProfile
@@ -539,6 +577,8 @@ func (a *Agent) StartSession(ctx context.Context, sessionID string) (core.AgentS
 	cliExtraArgs := a.cliExtraArgs
 	workDir := a.workDir
 	spawn := a.spawnOpts
+	shared, sharedWorkspace, sharedStopped := a.sharedServer, a.sharedWorkspace, a.sharedStopped
+	fileRoot := a.fileWorkRoot
 	// Order matters for MergeEnv override semantics (later wins):
 	//   1. configEnv — static env from [projects.agent.options.env]
 	//   2. providerEnv — per-provider keys (OPENAI_API_KEY etc.)
@@ -555,6 +595,14 @@ func (a *Agent) StartSession(ctx context.Context, sessionID string) (core.AgentS
 	}
 	provName, provAPIKey, provWireAPI, provHeaders := a.activeProviderCodexConfig()
 	a.mu.Unlock()
+	defer func() {
+		if shared != nil && err != nil {
+			err = fmt.Errorf("%w: %w", core.ErrSessionResumeBlocked, err)
+		}
+	}()
+	if shared != nil && (sharedStopped || workDir != sharedWorkspace) {
+		return nil, fmt.Errorf("codex: shared entry is stopped or its workspace changed")
+	}
 	if permissionProfile != "" && (backend != "app_server" || (mode != "full-auto" && mode != "auto-edit")) {
 		return nil, fmt.Errorf("codex: permission_profile cannot be used with the selected mode/backend")
 	}
@@ -586,6 +634,27 @@ func (a *Agent) StartSession(ctx context.Context, sessionID string) (core.AgentS
 	}
 
 	if backend == "app_server" {
+		if shared != nil {
+			var officeSocket string
+			if fileRoot != "" && runtime.GOOS == "darwin" {
+				var err error
+				officeSocket, err = macOfficeSocket(fileRoot, spawn.RunAsUser)
+				if err != nil {
+					return nil, err
+				}
+			}
+			s := makeAppServerSession(ctx, cliBin, cliExtraArgs, appServerURL, workDir, model, reasoningEffort, mode, permissionProfile, sessionID, baseURL, provName, extraEnv, codexHome, systemPrompt, appendPrompt, spawn)
+			s.threadConfig = sharedThreadConfig(workDir, fileRoot, permissionProfile, officeSocket, extraEnv, spawn)
+			if reasoningEffort != "" {
+				s.threadConfig["model_reasoning_effort"] = reasoningEffort
+			}
+			if err := shared.attach(s, sessionID); err != nil {
+				s.cancel()
+				s.closeEvents()
+				return nil, err
+			}
+			return s, nil
+		}
 		return newAppServerSession(ctx, cliBin, cliExtraArgs, appServerURL, workDir, model, reasoningEffort, mode, permissionProfile, sessionID, baseURL, provName, extraEnv, codexHome, systemPrompt, appendPrompt, spawn)
 	}
 	if codexHome != "" {
@@ -634,7 +703,15 @@ func (a *Agent) DeleteSession(ctx context.Context, sessionID string) error {
 	return os.Remove(path)
 }
 
-func (a *Agent) Stop() error { return nil }
+func (a *Agent) Stop() error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.sharedServer != nil && !a.sharedBorrowed && !a.sharedStopped {
+		a.sharedStopped = true
+		return a.sharedServer.release()
+	}
+	return nil
+}
 
 // SetMode changes the approval mode for future sessions.
 func (a *Agent) SetMode(mode string) {
@@ -685,6 +762,10 @@ func (a *Agent) WorkspaceAgentOptions() map[string]any {
 	}
 	if a.fileWorkNative {
 		opts["file_work_native"] = true
+	}
+	if a.sharedServer != nil {
+		opts["shared_app_server"] = true
+		opts["shared_workspace"] = a.sharedWorkspace
 	}
 	return opts
 }

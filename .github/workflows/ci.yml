@@ -22,7 +22,7 @@ jobs:
           go-version-file: 'go.mod'
           cache: true
       - name: Verify native Codex adapter with synthetic CLI
-        run: go test -race ./agent/codex ./core -run 'TestConfiguredCLI|TestCodexRunAs|TestCodexNativeSession|TestCodexFileWork|TestOfficeSocket|TestBuildSpawnCommand|TestFilterEnvForSpawn' -count=1
+        run: go test -race ./agent/codex ./core -run 'TestConfiguredCLI|TestCodexRunAs|TestCodexNativeSession|TestCodexShared|TestCodexFileWork|TestOfficeSocket|TestBuildSpawnCommand|TestFilterEnvForSpawn' -count=1
       - name: Verify distinct ordinary gateway and model identities
         run: |
           go test -c ./agent/codex -o "$RUNNER_TEMP/codex-identity.test"

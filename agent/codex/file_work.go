@@ -24,6 +24,9 @@ func (a *Agent) ForFileWork(root string) (core.Agent, error) {
 		(a.mode != "full-auto" && a.mode != "auto-edit") {
 		return nil, errors.New("codex: native file runtime requires an isolated stdio workspace-write agent")
 	}
+	if a.sharedServer != nil && (withinPath(a.codexHome, root) || withinPath(root, a.codexHome)) {
+		return nil, errors.New("codex: file work cannot overlap authentication storage")
+	}
 	spawn := a.spawnOpts
 	spawn.EnvAllowlist = append(append([]string(nil), spawn.EnvAllowlist...), "CC_FILE_ACTION_TOKEN", "CC_FILE_TRANSPORT", "CC_FILE_WORK_ROOT")
 	// Reuse the deployment's env_keep rule; capability values must not appear
@@ -43,6 +46,11 @@ func (a *Agent) ForFileWork(root string) (core.Agent, error) {
 		}
 	}
 	args := append(append([]string(nil), a.cliExtraArgs...), "-c", workPolicy)
+	if a.sharedServer != nil {
+		// Work policy and capabilities go only to thread/start or cold resume.
+		// They must never become shared process arguments/environment.
+		args = append([]string(nil), a.cliExtraArgs...)
+	}
 	return &Agent{
 		cmd: a.cmd, cliExtraArgs: args, workDir: a.workDir, codexHome: a.codexHome,
 		model: a.model, reasoningEffort: a.reasoningEffort, mode: a.mode,
@@ -52,5 +60,6 @@ func (a *Agent) ForFileWork(root string) (core.Agent, error) {
 		configEnv: append(append([]string(nil), a.configEnv...), "CC_FILE_TRANSPORT=native", "CC_FILE_WORK_ROOT="+root),
 		providers: append([]core.ProviderConfig(nil), a.providers...), activeIdx: a.activeIdx,
 		fileWorkNative: true, fileWorkRoot: root,
+		sharedServer: a.sharedServer, sharedWorkspace: a.sharedWorkspace, sharedBorrowed: true,
 	}, nil
 }

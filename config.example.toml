@@ -1624,6 +1624,15 @@ app_secret = "your-feishu-app-secret"
 # Define it in this identity's protected Codex config, including network_proxy
 # and allowed domains if host tools need network. No profile means legacy behavior.
 # permission_profile = "anc-work"
+# Experimental single native login owner for fixed trusted entrances (off by default).
+# All entrances share run_as_user, codex_home, CLI and process proxy settings;
+# their work_dir, thread, host capabilities and model configuration remain separate.
+# Requires a protected named filesystem allowlist with :minimal=read plus explicit
+# read-only tool paths, no extends or static work/write roots. Private paths are
+# granted per thread. Do not use a :workspace base profile in this mode.
+# Dynamic chat workspace overrides are unsupported. Unconfirmed unloads stop the
+# affected entrance; inspect before restarting. No credential copies or listener.
+# shared_app_server = false
 # mode = "suggest"  # "suggest" | "auto-edit" | "full-auto" | "yolo"
 #
 # Mode options / 模式说明:

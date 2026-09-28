@@ -1483,6 +1483,11 @@ func (e *Engine) ActiveSessionKeys() []string {
 // It finds the platform that owns the session key, reconstructs a reply context,
 // and processes the message as if the user sent it.
 func (e *Engine) ExecuteCronJob(job *CronJob) error {
+	if validator, ok := e.agent.(WorkDirValidator); ok && job.WorkDir != "" {
+		if err := validator.ValidateWorkDir(job.WorkDir); err != nil {
+			return fmt.Errorf("cron workspace: %w", err)
+		}
+	}
 	e.hooks.Emit(HookEvent{
 		Event:      HookEventCronTriggered,
 		SessionKey: job.SessionKey,
@@ -1691,6 +1696,11 @@ func (e *Engine) ExecuteCronJob(job *CronJob) error {
 // notification (unless muted), and either runs a shell command or injects a
 // synthetic message into the agent session.
 func (e *Engine) ExecuteTimerJob(job *TimerJob) error {
+	if validator, ok := e.agent.(WorkDirValidator); ok && job.WorkDir != "" {
+		if err := validator.ValidateWorkDir(job.WorkDir); err != nil {
+			return fmt.Errorf("timer workspace: %w", err)
+		}
+	}
 	e.hooks.Emit(HookEvent{
 		Event:      HookEventTimerTriggered,
 		SessionKey: job.SessionKey,
@@ -4310,7 +4320,7 @@ func (e *Engine) getOrCreateInteractiveStateWith(sessionKey string, p Platform, 
 	startElapsed := time.Since(startAt)
 	if err != nil {
 		// If resume/continue failed, try a fresh session as fallback.
-		if startSessionID != "" {
+		if startSessionID != "" && !errors.Is(err, ErrSessionResumeBlocked) {
 			slog.Error("session resume failed, falling back to fresh session",
 				"session_key", sessionKey, "failed_session_id", startSessionID,
 				"error", err, "elapsed", startElapsed)
@@ -8628,6 +8638,11 @@ func (e *Engine) dirApply(agent Agent, sessions *SessionManager, interactiveKey,
 	info, err := os.Stat(newDir)
 	if err != nil || !info.IsDir() {
 		return e.i18n.Tf(MsgDirInvalidPath, newDir), ""
+	}
+	if validator, ok := e.agent.(WorkDirValidator); ok {
+		if err := validator.ValidateWorkDir(newDir); err != nil {
+			return e.i18n.Tf(MsgDirInvalidPath, newDir), ""
+		}
 	}
 
 	if !e.multiWorkspace {
@@ -16158,7 +16173,7 @@ func (e *Engine) HandleRelay(ctx context.Context, fromProject, sourceSessionKey,
 	if err != nil {
 		// Resume failed — fall back to a fresh session so the relay is not
 		// permanently broken by a corrupted/stale session ID.
-		if session.GetAgentSessionID() != "" {
+		if session.GetAgentSessionID() != "" && !errors.Is(err, ErrSessionResumeBlocked) {
 			slog.Warn("relay: session resume failed, trying fresh session",
 				"relay_key", relaySessionKey, "error", err)
 			session.SetAgentSessionID("", agent.Name())

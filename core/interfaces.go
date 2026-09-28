@@ -19,6 +19,10 @@ type Platform interface {
 // ErrNotSupported indicates a platform doesn't support a particular operation.
 var ErrNotSupported = errors.New("operation not supported by this platform")
 
+// ErrSessionResumeBlocked preserves a session binding when starting a new
+// session could bypass an unresolved stop or access failure.
+var ErrSessionResumeBlocked = errors.New("session resume requires inspection")
+
 // ErrFileNotSubmitted means no recipient-visible message was accepted. All
 // other delivery errors are uncertain and must not trigger an automatic retry.
 var ErrFileNotSubmitted = errors.New("file was not submitted")
@@ -642,6 +646,12 @@ type SessionTitleProvider interface {
 type WorkDirSwitcher interface {
 	SetWorkDir(dir string)
 	GetWorkDir() string
+}
+
+// WorkDirValidator lets fixed-scope agents reject a directory change before
+// the engine discards the current session or saves a workspace override.
+type WorkDirValidator interface {
+	ValidateWorkDir(string) error
 }
 
 // AgentOptsProvider is an optional interface for agents that need to carry

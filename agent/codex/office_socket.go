@@ -22,19 +22,30 @@ func macOfficeSocket(root, runAsUser string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve work root: %w", err)
 	}
+	uid, err := ordinaryRuntimeUID(runAsUser)
+	if err != nil {
+		return "", err
+	}
+	return officeSocketName(filepath.Join(canonical, "outputs", ".office-profile"), uid), nil
+}
+
+func ordinaryRuntimeUID(runAsUser string) (uint32, error) {
+	if runAsUser == "" || strings.HasPrefix(runAsUser, "-") {
+		return 0, errors.New("invalid runtime identity")
+	}
 	// Native id works with the candidate's CGO_ENABLED=0 build and macOS accounts;
 	// do not guess the model UID from the gateway or a writable output's owner.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, "/usr/bin/id", "-u", runAsUser).Output()
 	if err != nil {
-		return "", fmt.Errorf("resolve Office runtime UID: %w", err)
+		return 0, fmt.Errorf("resolve ordinary runtime UID: %w", err)
 	}
 	uid, err := strconv.ParseUint(strings.TrimSpace(string(out)), 10, 32)
 	if err != nil || uid == 0 {
-		return "", errors.New("office requires a known ordinary UID")
+		return 0, errors.New("runtime requires a known ordinary UID")
 	}
-	return officeSocketName(filepath.Join(canonical, "outputs", ".office-profile"), uint32(uid)), nil
+	return uint32(uid), nil
 }
 
 // Match LibreOffice 26.8 desktop/source/deployment/misc/dp_misc.cxx and
