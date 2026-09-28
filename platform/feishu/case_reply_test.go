@@ -21,8 +21,17 @@ import (
 // Real Feishu callback/reply handling and Engine/SessionManager; only the remote
 // API, model process and privileged action/file hosts are replaced.
 func TestCaseConfirmationReplyContinuesOriginalWork(t *testing.T) {
-	for _, answer := range []string{"askq:0:1", "askq:0:2"} {
-		t.Run(answer, func(t *testing.T) {
+	for _, tc := range []struct {
+		name, answer     string
+		noReplyToTrigger bool
+	}{
+		{"reply-confirm", "askq:0:1", false},
+		{"reply-cancel", "askq:0:2", false},
+		{"create-confirm", "askq:0:1", true},
+		{"create-cancel", "askq:0:2", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			answer := tc.answer
 			const key = "feishu:chat-fixture:sender-fixture"
 			var replies atomic.Int32
 			results := make(chan string, 8)
@@ -31,16 +40,21 @@ func TestCaseConfirmationReplyContinuesOriginalWork(t *testing.T) {
 				switch {
 				case strings.HasSuffix(r.URL.Path, "/tenant_access_token/internal"):
 					writeJSON(t, w, map[string]any{"code": 0, "expire": 7200, "tenant_access_token": "fictional"})
-				case strings.HasSuffix(r.URL.Path, "/reply"):
+				case r.Method == http.MethodPost && (strings.HasSuffix(r.URL.Path, "/reply") || strings.HasSuffix(r.URL.Path, "/messages")):
 					var body map[string]any
 					_ = json.NewDecoder(r.Body).Decode(&body)
-					id := fmt.Sprintf("reply-%d", replies.Add(1))
-					if strings.Contains(r.URL.Path, "/original-request/") {
+					isCreate := strings.HasSuffix(r.URL.Path, "/messages")
+					if isCreate != tc.noReplyToTrigger || (isCreate && body["receive_id"] != "chat-fixture") {
+						t.Error("send changed configured mode or fixed recipient", r.URL.Path, body["receive_id"])
+					}
+					n := replies.Add(1)
+					id := fmt.Sprintf("reply-%d", n)
+					if n == 1 {
 						id = "question-card"
 					}
 					writeJSON(t, w, map[string]any{"code": 0, "data": map[string]any{"message_id": id}})
 					if strings.Contains(fmt.Sprint(body["content"]), "fixture-result") {
-						if !strings.Contains(r.URL.Path, "/question-card/") && !strings.Contains(r.URL.Path, "/follow-up/") {
+						if !isCreate && !strings.Contains(r.URL.Path, "/question-card/") && !strings.Contains(r.URL.Path, "/follow-up/") {
 							t.Error("reply target changed to a synthetic answer ID", r.URL.Path)
 						}
 						results <- id
@@ -56,14 +70,19 @@ func TestCaseConfirmationReplyContinuesOriginalWork(t *testing.T) {
 			defer srv.Close()
 			p := &interactivePlatform{Platform: &Platform{
 				platformName: "feishu", domain: srv.URL, appID: t.Name(), strictRoutes: true,
-				allowFrom: "sender-fixture", allowChat: "chat-fixture", botOpenID: "bot-fixture", dedup: &core.MessageDedup{},
+				noReplyToTrigger: tc.noReplyToTrigger,
+				allowFrom:        "sender-fixture", allowChat: "chat-fixture", botOpenID: "bot-fixture", dedup: &core.MessageDedup{},
 				client: lark.NewClient(t.Name(), "fictional", lark.WithOpenBaseUrl(srv.URL), lark.WithHttpClient(srv.Client())),
 			}}
 			p.userNameCache.Store("sender-fixture", "Employee")
 			p.chatNameCache.Store("chat-fixture", "Fixture group")
 			agent := &caseReplyAgent{events: make(chan core.Event, 4), sends: make(chan string, 4)}
 			e := core.NewEngine("fixture-project", agent, []core.Platform{p}, filepath.Join(t.TempDir(), "sessions.json"), core.LangEnglish)
-			defer e.Stop()
+			defer func() {
+				if err := e.Stop(); err != nil {
+					t.Error(err)
+				}
+			}()
 			if err := p.Prepare(e.ReceiveMessage); err != nil {
 				t.Fatal(err)
 			}

@@ -69,7 +69,11 @@ func (p *interactivePlatform) ReplyHostedActionPlaceholder(ctx context.Context, 
 		if rc.chatID == "" {
 			return "", fmt.Errorf("%s: chatID is empty, cannot send hosted action placeholder", p.tag())
 		}
-		return p.createMessageWithID(ctx, rc.chatID, larkim.MsgTypeInteractive, cardJSON, "send hosted action placeholder")
+		id, err := p.createMessageWithID(ctx, rc.chatID, larkim.MsgTypeInteractive, cardJSON, "send hosted action placeholder")
+		if err == nil {
+			p.observeFileWorkReply(rc, id)
+		}
+		return id, err
 	}
 	return p.replyMessageWithID(ctx, rc, larkim.MsgTypeInteractive, cardJSON)
 }
