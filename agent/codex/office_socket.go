@@ -32,7 +32,7 @@ func macOfficeSocket(root, runAsUser string) (string, error) {
 	}
 	uid, err := strconv.ParseUint(strings.TrimSpace(string(out)), 10, 32)
 	if err != nil || uid == 0 {
-		return "", errors.New("Office requires a known ordinary UID")
+		return "", errors.New("office requires a known ordinary UID")
 	}
 	return officeSocketName(filepath.Join(canonical, "outputs", ".office-profile"), uint32(uid)), nil
 }
