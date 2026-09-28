@@ -2,6 +2,8 @@ package codex
 
 import (
 	"context"
+	"os"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -46,6 +48,16 @@ func TestCodexFileWorkPreservesRuntimeWithoutOldSession(t *testing.T) {
 		t.Fatal("parent configuration mutated")
 	}
 	a.permissionProfile = "anc-work"
+	if runtime.GOOS == "darwin" {
+		current, err := user.Current()
+		if err != nil {
+			t.Fatal(err)
+		}
+		a.spawnOpts.RunAsUser = current.Username
+		if err := os.MkdirAll(root, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
 	profileClone, err := a.ForFileWork(root)
 	if err != nil {
 		t.Fatal(err)
@@ -57,11 +69,20 @@ func TestCodexFileWorkPreservesRuntimeWithoutOldSession(t *testing.T) {
 	}
 	var policy struct {
 		Permissions map[string]struct {
-			Roots map[string]bool `toml:"workspace_roots"`
+			Roots   map[string]bool `toml:"workspace_roots"`
+			Network struct {
+				Sockets map[string]string `toml:"unix_sockets"`
+			} `toml:"network"`
 		}
 	}
 	if _, err := toml.Decode(profileChild.cliExtraArgs[len(profileChild.cliExtraArgs)-1], &policy); err != nil || !policy.Permissions["anc-work"].Roots[root] {
 		t.Fatalf("invalid dynamic profile/root TOML: %v", err)
+	}
+	if runtime.GOOS == "darwin" {
+		socket, err := macOfficeSocket(root, a.spawnOpts.RunAsUser)
+		if err != nil || len(policy.Permissions["anc-work"].Network.Sockets) != 1 || policy.Permissions["anc-work"].Network.Sockets[socket] != "allow" {
+			t.Fatalf("Office permission must select only the trusted work socket: %v", err)
+		}
 	}
 	for _, mode := range []string{"suggest", "yolo"} {
 		a.mode = mode
@@ -73,5 +94,47 @@ func TestCodexFileWorkPreservesRuntimeWithoutOldSession(t *testing.T) {
 	a.fileWorkNative = false
 	if _, err := a.ForFileWork(root); err == nil {
 		t.Fatal("disabled native runtime silently launched")
+	}
+}
+
+func TestOfficeSocketMatchesCRMUnicodeURIAndIdentity(t *testing.T) {
+	profile := "/private/var/fictional work/婚宴 %/outputs/.office-profile"
+	want := "/private/tmp/OSL_PIPE_501_SingleOfficeIPC_786cfa4b1e5213eb148ce155790654d"
+	if got := officeSocketName(profile, 501); got != want {
+		t.Fatalf("Office socket naming protocol mismatch: %s", got)
+	}
+	if officeSocketName(profile, 502) == want || officeSocketName(profile+"-other", 501) == want {
+		t.Fatal("socket must be work and UID specific")
+	}
+}
+
+func TestOfficeSocketResolvesNativeIdentityAndCanonicalRoot(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("macOS identity and path resolution")
+	}
+	current, err := user.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	alias := filepath.Join(t.TempDir(), "work alias")
+	if err := os.Symlink(root, alias); err != nil {
+		t.Fatal(err)
+	}
+	a, err := macOfficeSocket(root, current.Username)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := macOfficeSocket(alias, current.Username)
+	if err != nil || a != b {
+		t.Fatalf("root aliases must select one socket: %v", err)
+	}
+	for _, username := range []string{"root", "-u", "", "_anc_nonexistent_fixture_12345"} {
+		if _, err := macOfficeSocket(root, username); err == nil {
+			t.Fatalf("unknown/privileged identity accepted: %q", username)
+		}
+	}
+	if _, err := macOfficeSocket(root+"/missing", current.Username); err == nil {
+		t.Fatal("nonexistent work accepted")
 	}
 }
