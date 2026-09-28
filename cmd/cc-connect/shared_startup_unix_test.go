@@ -117,6 +117,9 @@ func TestSharedStartupOrdinaryIdentities(t *testing.T) {
 			}
 		}
 		state := t.TempDir()
+		if err := os.Chmod(state, 0700); err != nil {
+			t.Fatal(err)
+		}
 		ledger := filepath.Join(state, "files.db")
 		if err := files.Initialize(ledger); err != nil {
 			t.Fatal(err)
