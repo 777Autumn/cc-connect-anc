@@ -156,6 +156,9 @@ func (h *sharedAppServer) attach(s *appServerSession, resumeID string) error {
 	if err := validateSharedConfig(config.Config, s.permissionProfile, private); err != nil {
 		return err
 	}
+	base := config.Config["permissions"].(map[string]any)[s.permissionProfile].(map[string]any)
+	policies := s.threadConfig["permissions"].(map[string]any)
+	policies[s.permissionProfile] = sharedPermissionOverrides(base, policies[s.permissionProfile].(map[string]any))
 	if resumeID != "" && resumeID != core.ContinueSession {
 		h.mu.Lock()
 		busy := h.threads[resumeID] != nil || h.unavailable[resumeID]
@@ -233,7 +236,33 @@ func validateSharedConfig(config map[string]any, profile string, private []strin
 			}
 		}
 	}
+	network, _ := policy["network"].(map[string]any)
+	sockets, _ := network["unix_sockets"].(map[string]any)
+	if len(sockets) != 0 || network["dangerously_allow_all_unix_sockets"] == true || network["allow_local_binding"] == true {
+		return errors.New("codex: shared base cannot grant static Unix sockets or local listeners")
+	}
 	return nil
+}
+
+func sharedPermissionOverrides(base, dynamic map[string]any) map[string]any {
+	// 0.157.1's thread config can replace the profile's filesystem table.
+	// Explicitly retain verified tool reads, not just the new writable roots.
+	merged := make(map[string]any)
+	for _, section := range []string{"filesystem", "network"} {
+		fields := make(map[string]any)
+		for _, source := range []map[string]any{base, dynamic} {
+			values, _ := source[section].(map[string]any)
+			for key, value := range values {
+				if value != nil {
+					fields[key] = value
+				}
+			}
+		}
+		if len(fields) != 0 {
+			merged[section] = fields
+		}
+	}
+	return merged
 }
 
 func withinPath(path, root string) bool {
@@ -397,7 +426,7 @@ func sharedThreadConfig(work, fileRoot, profile, officeSocket string, env []stri
 	}
 	tmp := work
 	fs := map[string]any{work: "write"}
-	for _, name := range []string{"AGENTS.md", "AGENTS.override.md", "CLAUDE.md", ".agents", ".codex", ".claude", ".git"} {
+	for _, name := range []string{"AGENTS.md", "AGENTS.override.md", "CLAUDE.md", ".agents", ".codex", ".claude", ".git", ".mcp.json"} {
 		fs[filepath.Join(work, name)] = "read"
 	}
 	if fileRoot != "" {

@@ -239,6 +239,26 @@ func TestCodexSharedPermissionsAndCapabilities(t *testing.T) {
 	}
 }
 
+func TestCodexSharedThreadOverrideRetainsVerifiedNativeBase(t *testing.T) {
+	base := map[string]any{"filesystem": map[string]any{":minimal": "read", "/opt/tools": "read", "glob_scan_max_depth": nil}, "network": map[string]any{"enabled": true, "domains": map[string]any{"127.0.0.1": "allow"}, "unix_sockets": nil}}
+	dynamic := map[string]any{"filesystem": map[string]any{"/work": "write"}, "network": map[string]any{"unix_sockets": map[string]string{"/tmp/exact-office": "allow"}}}
+	merged := sharedPermissionOverrides(base, dynamic)
+	fs := merged["filesystem"].(map[string]any)
+	if fs[":minimal"] != "read" || fs["/opt/tools"] != "read" || fs["/work"] != "write" {
+		t.Fatal(fs)
+	}
+	if _, ok := fs["glob_scan_max_depth"]; ok {
+		t.Fatal("native null default forwarded as an override")
+	}
+	network := merged["network"].(map[string]any)
+	if network["enabled"] != true || network["domains"] == nil || network["unix_sockets"] == nil {
+		t.Fatal(network)
+	}
+	if _, ok := base["filesystem"].(map[string]any)["/work"]; ok {
+		t.Fatal("one thread changed base for another")
+	}
+}
+
 func TestCodexSharedRegistrationKeepsAuthAndBorrowedStop(t *testing.T) {
 	a := &Agent{cmd: "synthetic", codexHome: t.TempDir(), workDir: t.TempDir()}
 	h, err := registerSharedServer(a)
