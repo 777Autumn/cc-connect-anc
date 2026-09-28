@@ -209,12 +209,18 @@ func validateSharedConfig(config map[string]any, profile string, private []strin
 	if len(fs) == 0 || fs[":minimal"] != "read" {
 		return errors.New("codex: shared permissions require an explicit minimal read allowlist")
 	}
-	for key := range policy {
+	for key, value := range policy {
+		if key == "description" || ((key == "extends" || key == "workspace_roots") && value == nil) {
+			continue // Native config/read includes these unset fields as null.
+		}
 		if key != "filesystem" && key != "network" {
 			return errors.New("codex: shared permissions cannot inherit or add static work roots")
 		}
 	}
 	for path, access := range fs {
+		if path == "glob_scan_max_depth" && access == nil {
+			continue
+		}
 		if access != "read" || (path != ":minimal" && (!filepath.IsAbs(path) || filepath.Clean(path) != path)) {
 			return errors.New("codex: shared base filesystem must contain only explicit read paths")
 		}

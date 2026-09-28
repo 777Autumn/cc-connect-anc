@@ -224,6 +224,10 @@ func TestCodexSharedPermissionsAndCapabilities(t *testing.T) {
 	if err := validateSharedConfig(base(map[string]any{":minimal": "read", filepath.Join(root, "tools"): "read"}, nil), "isolated", []string{work, home}); err != nil {
 		t.Fatal(err)
 	}
+	// Exact shape returned by pinned 0.157.1 config/read (no model invocation).
+	if err := validateSharedConfig(base(map[string]any{":minimal": "read", "glob_scan_max_depth": nil}, map[string]any{"description": nil, "extends": nil, "workspace_roots": nil}), "isolated", []string{work, home}); err != nil {
+		t.Fatalf("native null defaults rejected: %v", err)
+	}
 	c := sharedThreadConfig(work, file, "isolated", filepath.Join(root, "office.sock"), []string{"CC_FILE_ACTION_TOKEN=fictional", "CODEX_HOME=private", "OPENAI_API_KEY=private", "HOME=private", "MYANC_CRM_HOST_SECRET=private"}, core.SpawnOptions{})
 	b, _ := json.Marshal(c)
 	if strings.Contains(string(b), `:"private"`) {
