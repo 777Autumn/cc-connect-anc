@@ -44,6 +44,9 @@ func (a *Agent) withSessionAccess(ctx context.Context, fn func(codexRPC, string)
 	if home != "" {
 		env = append(env, "CODEX_HOME="+home)
 	}
+	if spawn.RunAsUser != "" {
+		spawn.EnvAllowlist = append(append([]string(nil), spawn.EnvAllowlist...), "CODEX_HOME")
+	}
 	work, err := filepath.Abs(work)
 	if err != nil {
 		return err

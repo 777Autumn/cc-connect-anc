@@ -9475,14 +9475,10 @@ func (e *Engine) cmdHistory(p Platform, msg *Message, args []string) {
 		n = v
 	}
 
-	entries := s.GetHistory(n)
-	agentSID := s.GetAgentSessionID()
-	if len(entries) == 0 && agentSID != "" {
-		if hp, ok := agent.(HistoryProvider); ok {
-			if agentEntries, err := hp.GetSessionHistory(e.ctx, agentSID, n); err == nil {
-				entries = agentEntries
-			}
-		}
+	entries, err := e.historyEntries(agent, s, n)
+	if err != nil {
+		e.reply(p, msg.ReplyCtx, e.i18n.T(MsgHistoryReadFailed))
+		return
 	}
 
 	if len(entries) == 0 {
@@ -9502,6 +9498,21 @@ func (e *Engine) cmdHistory(p Platform, msg *Message, args []string) {
 		sb.WriteString(fmt.Sprintf("%s [%s]\n%s\n\n", icon, h.Timestamp.Format("15:04:05"), content))
 	}
 	e.reply(p, msg.ReplyCtx, sb.String())
+}
+
+func (e *Engine) historyEntries(agent Agent, s *Session, n int) ([]HistoryEntry, error) {
+	entries := s.GetHistory(n)
+	if id := s.GetAgentSessionID(); len(entries) == 0 && id != "" {
+		if hp, ok := agent.(HistoryProvider); ok {
+			var err error
+			entries, err = hp.GetSessionHistory(e.ctx, id, n)
+			if err != nil {
+				slog.Warn("session history read failed", "error", err)
+			}
+			return entries, err
+		}
+	}
+	return entries, nil
 }
 
 func (e *Engine) historyEntryMaxLen() int {
@@ -13620,15 +13631,9 @@ func (e *Engine) renderCurrentCard(sessionKey string) *Card {
 func (e *Engine) renderHistoryCard(sessionKey string) *Card {
 	agent, sessions := e.sessionContextForKey(sessionKey)
 	s := sessions.GetOrCreateActive(sessionKey)
-	entries := s.GetHistory(10)
-
-	agentSID := s.GetAgentSessionID()
-	if len(entries) == 0 && agentSID != "" {
-		if hp, ok := agent.(HistoryProvider); ok {
-			if agentEntries, err := hp.GetSessionHistory(e.ctx, agentSID, 10); err == nil {
-				entries = agentEntries
-			}
-		}
+	entries, err := e.historyEntries(agent, s, 10)
+	if err != nil {
+		return e.simpleCard(e.i18n.T(MsgCardTitleHistory), "red", e.i18n.T(MsgHistoryReadFailed))
 	}
 
 	if len(entries) == 0 {

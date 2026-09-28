@@ -100,8 +100,8 @@ func TestCodexRunAsOrdinaryIdentities(t *testing.T) {
 		agent, err := New(map[string]any{
 			"cmd":      []string{bin, "-test.run=^TestCodexSessionCLIHelper$", "--", "anc-session-cli"},
 			"work_dir": f.Work, "codex_home": f.Home, "run_as_user": f.Model, "backend": "app_server", "app_server_url": "stdio",
-			"run_as_env": []string{"ANC_SESSION_CWD", "ANC_SESSION_UID", "ANC_SESSION_DELETE"},
-			"env":        map[string]string{"ANC_SESSION_CWD": f.Work, "ANC_SESSION_UID": f.Model, "ANC_SESSION_DELETE": filepath.Join(f.Home, "deleted")},
+			"run_as_env": []string{"ANC_SESSION_CWD", "ANC_SESSION_UID", "ANC_SESSION_DELETE", "ANC_SESSION_HOME"},
+			"env":        map[string]string{"ANC_SESSION_CWD": f.Work, "ANC_SESSION_UID": f.Model, "ANC_SESSION_DELETE": filepath.Join(f.Home, "deleted"), "ANC_SESSION_HOME": f.Home},
 		})
 		if err != nil {
 			t.Fatal(err)

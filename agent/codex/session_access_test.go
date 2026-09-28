@@ -23,6 +23,9 @@ func TestCodexSessionCLIHelper(t *testing.T) {
 		if err != nil || actual.Username != expected || actual.Uid == "0" {
 			os.Exit(8)
 		}
+		if home := os.Getenv("CODEX_HOME"); home == "" || home != os.Getenv("ANC_SESSION_HOME") {
+			os.Exit(10)
+		}
 		if err := os.WriteFile(filepath.Join(os.Getenv("CODEX_HOME"), "synthetic-session-access"), []byte("model-only"), 0600); err != nil {
 			os.Exit(9)
 		}
