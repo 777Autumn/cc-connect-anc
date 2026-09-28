@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -33,22 +34,26 @@ func init() {
 //   - "full-auto": --sandbox workspace-write + approval_policy=never
 //   - "yolo":      --dangerously-bypass-approvals-and-sandbox
 type Agent struct {
-	workDir         string
-	model           string
-	reasoningEffort string
-	mode            string // "suggest" | "auto-edit" | "full-auto" | "yolo"
-	backend         string // "exec" | "app_server"
-	appServerURL    string
-	codexHome       string
-	systemPrompt    string
-	appendPrompt    string
-	cmd             string   // CLI binary name, default "codex"
-	cliExtraArgs    []string // extra args parsed from cmd after the binary
-	providers       []core.ProviderConfig
-	activeIdx       int      // -1 = no provider set
-	configEnv       []string // env vars from [projects.agent.options.env] — persists across SetSessionEnv calls
-	sessionEnv      []string
-	mu              sync.RWMutex
+	spawnOpts         core.SpawnOptions
+	workDir           string
+	model             string
+	reasoningEffort   string
+	mode              string // "suggest" | "auto-edit" | "full-auto" | "yolo"
+	permissionProfile string // optional named app-server permissions policy
+	backend           string // "exec" | "app_server"
+	appServerURL      string
+	codexHome         string
+	fileWorkNative    bool
+	fileWorkRoot      string
+	systemPrompt      string
+	appendPrompt      string
+	cmd               string   // CLI binary name, default "codex"
+	cliExtraArgs      []string // extra args parsed from cmd after the binary
+	providers         []core.ProviderConfig
+	activeIdx         int      // -1 = no provider set
+	configEnv         []string // env vars from [projects.agent.options.env] — persists across SetSessionEnv calls
+	sessionEnv        []string
+	mu                sync.RWMutex
 }
 
 func New(opts map[string]any) (core.Agent, error) {
@@ -59,16 +64,44 @@ func New(opts map[string]any) (core.Agent, error) {
 	model, _ := opts["model"].(string)
 	reasoningEffort, _ := opts["reasoning_effort"].(string)
 	mode, _ := opts["mode"].(string)
+	permissionProfile, _ := opts["permission_profile"].(string)
+	permissionProfile = strings.TrimSpace(permissionProfile)
 	backend, _ := opts["backend"].(string)
 	appServerURL, _ := opts["app_server_url"].(string)
 	codexHome, _ := opts["codex_home"].(string)
+	fileWorkNative, _ := opts["file_work_native"].(bool)
 	systemPrompt, _ := opts["system_prompt"].(string)
 	appendPrompt, _ := opts["append_system_prompt"].(string)
 	mode = normalizeMode(mode)
 	backend = normalizeBackend(backend)
 	appServerURL = normalizeAppServerURL(appServerURL)
+	if permissionProfile != "" && (backend != "app_server" || (mode != "full-auto" && mode != "auto-edit") || strings.HasPrefix(permissionProfile, ":")) {
+		return nil, fmt.Errorf("codex: permission_profile requires a named policy and auto-edit/full-auto app_server")
+	}
 
 	cmd, cliExtraArgs := core.ParseCmdOpts(opts, "codex")
+	spawn := core.SpawnOptions{}
+	spawn.RunAsUser, _ = opts["run_as_user"].(string)
+	if spawn.RunAsUser != "" {
+		if runtime.GOOS == "windows" || spawn.RunAsUser == "root" || spawn.RunAsUser == "0" {
+			return nil, fmt.Errorf("codex: run_as_user requires a non-root Unix identity")
+		}
+		if !filepath.IsAbs(cmd) || !filepath.IsAbs(workDir) || !filepath.IsAbs(codexHome) {
+			return nil, fmt.Errorf("codex: run_as_user requires absolute cmd, work_dir and codex_home")
+		}
+		if backend == "app_server" && appServerURL != "stdio://" {
+			return nil, fmt.Errorf("codex: run_as_user app_server requires app_server_url=stdio")
+		}
+		if env, ok := opts["run_as_env"].([]string); ok {
+			spawn.EnvAllowlist = append(spawn.EnvAllowlist, env...)
+		} else if env, ok := opts["run_as_env"].([]any); ok {
+			for _, v := range env {
+				if key, ok := v.(string); ok {
+					spawn.EnvAllowlist = append(spawn.EnvAllowlist, key)
+				}
+			}
+		}
+	}
 
 	if _, err := exec.LookPath(cmd); err != nil {
 		return nil, fmt.Errorf("codex: %q CLI not found in PATH, install with: npm install -g @openai/codex", cmd)
@@ -92,19 +125,22 @@ func New(opts map[string]any) (core.Agent, error) {
 	}
 
 	return &Agent{
-		workDir:         workDir,
-		model:           model,
-		reasoningEffort: normalizeReasoningEffort(reasoningEffort),
-		mode:            mode,
-		backend:         backend,
-		appServerURL:    appServerURL,
-		codexHome:       strings.TrimSpace(codexHome),
-		systemPrompt:    strings.TrimSpace(systemPrompt),
-		appendPrompt:    strings.TrimSpace(appendPrompt),
-		cmd:             cmd,
-		cliExtraArgs:    cliExtraArgs,
-		configEnv:       configEnv,
-		activeIdx:       -1,
+		spawnOpts:         spawn,
+		workDir:           workDir,
+		model:             model,
+		reasoningEffort:   normalizeReasoningEffort(reasoningEffort),
+		mode:              mode,
+		permissionProfile: permissionProfile,
+		backend:           backend,
+		appServerURL:      appServerURL,
+		codexHome:         strings.TrimSpace(codexHome),
+		fileWorkNative:    fileWorkNative,
+		systemPrompt:      strings.TrimSpace(systemPrompt),
+		appendPrompt:      strings.TrimSpace(appendPrompt),
+		cmd:               cmd,
+		cliExtraArgs:      cliExtraArgs,
+		configEnv:         configEnv,
+		activeIdx:         -1,
 	}, nil
 }
 
@@ -173,6 +209,18 @@ func (a *Agent) GetWorkDir() string {
 	return a.workDir
 }
 
+func (a *Agent) GetRunAsUser() string {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.spawnOpts.RunAsUser
+}
+
+func (a *Agent) GetRunAsEnv() []string {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return append([]string(nil), a.spawnOpts.EnvAllowlist...)
+}
+
 func (a *Agent) SetModel(model string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -210,6 +258,19 @@ func (a *Agent) configuredModels() []core.ModelOption {
 }
 
 func (a *Agent) AvailableModels(ctx context.Context) []core.ModelOption {
+	a.mu.RLock()
+	isolated, model := a.spawnOpts.RunAsUser != "", a.model
+	a.mu.RUnlock()
+	if isolated {
+		// Do not inspect the supervisor's catalog, cache or API credentials.
+		if models := a.configuredModels(); len(models) > 0 {
+			return models
+		}
+		if model != "" {
+			return []core.ModelOption{{Name: model}}
+		}
+		return nil
+	}
 	if models := readCodexModelCatalog(); len(models) > 0 {
 		return models
 	}
@@ -353,7 +414,6 @@ func readCodexCachedModels() []core.ModelOption {
 	return parseCodexModelsJSON(b)
 }
 
-
 // parseCodexModelsJSON parses a Codex models JSON file (model_catalog.json
 // or models_cache.json) into a deduplicated, filtered slice of ModelOption.
 // It is shared by readCodexCachedModels and readCodexModelCatalog.
@@ -398,7 +458,6 @@ func parseCodexModelsJSON(data []byte) []core.ModelOption {
 	}
 	return models
 }
-
 
 // readCodexModelCatalog reads $CODEX_HOME/config.toml to find the
 // model_catalog_json setting, then reads and parses that JSON file.
@@ -464,6 +523,7 @@ func (a *Agent) SetSessionEnv(env []string) {
 func (a *Agent) StartSession(ctx context.Context, sessionID string) (core.AgentSession, error) {
 	a.mu.Lock()
 	mode := a.mode
+	permissionProfile := a.permissionProfile
 	model := a.model
 	reasoningEffort := a.reasoningEffort
 	backend := a.backend
@@ -471,9 +531,14 @@ func (a *Agent) StartSession(ctx context.Context, sessionID string) (core.AgentS
 	codexHome := a.codexHome
 	systemPrompt := a.systemPrompt
 	appendPrompt := a.appendPrompt
+	fileWork := a.fileWorkRoot != ""
+	if fileWork {
+		appendPrompt = strings.TrimSpace(appendPrompt + "\n\n" + core.FileWorkPrompt)
+	}
 	cliBin := a.cmd
 	cliExtraArgs := a.cliExtraArgs
 	workDir := a.workDir
+	spawn := a.spawnOpts
 	// Order matters for MergeEnv override semantics (later wins):
 	//   1. configEnv — static env from [projects.agent.options.env]
 	//   2. providerEnv — per-provider keys (OPENAI_API_KEY etc.)
@@ -490,7 +555,27 @@ func (a *Agent) StartSession(ctx context.Context, sessionID string) (core.AgentS
 	}
 	provName, provAPIKey, provWireAPI, provHeaders := a.activeProviderCodexConfig()
 	a.mu.Unlock()
+	if permissionProfile != "" && (backend != "app_server" || (mode != "full-auto" && mode != "auto-edit")) {
+		return nil, fmt.Errorf("codex: permission_profile cannot be used with the selected mode/backend")
+	}
 
+	if fileWork {
+		hasToken := false
+		for _, entry := range extraEnv {
+			if value, ok := strings.CutPrefix(entry, "CC_FILE_ACTION_TOKEN="); ok {
+				hasToken = value != ""
+			}
+		}
+		if !hasToken {
+			return nil, fmt.Errorf("codex: host-bound file session capability missing")
+		}
+	}
+	if spawn.RunAsUser != "" {
+		if provName != "" {
+			return nil, fmt.Errorf("codex: isolated identities must configure providers in their own CODEX_HOME")
+		}
+		spawn.EnvAllowlist = append(append([]string(nil), spawn.EnvAllowlist...), "CODEX_HOME")
+	}
 	if provName != "" {
 		if err := ensureCodexProviderConfig(codexHome, provName, baseURL, provWireAPI, provHeaders); err != nil {
 			slog.Warn("codex: failed to write provider config", "provider", provName, "error", err)
@@ -501,13 +586,17 @@ func (a *Agent) StartSession(ctx context.Context, sessionID string) (core.AgentS
 	}
 
 	if backend == "app_server" {
-		return newAppServerSession(ctx, appServerURL, workDir, model, reasoningEffort, mode, sessionID, baseURL, provName, extraEnv, codexHome, systemPrompt, appendPrompt)
+		return newAppServerSession(ctx, cliBin, cliExtraArgs, appServerURL, workDir, model, reasoningEffort, mode, permissionProfile, sessionID, baseURL, provName, extraEnv, codexHome, systemPrompt, appendPrompt, spawn)
 	}
 	if codexHome != "" {
 		extraEnv = append(extraEnv, "CODEX_HOME="+codexHome)
 	}
 
-	return newCodexSession(ctx, cliBin, cliExtraArgs, workDir, model, reasoningEffort, mode, sessionID, baseURL, extraEnv, provName, systemPrompt, appendPrompt)
+	s, err := newCodexSession(ctx, cliBin, cliExtraArgs, workDir, model, reasoningEffort, mode, sessionID, baseURL, extraEnv, provName, systemPrompt, appendPrompt)
+	if err == nil {
+		s.spawnOpts = spawn
+	}
+	return s, err
 }
 
 func (a *Agent) ListSessions(_ context.Context) ([]core.AgentSessionInfo, error) {
@@ -560,6 +649,19 @@ func (a *Agent) WorkspaceAgentOptions() map[string]any {
 		"mode":    a.mode,
 		"backend": a.backend,
 	}
+	if a.permissionProfile != "" {
+		opts["permission_profile"] = a.permissionProfile
+	}
+	opts["cmd"] = append([]string{a.cmd}, a.cliExtraArgs...)
+	if len(a.configEnv) > 0 {
+		env := make(map[string]string)
+		for _, entry := range a.configEnv {
+			if key, value, ok := strings.Cut(entry, "="); ok {
+				env[key] = value
+			}
+		}
+		opts["env"] = env
+	}
 	if a.model != "" {
 		opts["model"] = a.model
 	}
@@ -572,6 +674,9 @@ func (a *Agent) WorkspaceAgentOptions() map[string]any {
 	if a.codexHome != "" {
 		opts["codex_home"] = a.codexHome
 	}
+	if a.fileWorkNative {
+		opts["file_work_native"] = true
+	}
 	return opts
 }
 
@@ -581,7 +686,11 @@ func (a *Agent) SkillDirs() []string {
 	a.mu.RLock()
 	workDir := a.workDir
 	codexHome := a.codexHome
+	isolated := a.spawnOpts.RunAsUser != ""
 	a.mu.RUnlock()
+	if isolated {
+		return []string{filepath.Join(workDir, ".agents", "skills"), filepath.Join(workDir, ".codex", "skills"), filepath.Join(codexHome, "skills")}
+	}
 	absDir, err := filepath.Abs(workDir)
 	if err != nil {
 		absDir = workDir
@@ -686,6 +795,8 @@ func uniqueCodexSkillDirs(paths []string) []string {
 // ── MemoryFileProvider implementation ─────────────────────────
 
 func (a *Agent) ProjectMemoryFile() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	absDir, err := filepath.Abs(a.workDir)
 	if err != nil {
 		absDir = a.workDir
@@ -694,6 +805,12 @@ func (a *Agent) ProjectMemoryFile() string {
 }
 
 func (a *Agent) GlobalMemoryFile() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	// Core reads/writes this path as the gateway, not as the employee.
+	if a.spawnOpts.RunAsUser != "" {
+		return ""
+	}
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return ""

@@ -24,6 +24,7 @@ import (
 // codexSession manages a multi-turn Codex conversation.
 // First Send() uses `codex exec`, subsequent ones use `codex exec resume <threadID>`.
 type codexSession struct {
+	spawnOpts      core.SpawnOptions
 	workDir        string
 	model          string
 	effort         string
@@ -148,11 +149,9 @@ func (cs *codexSession) Send(prompt string, messageID string, images []core.Imag
 
 	slog.Debug("codexSession: launching", "resume", isResume, "args", core.RedactArgs(args))
 
-	cmd := exec.CommandContext(cs.ctx, bin, args...)
-	cmd.Dir = cs.workDir
-	prepareCmdForKill(cmd)
-	if len(cs.extraEnv) > 0 {
-		cmd.Env = core.MergeEnv(os.Environ(), cs.extraEnv)
+	cmd, err := buildCodexCommand(cs.ctx, cs.spawnOpts, bin, args, cs.workDir, cs.extraEnv)
+	if err != nil {
+		return err
 	}
 	cmd.Stdin = strings.NewReader(prompt)
 
@@ -656,12 +655,11 @@ func codexToolSuccess(status string, exitCode *int) bool {
 	return s == "completed" || s == "success" || s == "succeeded" || s == "ok"
 }
 
-func loadCodexRuntimeConfig(ctx context.Context, workDir string, extraEnv []string) (string, string, error) {
-	cmd := exec.CommandContext(ctx, "codex", "app-server")
-	cmd.Dir = workDir
-	prepareCmdForKill(cmd)
-	if len(extraEnv) > 0 {
-		cmd.Env = core.MergeEnv(os.Environ(), extraEnv)
+func loadCodexRuntimeConfig(ctx context.Context, cliBin string, cliExtraArgs []string, workDir string, extraEnv []string, spawn core.SpawnOptions) (string, string, error) {
+	args := append(append([]string(nil), cliExtraArgs...), "app-server")
+	cmd, err := buildCodexCommand(ctx, spawn, cliBin, args, workDir, extraEnv)
+	if err != nil {
+		return "", "", err
 	}
 
 	stdin, err := cmd.StdinPipe()
@@ -681,7 +679,7 @@ func loadCodexRuntimeConfig(ctx context.Context, workDir string, extraEnv []stri
 	defer func() {
 		_ = stdin.Close()
 		if cmd.Process != nil {
-			_ = cmd.Process.Kill()
+			_ = forceKillCmd(cmd)
 		}
 		_ = cmd.Wait()
 	}()
@@ -839,7 +837,7 @@ func (cs *codexSession) runtimeConfig() (string, string) {
 	ctx, cancel := context.WithTimeout(cs.ctx, codexRuntimeConfigTimeout)
 	defer cancel()
 
-	model, effort, err := loadCodexRuntimeConfig(ctx, cs.workDir, cs.extraEnv)
+	model, effort, err := loadCodexRuntimeConfig(ctx, cs.cmd, cs.cliExtraArgs, cs.workDir, cs.extraEnv, cs.spawnOpts)
 	if err == nil {
 		cs.runtimeCfgModel = model
 		cs.runtimeCfgEffort = effort

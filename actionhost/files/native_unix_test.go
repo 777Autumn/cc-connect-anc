@@ -1,3 +1,5 @@
+//go:build linux || darwin
+
 package files
 
 import (
@@ -12,6 +14,7 @@ import (
 	"time"
 
 	"github.com/chenhg5/cc-connect/agent/claudecode"
+	"github.com/chenhg5/cc-connect/agent/codex"
 	"github.com/chenhg5/cc-connect/core"
 )
 
@@ -20,10 +23,11 @@ import (
 func TestNativeFileWorkOrdinaryIdentities(t *testing.T) {
 	path := os.Getenv("CC_FILE_HANDOFF_FIXTURE")
 	if path == "" {
-		t.Skip("requires disposable Linux identity fixture")
+		t.Skip("requires disposable native identity fixture")
 	}
 	var f struct {
 		Root, Model, EmployeeWork, NativeCLI, Client string
+		Agent, Python, CodexHome                     string
 		GatewayUID, ModelUID                         int
 	}
 	raw, err := os.ReadFile(path)
@@ -39,8 +43,15 @@ func TestNativeFileWorkOrdinaryIdentities(t *testing.T) {
 	platform := &fileJourneyPlatform{}
 	fixture := newFixture(t, platform.SendFileWithReceipt)
 	configPath := filepath.Join(f.Root, "native-fixture.json")
-	agent, err := claudecode.New(map[string]any{"cmd": "/usr/bin/python3 " + f.NativeCLI + " " + configPath,
-		"work_dir": f.EmployeeWork, "cc_data_dir": t.TempDir(), "run_as_user": f.Model, "file_work_native": true})
+	var agent core.Agent
+	if f.Agent == "codex" {
+		agent, err = codex.New(map[string]any{"cmd": []string{f.Python, "-B", f.NativeCLI, configPath},
+			"work_dir": f.EmployeeWork, "codex_home": f.CodexHome, "run_as_user": f.Model,
+			"backend": "app_server", "app_server_url": "stdio", "mode": "full-auto", "file_work_native": true})
+	} else {
+		agent, err = claudecode.New(map[string]any{"cmd": "/usr/bin/python3 " + f.NativeCLI + " " + configPath,
+			"work_dir": f.EmployeeWork, "cc_data_dir": t.TempDir(), "run_as_user": f.Model, "file_work_native": true})
+	}
 	if err != nil {
 		t.Fatal(err)
 	}

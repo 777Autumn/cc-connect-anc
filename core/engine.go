@@ -3387,19 +3387,8 @@ func (e *Engine) drainOrphanedQueue(session *Session, sessions *SessionManager, 
 		return
 	}
 
-	// Stop unsolicited reader before draining — drainPendingMessages reads
-	// from Events() and we must not have concurrent readers.
-	e.stopUnsolicitedReader(state)
-
+	// The drainer owns reader handoff until it releases the session lock.
 	unlocked = e.drainPendingMessages(state, session, sessions, interactiveKey)
-
-	// Restart unsolicited reader if the session is still alive and clean.
-	state.mu.Lock()
-	alive := state.agentSession != nil && state.agentSession.Alive() && !state.stopped && !state.eventsNeedResync
-	state.mu.Unlock()
-	if alive {
-		e.startUnsolicitedReader(state, session, sessions, interactiveKey, workspaceDir)
-	}
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -3999,7 +3988,7 @@ func (e *Engine) processInteractiveMessageWith(p Platform, msg *Message, session
 	}
 	stopTyping = nil // ownership transferred; prevent defer from double-stopping
 
-	// Start unsolicited reader and arm the idle close timer BEFORE draining
+	// Arm the idle close timer BEFORE draining
 	// queued messages. drainPendingMessages releases the session lock, and
 	// without this ordering the next user message can race in, call
 	// cancelAgentSessionIdleClose (a no-op since nothing was scheduled yet),
@@ -4012,7 +4001,6 @@ func (e *Engine) processInteractiveMessageWith(p Platform, msg *Message, session
 	alive := state.agentSession != nil && state.agentSession.Alive() && !state.stopped && !state.eventsNeedResync
 	state.mu.Unlock()
 	if alive {
-		e.startUnsolicitedReader(state, session, sessions, interactiveKey, workspaceDir)
 		e.scheduleAgentSessionIdleClose(interactiveKey, state)
 	}
 
@@ -6578,13 +6566,11 @@ func (e *Engine) notifyDroppedQueuedMessages(state *interactiveState, reason err
 // state.mu) to close the race window between "queue empty" and "session unlocked".
 // Returns true if the session was unlocked by this call.
 func (e *Engine) drainPendingMessages(state *interactiveState, session *Session, sessions *SessionManager, sessionKey string) bool {
+	// All callers hand event ownership to the drainer while the session is
+	// still locked. Restore the idle reader before unlocking, never afterward.
+	e.stopUnsolicitedReader(state)
 	for {
 		state.mu.Lock()
-		if len(state.pendingMessages) == 0 {
-			session.Unlock()
-			state.mu.Unlock()
-			return true
-		}
 		droppedStale := 0
 		for len(state.pendingMessages) > 0 && state.pendingMessages[0].fileWorkID == "" && e.isQueuedUserMessageStaleForDrainLocked(state, state.pendingMessages[0].userMessageTimeMs) {
 			state.pendingMessages = state.pendingMessages[1:]
@@ -6597,6 +6583,19 @@ func (e *Engine) drainPendingMessages(state *interactiveState, session *Session,
 			)
 		}
 		if len(state.pendingMessages) == 0 {
+			alive := state.agentSession != nil && state.agentSession.Alive() && !state.stopped && !state.eventsNeedResync
+			workspaceDir := state.workspaceDir
+			state.mu.Unlock()
+			if alive {
+				e.startUnsolicitedReader(state, session, sessions, sessionKey, workspaceDir)
+			}
+			state.mu.Lock()
+			// A supplement can arrive while the idle reader is being armed.
+			if len(state.pendingMessages) > 0 {
+				state.mu.Unlock()
+				e.stopUnsolicitedReader(state)
+				continue
+			}
 			session.Unlock()
 			state.mu.Unlock()
 			return true
@@ -10617,7 +10616,9 @@ func (e *Engine) runCompress(state *interactiveState, session *Session, sessions
 	// ensures the lock is released on early-return paths.
 	compressUnlocked := false
 	defer func() {
-		if !compressUnlocked {
+		// Automatic compression is nested inside an existing foreground turn;
+		// only that outer turn owns the queue and final unlock.
+		if !auto && !compressUnlocked {
 			session.Unlock()
 		}
 	}()
@@ -10749,8 +10750,11 @@ func (e *Engine) processCompressEvents(state *interactiveState, session *Session
 				}
 			}
 
-			// After compress succeeds, process any queued messages instead of dropping them.
-			e.drainQueuedMessagesAfterCompress(state, session, sessions, sessionKey, unlocked)
+			// Manual compression owns the lock. Automatic compression returns
+			// to the foreground caller, which drains its own queue before unlock.
+			if !auto {
+				e.drainQueuedMessagesAfterCompress(state, session, sessions, sessionKey, unlocked)
+			}
 			return
 		case EventError:
 			if !auto && event.Error != nil {
@@ -10760,7 +10764,7 @@ func (e *Engine) processCompressEvents(state *interactiveState, session *Session
 			// emit per-turn EventError while staying alive.
 			if !state.agentSession.Alive() {
 				e.notifyDroppedQueuedMessages(state, event.Error)
-			} else {
+			} else if !auto {
 				// Agent survived — try to process queued messages.
 				e.drainQueuedMessagesAfterCompress(state, session, sessions, sessionKey, unlocked)
 			}

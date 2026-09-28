@@ -222,6 +222,22 @@ func newMediaEngine(t *testing.T) (*core.Engine, *recordingAgent, *mediaPlatform
 	t.Cleanup(func() {
 		engine.Stop()
 		_ = agent.Stop()
+		// Stop cancels the turns; their final session saves are asynchronous.
+		// Wait before TempDir removes the store, as the core CUJ fixture does.
+		deadline := time.Now().Add(5 * time.Second)
+		for {
+			busy := false
+			for _, session := range engine.GetSessions().AllSessions() {
+				busy = busy || session.Busy()
+			}
+			if !busy {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("media turns did not stop before session store cleanup")
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
 	})
 	return engine, agent, platform
 }

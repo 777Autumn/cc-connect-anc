@@ -9921,6 +9921,41 @@ func TestAutoCompress_TriggerAfterResult(t *testing.T) {
 	}
 }
 
+func TestAutoCompress_RetainsOuterTurnLockAndQueue(t *testing.T) {
+	for _, event := range []Event{{Type: EventResult, Done: true}, {Type: EventError, Error: fmt.Errorf("synthetic compress failure")}} {
+		for _, auto := range []bool{false, true} {
+			t.Run(fmt.Sprintf("event=%v/auto=%t", event.Type, auto), func(t *testing.T) {
+				p := &stubPlatformEngine{n: "test"}
+				e := NewEngine("test", &stubCompressorAgent{cmd: "/compact"}, []Platform{p}, "", LangEnglish)
+				t.Cleanup(func() { _ = e.Stop() })
+				const key = "test:compact-owner"
+				session := e.sessions.GetOrCreateActive(key)
+				if !session.TryLock() {
+					t.Fatal("expected idle session")
+				}
+				as := newCUJAgentSession()
+				as.nextEventOverride = &event
+				state := &interactiveState{agentSession: as, platform: p, replyCtx: "reply",
+					pendingMessages: []queuedMessage{{platform: p, replyCtx: "queued", content: "supplement"}}}
+				e.interactiveStates[key] = state
+				e.runCompress(state, session, e.sessions, key, p, "reply", auto)
+				if session.Busy() != auto {
+					t.Fatal("automatic compression must leave unlock to the outer turn")
+				}
+				if auto {
+					if len(as.getSentPrompts()) != 1 {
+						t.Fatal("nested compression drained the outer turn's queue")
+					}
+					e.drainPendingMessages(state, session, e.sessions, key)
+				}
+				if session.Busy() || len(as.getSentPrompts()) != 2 {
+					t.Fatal("supplement must be processed exactly once")
+				}
+			})
+		}
+	}
+}
+
 func TestCmdCompress_SessionBusy_RepliesPreviousProcessing(t *testing.T) {
 	p := &stubPlatformEngine{n: "test"}
 	sess := newQueuingSession("compress-busy")
