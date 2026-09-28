@@ -12,7 +12,8 @@ import (
 var _ core.FileWorkAgent = (*Agent)(nil)
 
 // Preserve the employee's project and authentication; add only this host-bound
-// work to the existing workspace-write policy. This never enables a listener.
+// work to the existing workspace-write policy. Mac named profiles additionally
+// allow only this work's ordinary-user LibreOffice startup socket.
 func (a *Agent) ForFileWork(root string) (core.Agent, error) {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
@@ -33,6 +34,13 @@ func (a *Agent) ForFileWork(root string) (core.Agent, error) {
 		// CLI splits dotted keys literally; dynamic names belong in the TOML
 		// value. Codex merges this table into the existing profile configuration.
 		workPolicy = fmt.Sprintf("permissions={%q={workspace_roots={%q=true}}}", a.permissionProfile, root)
+		if runtime.GOOS == "darwin" {
+			socket, err := macOfficeSocket(root, a.spawnOpts.RunAsUser)
+			if err != nil {
+				return nil, fmt.Errorf("codex: Office work permission: %w", err)
+			}
+			workPolicy = fmt.Sprintf("permissions={%q={workspace_roots={%q=true},network={unix_sockets={%q=\"allow\"}}}}", a.permissionProfile, root, socket)
+		}
 	}
 	args := append(append([]string(nil), a.cliExtraArgs...), "-c", workPolicy)
 	return &Agent{
