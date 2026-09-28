@@ -65,13 +65,13 @@ func TestCommandRejectsWritableLinkedAndNonExecutablePaths(t *testing.T) {
 	}
 }
 
-func TestConfigurationRequiresExactlySixUniqueProjectsAndConsumesEnvironment(t *testing.T) {
+func TestConfigurationRequiresFourOrSixUniqueProjectsAndConsumesEnvironment(t *testing.T) {
 	path := protectedTestCommand(t)
-	for _, projects := range []string{"one", "1,2,3,4,5,5", "1,2,3,4,5, 6", "1,2,3,4,5,6,7", "1,2,3,4,5,6"} {
+	for _, projects := range []string{"one", "1,2,3,4,5,5", "1,2,3,4,5, 6", "1,2,3,4,5,6,7", "1,2,3,4,5,6", "1,2,3,4"} {
 		t.Setenv("CC_TEAM_BRAIN_COMMAND", path)
 		t.Setenv("CC_TEAM_BRAIN_PROJECTS", projects)
 		a, err := NewFromEnv()
-		valid := projects == "1,2,3,4,5,6"
+		valid := projects == "1,2,3,4,5,6" || projects == "1,2,3,4"
 		if (err == nil) != valid || (a != nil) != valid {
 			t.Fatalf("mapping %q = %v", projects, err)
 		}

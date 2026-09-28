@@ -81,13 +81,25 @@ func NewFromEnv() (*Adapter, error) {
 		}
 		configured[name] = true
 	}
-	if len(configured) != 6 {
-		return nil, errors.New("knowledge host requires six explicit projects")
+	if len(configured) != 4 && len(configured) != 6 {
+		return nil, errors.New("knowledge host requires four or six explicit projects")
 	}
 	return &Adapter{command: command, projects: configured}, nil
 }
 
 func (a *Adapter) Enabled(project string) bool { return a != nil && a.projects[project] }
+
+func (a *Adapter) AllAttached(attached map[string]bool) bool {
+	if a == nil || len(attached) != len(a.projects) {
+		return false
+	}
+	for name := range a.projects {
+		if !attached[name] {
+			return false
+		}
+	}
+	return true
+}
 
 // RestartEnv restores host configuration for supervisor self-exec, never for
 // model children. Duplicate inherited keys are replaced with the pinned values.
