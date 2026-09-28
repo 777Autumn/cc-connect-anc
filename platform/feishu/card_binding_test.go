@@ -16,8 +16,16 @@ import (
 // Exercise the actual placeholder -> PATCH -> authenticated callback adapter;
 // the engine's fake card sender cannot catch a missing Feishu interaction bind.
 func TestRefreshedBusinessQuestionBindsExactCallback(t *testing.T) {
-	for _, shared := range []bool{false, true} {
-		t.Run(map[bool]string{false: "ordinary", true: "shared"}[shared], func(t *testing.T) {
+	for _, tc := range []struct {
+		name, requestID string
+		shared          bool
+	}{
+		{"ordinary-case", "case:question:0", false},
+		{"shared-case", "case:question:0", true},
+		{"ordinary-agent-question", "agent-question", false},
+		{"shared-agent-question", "agent-question", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
 			failPatch := false
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
@@ -55,8 +63,8 @@ func TestRefreshedBusinessQuestionBindsExactCallback(t *testing.T) {
 				t.Fatal(err)
 			}
 			card := core.NewCard().Buttons(core.CardButton{Text: "Confirm", Value: "askq:0:1", Extra: map[string]string{"askq_label": "Confirm"}}).Build()
-			card.SharedUpdate = shared
-			card.Interaction = &core.CardInteraction{RequestID: "case:question:0", Principal: core.ActionPrincipal{UserID: "owner", ChatID: rc.chatID, SessionKey: rc.sessionKey}}
+			card.SharedUpdate = tc.shared
+			card.Interaction = &core.CardInteraction{RequestID: tc.requestID, Principal: core.ActionPrincipal{UserID: "owner", ChatID: rc.chatID, SessionKey: rc.sessionKey}}
 			if err := p.RefreshCardMessage(context.Background(), id, rc.sessionKey, card); err != nil {
 				t.Fatal(err)
 			}
@@ -86,6 +94,11 @@ func TestRefreshedBusinessQuestionBindsExactCallback(t *testing.T) {
 			case msg := <-messages:
 				if msg.InteractionRequestID != card.Interaction.RequestID || msg.SessionKey != rc.sessionKey || msg.Content != "askq:0:1" {
 					t.Fatalf("callback lost trusted question: %+v", msg)
+				}
+				got, ok := msg.ReplyCtx.(replyContext)
+				if !ok || got.messageID != id || got.chatID != rc.chatID || got.sessionKey != rc.sessionKey ||
+					got.controlledFileWork != strings.HasPrefix(tc.requestID, "case:") {
+					t.Fatalf("callback changed physical reply route or controlled scope: %+v", got)
 				}
 			case <-time.After(time.Second):
 				t.Fatal("confirmed answer did not reach engine")
