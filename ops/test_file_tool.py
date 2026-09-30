@@ -1,5 +1,6 @@
 """Offline file-client contract, using a fake Unix socket and real HTTP parser."""
 import base64
+import errno
 import hashlib
 import io
 import json
@@ -59,18 +60,32 @@ class FileClientTests(unittest.TestCase):
                 value = {'work_id':'fixture', 'path':'nested/result.docx',
                          'sha256':hashlib.sha256(selected.read_bytes()).hexdigest(), 'expected_version':0}
                 accepted = {'delivery_id':'fixture-delivery', 'status':'accepted', 'message_receipt':'fixture-message'}
-                code, result, factory = self.invoke(['file-deliver'], json.dumps(value).encode(), Peer(accepted))
+                stale = dict(value, sha256='0' * 64)
+                peer = Peer(accepted)
+                code, result, factory = self.invoke(['file-deliver'], json.dumps(stale).encode(), peer)
+                self.assertEqual((code, result), (2, {
+                    'status': 'blocked', 'code': 'file_access_not_prepared',
+                    'stage': 'local_preflight', 'request_state': 'not_sent', 'reason': 'output_changed'}))
+                factory.assert_not_called()
+                self.assertEqual(bytes(peer.sent), b'')
+                self.assertEqual(stat.S_IMODE(selected.stat().st_mode), 0o600)
+                value['sha256'] = hashlib.sha256(selected.read_bytes()).hexdigest()
+                peer = Peer(accepted)
+                code, result, factory = self.invoke(['file-deliver'], json.dumps(value).encode(), peer)
                 self.assertEqual((code,result), (0,accepted))
                 self.assertEqual(factory.call_count, 1)
+                self.assertEqual(bytes(peer.sent).count(b'POST /tool HTTP/1.1'), 1)
                 self.assertEqual(stat.S_IMODE(selected.stat().st_mode), 0o640)
                 self.assertEqual(stat.S_IMODE(selected.parent.stat().st_mode), 0o2750)
                 self.assertEqual(stat.S_IMODE(untouched.stat().st_mode), 0o600)
-                for kind in ('digest', 'symlink', 'hardlink'):
+                for kind in ('digest', 'missing', 'symlink', 'hardlink'):
                     with self.subTest(kind=kind):
                         bad = dict(value)
                         selected.chmod(0o600)
                         if kind == 'digest':
                             bad['sha256'] = '0' * 64
+                        elif kind == 'missing':
+                            bad['path'] = 'absent.docx'
                         else:
                             link = Path('outputs/' + kind)
                             if kind == 'symlink':
@@ -80,10 +95,61 @@ class FileClientTests(unittest.TestCase):
                             bad['path'] = kind
                         code, result, factory = self.invoke(['file-deliver'], json.dumps(bad).encode(), Peer(accepted))
                         self.assertEqual((code,result['code']), (2,'file_access_not_prepared'))
+                        self.assertEqual(result['reason'], 'output_changed' if kind == 'digest' else 'invalid_output')
+                        self.assertEqual(result['request_state'], 'not_sent')
                         factory.assert_not_called()
                         self.assertEqual(stat.S_IMODE(selected.stat().st_mode), 0o600)
             finally:
                 os.chdir(previous)
+
+    def test_local_preflight_reasons_never_connect_or_expose_exception_text(self):
+        raw = json.dumps({'work_id': 'fixture', 'path': 'result.docx',
+                          'sha256': '0' * 64, 'expected_version': 0}).encode()
+        cases = [(PermissionError('private-path'), 'access_denied'),
+                 (FileNotFoundError('private-path'), 'invalid_output'),
+                 (NotADirectoryError('private-path'), 'invalid_output'),
+                 (IsADirectoryError('private-path'), 'invalid_output'),
+                 (OSError(errno.ELOOP, 'private-path'), 'invalid_output'),
+                 (OSError(errno.ENAMETOOLONG, 'private-path'), 'invalid_output'),
+                 (ValueError('private-path'), 'invalid_output'),
+                 (OSError(errno.EIO, 'private-path'), 'preparation_failed'),
+                 (AttributeError('private-path'), 'preparation_failed')]
+        for error, reason in cases:
+            with self.subTest(error=type(error).__name__, reason=reason):
+                peer = Peer({})
+                with patch.object(file_tool, 'prepare_delivery', side_effect=error):
+                    code, result, factory = self.invoke(['file-deliver'], raw, peer)
+                self.assertEqual((code, result), (2, {
+                    'status': 'blocked', 'code': 'file_access_not_prepared',
+                    'stage': 'local_preflight', 'request_state': 'not_sent', 'reason': reason}))
+                factory.assert_not_called()
+                self.assertIsNone(peer.address)
+                self.assertEqual(bytes(peer.sent), b'')
+
+    def test_delivery_host_results_and_post_request_uncertainty_never_become_not_sent(self):
+        raw = json.dumps({'work_id': 'fixture', 'path': 'result.docx',
+                          'sha256': '0' * 64, 'expected_version': 0}).encode()
+        cases = [(Peer({'status': 'blocked', 'code': 'file_version_conflict'}, 400),
+                  {'status': 'blocked', 'code': 'file_version_conflict'}, 1),
+                 (Peer({'status': 'unavailable', 'code': 'file_outcome_unconfirmed'}, 503),
+                  {'status': 'unavailable', 'code': 'file_outcome_unconfirmed'}, 1),
+                 (Peer({'status': 'unknown', 'delivery_id': 'fixture-delivery'}),
+                  {'status': 'unknown', 'delivery_id': 'fixture-delivery'}, 0),
+                 (Peer({'status': 'accepted'}),
+                  {'status': 'unavailable', 'code': 'invalid_response'}, 1)]
+        timeout = Peer({})
+        timeout_stream = io.BytesIO()
+        timeout_stream.readline = lambda *_args: (_ for _ in ()).throw(TimeoutError('private-path'))
+        timeout.makefile = lambda *_args: timeout_stream
+        cases.append((timeout, {'status': 'unavailable', 'code': 'outcome_unconfirmed'}, 1))
+        for peer, expected, exit_code in cases:
+            with self.subTest(expected=expected):
+                with patch.object(file_tool, 'prepare_delivery'):
+                    code, result, factory = self.invoke(['file-deliver'], raw, peer)
+                self.assertEqual((code, result), (exit_code, expected))
+                self.assertEqual(factory.call_count, 1)
+                self.assertEqual(bytes(peer.sent).count(b'POST /tool HTTP/1.1'), 1)
+                self.assertTrue(peer.closed)
 
     def invoke(self, command, raw, peer, env=None):
         output = io.StringIO()
