@@ -2,6 +2,7 @@
 """Narrow model-side file client; no management API, credentials or recipients."""
 
 import base64
+import errno
 import hashlib
 import http.client
 import json
@@ -21,6 +22,10 @@ FIELDS = {
     "file-deliver": {"work_id", "path", "sha256", "expected_version"},
     "file-status": {"work_id", "delivery_id"},
 }
+
+
+class OutputChanged(ValueError):
+    """The selected bytes no longer match the requested delivery."""
 
 
 def unique_object(pairs):
@@ -134,7 +139,7 @@ def prepare_delivery(value):
                 raise ValueError("invalid output file")
             data = stream.read((20 << 20) + 1)
             if len(data) != info.st_size or hashlib.sha256(data).hexdigest() != value["sha256"]:
-                raise ValueError("output changed")
+                raise OutputChanged("output changed")
             os.fchmod(stream.fileno(), 0o640)
     finally:
         os.close(directory)
@@ -169,8 +174,19 @@ def main(argv=None, *, stdin=None, stdout=None):
     if argv[0] == "file-deliver":
         try:
             prepare_delivery(value)
-        except (ValueError, OSError, AttributeError):
-            return emit(stdout, {"status": "blocked", "code": "file_access_not_prepared"}, 2)
+        except (ValueError, OSError, AttributeError) as error:
+            if isinstance(error, OutputChanged):
+                reason = "output_changed"
+            elif isinstance(error, PermissionError):
+                reason = "access_denied"
+            elif (isinstance(error, (ValueError, FileNotFoundError, NotADirectoryError, IsADirectoryError))
+                  or isinstance(error, OSError) and error.errno in {errno.ELOOP, errno.ENAMETOOLONG}):
+                reason = "invalid_output"
+            else:
+                reason = "preparation_failed"
+            return emit(stdout, {"status": "blocked", "code": "file_access_not_prepared",
+                                 "stage": "local_preflight", "request_state": "not_sent",
+                                 "reason": reason}, 2)
 
     try:
         headers.update({"Authorization": "Bearer " + token, "Content-Type": "application/json"})

@@ -43,6 +43,17 @@ Known input/format/scope/version refusals return `blocked` with a safe code;
 post-send journal failures remain uncertain and must not invite resubmission.
 An API acceptance does not prove an employee received or opened the file.
 
+Client-side preparation failures retain `status: blocked`,
+`code: file_access_not_prepared` and exit code 2, adding `stage: local_preflight`
+and `request_state: not_sent`. Their safe `reason` is `output_changed` for a byte
+count/digest mismatch, `invalid_output` for a missing or invalid path/file,
+`access_denied` for an explicit permission denial, or `preparation_failed` for
+other preparation errors. These fields describe only this call before any request,
+not earlier delivery attempts. Refresh `work-context` and reconcile prior receipts;
+after resolving the cause, submit only unsent files using their final saved hashes.
+Retain accepted and uncertain deliveries. Timeouts, invalid responses and host
+post-send errors remain uncertain, without these local-preflight fields or retries.
+
 Example configuration (all paths are fictional; do not apply to a live host):
 
 ```toml
