@@ -599,6 +599,97 @@ func TestCUJ_B3_SwitchPreservesHistoryEndToEnd(t *testing.T) {
 	}
 }
 
+type fileSessionJourneyAgent struct {
+	cujAgent
+	resumeIDs []string
+}
+
+func (a *fileSessionJourneyAgent) ForFileWork(string) (Agent, error) { return a, nil }
+func (a *fileSessionJourneyAgent) ListSessions(context.Context) ([]AgentSessionInfo, error) {
+	return []AgentSessionInfo{{ID: "original-thread", Summary: "original work"}}, nil
+}
+func (a *fileSessionJourneyAgent) StartSession(ctx context.Context, id string) (AgentSession, error) {
+	as, err := a.cujAgent.StartSession(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	a.mu.Lock()
+	a.resumeIDs = append(a.resumeIDs, id)
+	a.mu.Unlock()
+	return &fileSessionJourneySession{AgentSession: as}, nil
+}
+
+type fileSessionJourneySession struct{ AgentSession }
+
+func (*fileSessionJourneySession) CurrentSessionID() string { return "original-thread" }
+
+func TestCUJ_B3_NewThenSwitchKeepsFileWork(t *testing.T) {
+	for _, switchKind := range []string{"text", "card"} {
+		t.Run(switchKind, func(t *testing.T) {
+			p := &filePlatformStub{stubPlatformEngine: stubPlatformEngine{n: "fixture"}}
+			a := &fileSessionJourneyAgent{}
+			e := NewEngine("fixture-project", a, []Platform{p}, filepath.Join(t.TempDir(), "sessions.json"), LangEnglish)
+			t.Cleanup(func() { _ = e.Stop() })
+			h := &fileHostStub{}
+			root := t.TempDir()
+			if err := e.SetFileWorkHost(h, func(id string) (string, int, error) { return filepath.Join(root, id), 0, nil }); err != nil {
+				t.Fatal(err)
+			}
+			env := &cujEnv{t: t}
+			key := "fixture:chat:user"
+			send := func(id, text string) {
+				p.clearSent()
+				e.ReceiveMessage(p, &Message{Platform: "fixture", SessionKey: key, UserID: "user", ChannelID: "chat", MessageID: id, Content: text, ControlledFileWork: true, FileWorkPrivate: true})
+				env.waitFor("reply and persisted turn", 3*time.Second, func() bool {
+					return len(p.getSent()) > 0 && !e.sessions.GetOrCreateActive(key).Busy()
+				})
+			}
+			send("first", "Prepare the original draft")
+			original := e.sessions.GetOrCreateActive(key)
+			originalWork := h.bindings[0]
+			send("new", "/new another work")
+			if fresh := e.sessions.GetOrCreateActive(key); fresh.ID == original.ID || fresh.GetAgentSessionID() != "" || len(fresh.GetHistory(0)) != 0 {
+				t.Fatal("new work did not get an independent empty session")
+			}
+			if original.GetAgentSessionID() != "original-thread" || len(original.GetHistory(0)) < 2 {
+				t.Fatal("new command discarded the original conversation binding/history")
+			}
+			send("list", "/list")
+			if !strings.Contains(strings.Join(p.getSent(), "\n"), "original work") {
+				t.Fatal("original conversation is no longer listed")
+			}
+			if switchKind == "card" {
+				if card := e.handleCardNav("act:/switch original-thread", key); card == nil {
+					t.Fatal("card switch returned no result")
+				}
+			} else {
+				send("switch", "/switch original-thread")
+			}
+			send("history", "/history")
+			if !strings.Contains(strings.Join(p.getSent(), "\n"), "Prepare the original draft") {
+				t.Fatal("switch hid the original user-visible history")
+			}
+			send("revise", "Revise the original draft")
+			if active := e.sessions.GetOrCreateActive(key); active.ID != original.ID || fileNativeSessionID(active) != originalWork.SessionID {
+				t.Fatal("continuation replaced the original session/work identity")
+			}
+			if len(h.bindings) != 2 || h.bindings[1].SessionID != originalWork.SessionID || h.bindings[1].WorkRoot != originalWork.WorkRoot {
+				t.Fatal("continuation prepared a different file work")
+			}
+			a.mu.Lock()
+			ids := append([]string(nil), a.resumeIDs...)
+			a.mu.Unlock()
+			if len(ids) != 2 || ids[0] != "" || ids[1] != "original-thread" {
+				t.Fatalf("continuation did not resume its original native thread: %v", ids)
+			}
+			send("history-after", "/history")
+			if text := strings.Join(p.getSent(), "\n"); !strings.Contains(text, "Prepare the original draft") || !strings.Contains(text, "Revise the original draft") {
+				t.Fatal("continuation lost user-visible prior history")
+			}
+		})
+	}
+}
+
 // ===========================================================================
 // CUJ-C4 · /cancel stops current turn AND creates a fresh session
 //

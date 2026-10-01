@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -400,13 +401,14 @@ func (sm *SessionManager) SwitchSession(userKey, target string) (*Session, error
 }
 
 // SwitchToAgentSession finds or creates an internal session that maps to the
-// given agent session ID. If an existing session already references agentSID,
-// it becomes the active session. Otherwise a new session is created so the
-// previous session's AgentSessionID is preserved in KnownAgentSessionIDs.
-func (sm *SessionManager) SwitchToAgentSession(userKey, agentSID, agentName, summary string) *Session {
+// given agent session ID. Current bindings take priority. A unique cleared
+// session with that past ID is restored without replacing its file-work identity.
+func (sm *SessionManager) SwitchToAgentSession(userKey, agentSID, agentName, summary string) (*Session, error) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
+	var previous *Session
+	ambiguous := false
 	for _, sid := range sm.userSessions[userKey] {
 		s := sm.sessions[sid]
 		if s == nil {
@@ -414,18 +416,37 @@ func (sm *SessionManager) SwitchToAgentSession(userKey, agentSID, agentName, sum
 		}
 		s.mu.Lock()
 		aid := s.AgentSessionID
+		past := aid == "" && slices.Contains(s.PastAgentSessionIDs, agentSID)
 		s.mu.Unlock()
 		if aid == agentSID {
 			sm.activeSession[userKey] = s.ID
 			sm.saveLocked()
-			return s
+			return s, nil
 		}
+		if past {
+			if previous != nil && previous != s {
+				ambiguous = true
+			}
+			previous = s
+		}
+	}
+
+	if ambiguous {
+		return nil, fmt.Errorf("multiple previous sessions match the selected conversation")
+	}
+	if previous != nil {
+		if !previous.CompareAndSetAgentSessionID(agentSID, agentName) {
+			return nil, fmt.Errorf("previous session changed before switching")
+		}
+		sm.activeSession[userKey] = previous.ID
+		sm.saveLocked()
+		return previous, nil
 	}
 
 	s := sm.createLocked(userKey, summary)
 	s.SetAgentInfo(agentSID, agentName, summary)
 	sm.saveLocked()
-	return s
+	return s, nil
 }
 
 func (sm *SessionManager) ListSessions(userKey string) []*Session {

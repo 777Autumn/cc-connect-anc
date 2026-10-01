@@ -1,8 +1,11 @@
 package core
 
 import (
+	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -915,7 +918,10 @@ func TestSwitchToAgentSession_PreservesOldSession(t *testing.T) {
 		t.Fatal("agent-A should be in KnownAgentSessionIDs before switch")
 	}
 
-	s2 := sm.SwitchToAgentSession(userKey, "agent-B", "claude", "session B")
+	s2, err := sm.SwitchToAgentSession(userKey, "agent-B", "claude", "session B")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if s2.GetAgentSessionID() != "agent-B" {
 		t.Fatalf("switched session AgentSessionID = %q, want agent-B", s2.GetAgentSessionID())
 	}
@@ -937,9 +943,14 @@ func TestSwitchToAgentSession_ReusesExisting(t *testing.T) {
 	s1 := sm.GetOrCreateActive(userKey)
 	s1.SetAgentInfo("agent-A", "claude", "session A")
 
-	sm.SwitchToAgentSession(userKey, "agent-B", "claude", "session B")
+	if _, err := sm.SwitchToAgentSession(userKey, "agent-B", "claude", "session B"); err != nil {
+		t.Fatal(err)
+	}
 
-	s3 := sm.SwitchToAgentSession(userKey, "agent-A", "claude", "session A")
+	s3, err := sm.SwitchToAgentSession(userKey, "agent-A", "claude", "session A")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if s3.ID != s1.ID {
 		t.Fatalf("switching back to agent-A should reuse session %s, got %s", s1.ID, s3.ID)
 	}
@@ -962,10 +973,15 @@ func TestSwitchToAgentSession_PreservesHistory(t *testing.T) {
 	s1.AddHistory("assistant", "hi! this is session A")
 
 	// Switch away to a different agent session.
-	sm.SwitchToAgentSession(userKey, "agent-B", "claude", "Session B")
+	if _, err := sm.SwitchToAgentSession(userKey, "agent-B", "claude", "Session B"); err != nil {
+		t.Fatal(err)
+	}
 
 	// Switch back to the original agent session.
-	s3 := sm.SwitchToAgentSession(userKey, "agent-A", "claude", "Session A")
+	s3, err := sm.SwitchToAgentSession(userKey, "agent-A", "claude", "Session A")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if s3.ID != s1.ID {
 		t.Fatalf("switching back to agent-A should reuse session %s, got %s", s1.ID, s3.ID)
 	}
@@ -979,6 +995,171 @@ func TestSwitchToAgentSession_PreservesHistory(t *testing.T) {
 	}
 	if got[1].Role != "assistant" || got[1].Content != "hi! this is session A" {
 		t.Fatalf("second history entry = (%q, %q), want (assistant, hi! this is session A)", got[1].Role, got[1].Content)
+	}
+}
+
+func TestSwitchToAgentSession_RestoresPastFileWorkAfterReload(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sessions.json")
+	sm := NewSessionManager(path)
+	key := "test:room:owner"
+	old := sm.NewSession(key, "retained work")
+	old.SetAgentSessionID("past-thread", "old-agent")
+	old.AddHistory("user", "synthetic original request")
+	old.AddHistory("assistant", "synthetic saved response")
+	p := ActionPrincipal{Platform: "test", Project: "project", UserID: "owner", ChatID: "room", SessionKey: key, MessageID: "message-1"}
+	old.FileTurns = []FileTurn{{Principal: p, WorkID: "work-1", Content: "synthetic supplement", Route: json.RawMessage(`{}`), Status: "completed"}}
+	old.CaseSelection = &CaseSelection{Name: "synthetic case", Principal: p}
+	old.CaseQuestion = &CaseQuestion{ID: "question-1", Principal: p, Input: json.RawMessage(`{}`), Question: "synthetic question", Status: "answered", Receipt: "receipt-1"}
+	old.CaseAnswerIDs = []string{"answer-1"}
+	old.ActiveProvider = "retained-provider"
+	old.SetAgentSessionID("", "old-agent")
+	old.ClearHistory()
+	newer := sm.NewSession(key, "new conversation")
+	sm.Save()
+
+	sm = NewSessionManager(path)
+	if sm.loadErr != nil {
+		t.Fatal(sm.loadErr)
+	}
+	old = sm.FindByID(old.ID)
+	if old == nil || sm.ActiveSessionID(key) != newer.ID {
+		t.Fatal("fixture did not preserve the old work and new active conversation")
+	}
+	// Compare all persisted fields except the binding being restored.
+	preserved := func(s *Session) map[string]json.RawMessage {
+		t.Helper()
+		raw, err := json.Marshal(s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &fields); err != nil {
+			t.Fatal(err)
+		}
+		delete(fields, "agent_session_id")
+		delete(fields, "agent_type")
+		return fields
+	}
+	want := preserved(old)
+	for attempt := 0; attempt < 2; attempt++ {
+		got, err := sm.SwitchToAgentSession(key, "past-thread", "new-agent", "native summary must not replace the local name")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != old || got.GetAgentSessionID() != "past-thread" || got.AgentType != "new-agent" || sm.ActiveSessionID(key) != old.ID {
+			t.Fatalf("switch %d did not restore the existing session: %+v", attempt, got)
+		}
+		if !reflect.DeepEqual(preserved(got), want) || len(sm.ListSessions(key)) != 2 {
+			t.Fatalf("switch %d replaced or changed retained file-work state", attempt)
+		}
+	}
+	reloaded := NewSessionManager(path)
+	got := reloaded.FindByID(old.ID)
+	if reloaded.loadErr != nil || got == nil || reloaded.ActiveSessionID(key) != old.ID || got.GetAgentSessionID() != "past-thread" || got.AgentType != "new-agent" {
+		t.Fatalf("restored binding did not survive reload: session=%+v error=%v", got, reloaded.loadErr)
+	}
+	if !reflect.DeepEqual(preserved(got), want) || len(reloaded.ListSessions(key)) != 2 {
+		t.Fatal("retained file-work state changed on reload")
+	}
+}
+
+func TestSwitchToAgentSession_CurrentIDWinsOverAmbiguousPast(t *testing.T) {
+	sm := NewSessionManager("")
+	key := "test:room:owner"
+	for _, name := range []string{"old first", "old second"} {
+		s := sm.NewSession(key, name)
+		s.SetAgentSessionID("target-thread", "stub")
+		s.SetAgentSessionID("", "stub")
+	}
+	current := sm.NewSession(key, "current binding")
+	current.SetAgentSessionID("target-thread", "stub")
+	sm.NewSession(key, "active elsewhere")
+	got, err := sm.SwitchToAgentSession(key, "target-thread", "stub", "summary")
+	if err != nil || got != current || sm.ActiveSessionID(key) != current.ID {
+		t.Fatalf("current binding must win over two earlier past matches: got=%+v error=%v", got, err)
+	}
+	for _, s := range sm.ListSessions(key)[:2] {
+		if s.GetAgentSessionID() != "" {
+			t.Fatal("current match also rebound a past session")
+		}
+	}
+	if len(sm.ListSessions(key)) != 4 {
+		t.Fatal("current match created a duplicate session")
+	}
+}
+
+func TestSwitchToAgentSession_AmbiguousPastLeavesStateUnchanged(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sessions.json")
+	sm := NewSessionManager(path)
+	key := "test:room:owner"
+	for _, name := range []string{"first work", "second work"} {
+		s := sm.NewSession(key, name)
+		s.SetAgentSessionID("ambiguous-thread", "stub")
+		s.SetAgentSessionID("", "stub")
+		s.AddHistory("user", name)
+	}
+	sm.NewSession(key, "active conversation")
+	sm.Save()
+	diskBefore, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot := func() []byte {
+		t.Helper()
+		raw, err := json.Marshal(sessionSnapshot{Sessions: sm.sessions, ActiveSession: sm.activeSession, UserSessions: sm.userSessions, Counter: sm.counter, SessionNames: sm.sessionNames, UserMeta: sm.userMeta, LegacyData: sm.legacyData})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return raw
+	}
+	before := snapshot()
+	got, err := sm.SwitchToAgentSession(key, "ambiguous-thread", "new-agent", "must not be created")
+	if err == nil || got != nil {
+		t.Fatalf("ambiguous history must fail without selecting a session: got=%+v error=%v", got, err)
+	}
+	if !bytes.Equal(before, snapshot()) {
+		t.Fatal("failed ambiguous switch changed in-memory sessions, active cursor, or counter")
+	}
+	diskAfter, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(diskBefore, diskAfter) {
+		t.Fatal("failed ambiguous switch changed the persisted snapshot")
+	}
+}
+
+func TestSwitchToAgentSession_DoesNotStealOtherBindings(t *testing.T) {
+	for _, tc := range []struct{ name, owner, current string }{
+		{"other user past", "test:room:other", ""},
+		{"other user current", "test:room:other", "target-thread"},
+		{"same user has a new current ID", "test:room:owner", "newer-thread"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sm := NewSessionManager("")
+			key := "test:room:owner"
+			old := sm.NewSession(tc.owner, "retained conversation")
+			old.SetAgentSessionID("target-thread", "stub")
+			old.SetAgentSessionID(tc.current, "stub")
+			old.AddHistory("user", "retained content")
+			before, err := json.Marshal(old)
+			if err != nil {
+				t.Fatal(err)
+			}
+			active := sm.NewSession(key, "active conversation")
+			count := len(sm.ListSessions(key))
+			got, err := sm.SwitchToAgentSession(key, "target-thread", "stub", "new binding")
+			if err != nil || got == nil || got == old || got == active || got.GetAgentSessionID() != "target-thread" || sm.ActiveSessionID(key) != got.ID || len(sm.ListSessions(key)) != count+1 {
+				t.Fatalf("non-eligible bindings should create a distinct local session: got=%+v error=%v", got, err)
+			}
+			after, err := json.Marshal(old)
+			if err != nil || !bytes.Equal(before, after) {
+				t.Fatal("switch changed a non-eligible conversation")
+			}
+			if tc.owner != key && sm.ActiveSessionID(tc.owner) != old.ID {
+				t.Fatal("switch moved another user's active cursor")
+			}
+		})
 	}
 }
 
@@ -1117,4 +1298,3 @@ func TestKnownAgentSessionIDs_ResetAllSessionsBug(t *testing.T) {
 		t.Fatalf("filterOwnedSessions returned %d, want 3", len(filtered))
 	}
 }
-

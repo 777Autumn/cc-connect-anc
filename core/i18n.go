@@ -508,6 +508,7 @@ const (
 	MsgSwitchSuccess   MsgKey = "switch_success"
 	MsgSwitchNoMatch   MsgKey = "switch_no_match"
 	MsgSwitchNoSession MsgKey = "switch_no_session"
+	MsgSwitchFailed    MsgKey = "switch_failed"
 
 	MsgCommandTimeout MsgKey = "command_timeout"
 
@@ -3436,6 +3437,13 @@ var messages = map[MsgKey]map[Language]string{
 		LangTraditionalChinese: "✅ 已切換到：%s（%s，%d 則訊息）",
 		LangJapanese:           "✅ 切り替え：%s（%s、%d件）",
 		LangSpanish:            "✅ Cambiado a: %s (%s, %d mensajes)",
+	},
+	MsgSwitchFailed: {
+		LangEnglish:            "❌ Could not safely select this conversation. The current session was not changed.",
+		LangChinese:            "❌ 无法安全确定要接续的会话，当前会话未改变。",
+		LangTraditionalChinese: "❌ 無法安全確定要接續的會話，目前會話未變更。",
+		LangJapanese:           "❌ 再開する会話を安全に特定できませんでした。現在のセッションは変更されていません。",
+		LangSpanish:            "❌ No se pudo seleccionar esta conversación de forma segura. La sesión actual no cambió.",
 	},
 	MsgSwitchNoMatch: {
 		LangEnglish:            "❌ No session matching %q",
