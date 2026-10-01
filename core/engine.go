@@ -7417,7 +7417,8 @@ func (e *Engine) cmdSwitch(p Platform, msg *Message, args []string) {
 	// /switch round-trip. When SwitchToAgentSession creates a fresh Session
 	// (no prior match), History is already nil, so preserving is a no-op.
 	if _, err := sessions.SwitchToAgentSession(msg.SessionKey, matched.ID, agent.Name(), matched.Summary); err != nil {
-		e.reply(p, msg.ReplyCtx, e.i18n.Tf(MsgError, err))
+		slog.Warn("session switch failed", "error", err)
+		e.reply(p, msg.ReplyCtx, e.i18n.T(MsgSwitchFailed))
 		return
 	}
 	e.cleanupInteractiveState(interactiveKey)
@@ -12328,6 +12329,9 @@ func (e *Engine) handleCardNav(action string, sessionKey string) *Card {
 	if prefix == "act" && cmd == "/model" {
 		return e.handleModelCardAction(args, sessionKey)
 	}
+	if prefix == "act" && cmd == "/switch" {
+		return e.handleSwitchCardAction(args, sessionKey)
+	}
 
 	if prefix == "act" {
 		e.executeCardAction(cmd, args, sessionKey)
@@ -12409,6 +12413,27 @@ func (e *Engine) handleCardNav(action string, sessionKey string) *Card {
 		return e.renderUpgradeCard()
 	}
 	return nil
+}
+
+func (e *Engine) handleSwitchCardAction(args, sessionKey string) *Card {
+	if args == "" {
+		return e.renderListCardSafe(sessionKey, 1)
+	}
+	agent, sessions := e.sessionContextForKey(sessionKey)
+	agentSessions, err := agent.ListSessions(e.ctx)
+	if err == nil {
+		matched := e.matchSession(e.applySessionFilter(agentSessions, sessions), sessions, args)
+		if matched == nil {
+			return e.simpleCard(e.i18n.T(MsgCardTitleCurrentSession), "red", e.i18n.Tf(MsgSwitchNoMatch, args))
+		}
+		_, err = sessions.SwitchToAgentSession(sessionKey, matched.ID, agent.Name(), matched.Summary)
+	}
+	if err != nil {
+		slog.Warn("card session switch failed", "error", err)
+		return e.simpleCard(e.i18n.T(MsgCardTitleCurrentSession), "red", e.i18n.T(MsgSwitchFailed))
+	}
+	e.cleanupInteractiveState(e.interactiveKeyForSessionKey(sessionKey))
+	return e.renderListCardSafe(sessionKey, 1)
 }
 
 func (e *Engine) handleModelCardAction(args, sessionKey string) *Card {
@@ -12661,26 +12686,6 @@ func (e *Engine) executeCardAction(cmd, args, sessionKey string) {
 
 	case "/delete-mode":
 		e.executeDeleteModeAction(sessionKey, args)
-
-	case "/switch":
-		if args == "" {
-			return
-		}
-		agent, sessions := e.sessionContextForKey(sessionKey)
-		agentSessions, err := agent.ListSessions(e.ctx)
-		if err != nil || len(agentSessions) == 0 {
-			return
-		}
-		agentSessions = e.applySessionFilter(agentSessions, sessions)
-		matched := e.matchSession(agentSessions, sessions, args)
-		if matched == nil {
-			return
-		}
-		if _, err := sessions.SwitchToAgentSession(sessionKey, matched.ID, agent.Name(), matched.Summary); err != nil {
-			slog.Warn("card session switch failed", "error", err)
-			return
-		}
-		e.cleanupInteractiveState(interactiveKey)
 
 	case "/dir":
 		fields := strings.Fields(args)

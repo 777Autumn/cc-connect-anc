@@ -10776,6 +10776,53 @@ func TestExecuteCardAction_NewCleansUpAndCreatesSession(t *testing.T) {
 	}
 }
 
+func TestSessionSwitchAmbiguousPastVisibleWithoutChangingWork(t *testing.T) {
+	for _, kind := range []string{"text", "card"} {
+		t.Run(kind, func(t *testing.T) {
+			p := &stubPlatformEngine{n: "test"}
+			path := filepath.Join(t.TempDir(), "sessions.json")
+			e := NewEngine("fixture", &fileSessionJourneyAgent{}, []Platform{p}, path, LangChinese)
+			t.Cleanup(e.cancel)
+			key := "test:owner"
+			for _, name := range []string{"first work", "second work"} {
+				s := e.sessions.NewSession(key, name)
+				s.SetAgentSessionID("original-thread", "cuj")
+				s.SetAgentSessionID("", "")
+			}
+			active := e.sessions.NewSession(key, "active work")
+			running := newControllableSession("active-thread")
+			e.interactiveStates[key] = &interactiveState{agentSession: running}
+			before, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var visible string
+			if kind == "card" {
+				card := e.handleCardNav("act:/switch original-thread", key)
+				if card == nil {
+					t.Fatal("ambiguous switch returned no visible result")
+				}
+				visible = card.RenderText()
+			} else {
+				e.cmdSwitch(p, &Message{SessionKey: key}, []string{"original-thread"})
+				visible = strings.Join(p.getSent(), "\n")
+			}
+			if !strings.Contains(visible, e.i18n.T(MsgSwitchFailed)) || strings.Contains(visible, "multiple previous sessions") {
+				t.Fatalf("ambiguous switch did not show the localized safe refusal: %s", visible)
+			}
+			after, err := os.ReadFile(path)
+			if err != nil || string(after) != string(before) || e.sessions.ActiveSessionID(key) != active.ID {
+				t.Fatal("rejected switch changed retained sessions or the active work")
+			}
+			select {
+			case <-running.closed:
+				t.Fatal("rejected switch closed the current running session")
+			default:
+			}
+		})
+	}
+}
+
 func TestExecuteCardAction_LangSwitch(t *testing.T) {
 	e := newTestEngine()
 

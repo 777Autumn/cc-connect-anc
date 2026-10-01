@@ -659,7 +659,9 @@ func TestCUJ_B3_NewThenSwitchKeepsFileWork(t *testing.T) {
 				t.Fatal("original conversation is no longer listed")
 			}
 			if switchKind == "card" {
-				e.executeCardAction("/switch", "original-thread", key)
+				if card := e.handleCardNav("act:/switch original-thread", key); card == nil {
+					t.Fatal("card switch returned no result")
+				}
 			} else {
 				send("switch", "/switch original-thread")
 			}
