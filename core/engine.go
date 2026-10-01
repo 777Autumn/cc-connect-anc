@@ -7248,12 +7248,6 @@ func (e *Engine) cmdNew(p Platform, msg *Message, args []string) {
 	e.cleanupInteractiveState(interactiveKey)
 	slog.Info("cmdNew: cleanup done, creating new session", "session_key", msg.SessionKey)
 
-	// Clear old session's agent session ID so it cannot be resumed
-	old := sessions.GetOrCreateActive(msg.SessionKey)
-	old.SetAgentSessionID("", "")
-	old.ClearHistory()
-	sessions.Save()
-
 	name := ""
 	if len(args) > 0 {
 		name = strings.Join(args, " ")
@@ -7416,17 +7410,17 @@ func (e *Engine) cmdSwitch(p Platform, msg *Message, args []string) {
 		return
 	}
 
-	slog.Info("cmdSwitch: cleaning up old session", "session_key", msg.SessionKey)
-	e.cleanupInteractiveState(interactiveKey)
-	slog.Info("cmdSwitch: cleanup done", "session_key", msg.SessionKey)
-
 	// NOTE: Do NOT call session.ClearHistory() on the returned Session.
 	// When switching back to a known agent_session_id, SwitchToAgentSession
 	// returns the *existing* Session object whose History reflects the
 	// original conversation; wiping it makes /history return empty after a
 	// /switch round-trip. When SwitchToAgentSession creates a fresh Session
 	// (no prior match), History is already nil, so preserving is a no-op.
-	_ = sessions.SwitchToAgentSession(msg.SessionKey, matched.ID, agent.Name(), matched.Summary)
+	if _, err := sessions.SwitchToAgentSession(msg.SessionKey, matched.ID, agent.Name(), matched.Summary); err != nil {
+		e.reply(p, msg.ReplyCtx, e.i18n.Tf(MsgError, err))
+		return
+	}
+	e.cleanupInteractiveState(interactiveKey)
 
 	shortID := matched.ID
 	if len(shortID) > 12 {
@@ -9516,18 +9510,19 @@ func (e *Engine) cmdHistory(p Platform, msg *Message, args []string) {
 }
 
 func (e *Engine) historyEntries(agent Agent, s *Session, n int) ([]HistoryEntry, error) {
-	entries := s.GetHistory(n)
-	if id := s.GetAgentSessionID(); len(entries) == 0 && id != "" {
+	if id := s.GetAgentSessionID(); id != "" {
 		if hp, ok := agent.(HistoryProvider); ok {
-			var err error
-			entries, err = hp.GetSessionHistory(e.ctx, id, n)
+			// A restored session's local history may contain only recent turns.
+			entries, err := hp.GetSessionHistory(e.ctx, id, n)
 			if err != nil {
 				slog.Warn("session history read failed", "error", err)
 			}
-			return entries, err
+			if err != nil || len(entries) > 0 {
+				return entries, err
+			}
 		}
 	}
-	return entries, nil
+	return s.GetHistory(n), nil
 }
 
 func (e *Engine) historyEntryMaxLen() int {
@@ -12681,9 +12676,11 @@ func (e *Engine) executeCardAction(cmd, args, sessionKey string) {
 		if matched == nil {
 			return
 		}
+		if _, err := sessions.SwitchToAgentSession(sessionKey, matched.ID, agent.Name(), matched.Summary); err != nil {
+			slog.Warn("card session switch failed", "error", err)
+			return
+		}
 		e.cleanupInteractiveState(interactiveKey)
-		session := sessions.SwitchToAgentSession(sessionKey, matched.ID, agent.Name(), matched.Summary)
-		session.ClearHistory()
 
 	case "/dir":
 		fields := strings.Fields(args)
