@@ -174,3 +174,104 @@ func TestPublicationImportRechecksSourceAndMembershipBeforeBytes(t *testing.T) {
 		t.Fatal("recovered pending import skipped authorization")
 	}
 }
+
+func TestPublicationThenLegacyImportNeverDowngradesSchema(t *testing.T) {
+	for _, existing := range []bool{false, true} {
+		t.Run(map[bool]string{false: "new-legacy-receipt", true: "existing-legacy-receipt"}[existing], func(t *testing.T) {
+			f, target, work, grant, selected, sends := publicationFixture(t)
+			ctx := context.Background()
+			realm := hash([]byte("fixture-group-realm"))
+			if err := f.host.SetGroupReferences(realm); err != nil {
+				t.Fatal(err)
+			}
+			group := f.binding
+			group.Group, group.SessionID = true, "group-source"
+			group.Principal.UserID, group.Principal.ChatID = "group-owner", "group-chat"
+			group.Principal.SessionKey, group.Principal.MessageID = "group-session", "group-message"
+			base := t.TempDir()
+			if err := os.Chmod(base, 0700); err != nil {
+				t.Fatal(err)
+			}
+			var err error
+			group.WorkRoot, err = PrepareWork(base, group.SessionID, os.Geteuid())
+			if err != nil {
+				t.Fatal(err)
+			}
+			groupWork, err := f.host.Bind(ctx, group)
+			if err != nil {
+				t.Fatal(err)
+			}
+			groupFixture := f
+			groupFixture.binding, groupFixture.context = group, groupWork
+			groupBytes := output(t, groupFixture, "docx")
+			delivered, err := deliver(t, groupFixture, "result.docx", groupBytes, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			receipt := delivered["message_receipt"].(string)
+			f.host.SetProjectAccess(func(_ context.Context, p core.ActionPrincipal, id, selectedReceipt string, bound bool) (string, string, error) {
+				if p != target.Principal || id != work.WorkID || selectedReceipt != receipt || !bound {
+					return "", "", ErrScope
+				}
+				return group.Principal.ChatID, realm, nil
+			})
+			f.host.SetPublicationAccess(func(_ context.Context, p core.ActionPrincipal, id, publication string) (core.CasePublishedSource, error) {
+				if p != target.Principal || id != work.WorkID || publication != "pub_selected" {
+					return core.CasePublishedSource{}, ErrScope
+				}
+				return grant, nil
+			})
+			legacy, _ := json.Marshal(map[string]string{"receipt": receipt})
+			if existing {
+				if _, err := f.host.Tool(ctx, "host-case-import", legacy, target.Principal, work.WorkID); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := f.host.Tool(ctx, "host-case-import", json.RawMessage(`{"publication_id":"pub_selected"}`), target.Principal, work.WorkID); err != nil {
+				t.Fatal(err)
+			}
+			for range 2 {
+				if _, err := f.host.Tool(ctx, "host-case-import", legacy, target.Principal, work.WorkID); err != nil {
+					t.Fatal("legacy import after publication", err)
+				}
+			}
+			current, err := f.host.ActivateInputs(ctx, target.Principal, work.WorkID)
+			if err != nil || len(current.Inputs) != 2 {
+				t.Fatal("activation after mixed imports", current, err)
+			}
+			for _, input := range current.Inputs {
+				actual, err := os.ReadFile(input.Path)
+				wanted := groupBytes
+				if input.Source.PublicationID != "" {
+					wanted = selected
+				}
+				if err != nil || !bytes.Equal(actual, wanted) || input.SHA256 != hash(wanted) {
+					t.Fatal("mixed input bytes", err)
+				}
+			}
+			if _, err := f.host.Tool(ctx, "work-context", json.RawMessage(`{}`), target.Principal, work.WorkID); err != nil {
+				t.Fatal("work read after mixed imports", err)
+			}
+			checkState := func(st *state) error {
+				if st.Schema != 4 || !validState(*st) || len(st.Works[work.WorkID].Inputs) != 2 || st.Works[grant.WorkID].GroupRealm != "" {
+					t.Fatal("publication provenance downgraded")
+				}
+				return nil
+			}
+			if err := f.store.change(ctx, checkState); err != nil {
+				t.Fatal(err)
+			}
+			reopened, err := Open(f.database)
+			if err != nil {
+				t.Fatal("reopen after mixed imports", err)
+			}
+			defer func() { _ = reopened.Close() }()
+			if err := reopened.change(ctx, checkState); err != nil {
+				t.Fatal(err)
+			}
+			if *sends != 2 {
+				t.Fatal("import resent a file", *sends)
+			}
+		})
+	}
+}
