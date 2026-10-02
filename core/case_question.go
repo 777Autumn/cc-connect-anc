@@ -87,7 +87,7 @@ func (s *Session) caseQuestion() *CaseQuestion {
 
 func (e *Engine) askCaseQuestion(ctx context.Context, command string, input json.RawMessage, principal ActionPrincipal, platform Platform, reply any, result map[string]any) (map[string]any, error) {
 	binding, ok := TrustedCaseContext(ctx)
-	if !ok || !binding.OfferConfirmation || binding.session == nil || binding.state == nil || (command != "case-read" && command != "case-update" && command != "case-member-add") {
+	if !ok || !binding.OfferConfirmation || binding.session == nil || binding.state == nil || (command != "case-read" && command != "case-update" && command != "case-member-add" && command != "case-publish") {
 		return nil, errors.New("case clarification unavailable")
 	}
 	var preview struct {
@@ -207,6 +207,12 @@ func (e *Engine) callCaseQuestion(ctx context.Context, q *CaseQuestion, resultOn
 		input, _ = json.Marshal(map[string]any{"command": q.Command, "input": q.Input})
 		binding.Confirmation = nil
 	} else {
+		if q.Command == "case-publish" {
+			files, err := e.selectedCaseFiles(ctx, q.Principal, binding.WorkID, q.Input)
+			if err != nil || !slices.Equal(files, binding.PublicationFiles) {
+				return map[string]any{"status": "blocked", "code": "case_publication_files_changed"}, nil
+			}
+		}
 		binding.Confirmation = &CaseAnswer{Command: q.Command, Input: q.Input, AnswerMessageID: q.AnswerID, Revision: q.Revision}
 	}
 	ctx = context.WithValue(ctx, caseContextKey{}, binding)

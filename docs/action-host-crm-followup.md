@@ -257,6 +257,41 @@ result queries, Quiet and continued discussion without restarting Claude.
 These tests do not prove live model understanding or real Feishu callback wiring;
 existing platform tests and a separately authorized canary are still required.
 
+## Publishing selected files to a shared case
+
+With shared cases and case confirmations enabled, the model can request
+`case-publish` through the existing action-tool endpoint:
+
+```json
+{"command":"case-publish","input":{"case_name":"Fixture case","expected_revision":2,"delivery_ids":["accepted-delivery-id"]}}
+```
+
+The selection must contain one to four distinct IDs from accepted deliveries in
+the current actor's current file work. Paths, recipients, realms, source receipts
+and claimed publication metadata are not model arguments. The gateway resolves
+the IDs through `work-context` and freezes name, SHA-256, version and receipt in
+the existing `CaseQuestion`. A concrete host question names the selected files;
+the same actor must confirm it. Before execution the gateway resolves the IDs
+again and compares the full selection. Restart recovery queries `case-result`
+with the frozen context; it does not automatically replay a publication.
+
+The companion CRM creates an independent `publication_id`. `case-read` imports
+that selected snapshot into the requesting member's own work after host-only
+`case-access` checks membership and destination-work binding. Import rechecks
+the source ledger and authorization before copying bytes. It sends no new file
+message, leaves the source private, and never manufactures a `GroupRealm`.
+Public tool results expose the publication ID, not the private source work,
+delivery ID or message receipt. An empty artifact list reports `file_import`
+status `none`; `available` requires the referenced file to be present in the
+returned work. Previously imported files are reused without another copy.
+
+Publication provenance advances the file ledger to schema 4. Older gateways
+refuse that ledger rather than erase the new provenance. Preserve the ledger;
+disabling publication is not permission to downgrade or rewrite its history.
+The paired Linux test `TestCUJ_CASEIPC_SelectedPrivateFilePublicationAndRealImport`
+uses the real file host, snapshots and CRM fixture (`MYANC_SPIKE_CRM_ROOT`),
+including actual recipient input bytes, privacy and duplicate-confirmation checks.
+
 ## State and rollback
 
 No ActionHost state is authoritative inside cc-connect. Every decision is

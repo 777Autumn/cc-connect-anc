@@ -34,10 +34,11 @@ type FileWorkInput struct {
 }
 
 type FileWorkSource struct {
-	WorkID         string `json:"work_id"`
-	DeliveryID     string `json:"delivery_id"`
-	Version        int    `json:"version"`
-	MessageReceipt string `json:"message_receipt"`
+	WorkID         string `json:"work_id,omitempty"`
+	DeliveryID     string `json:"delivery_id,omitempty"`
+	Version        int    `json:"version,omitempty"`
+	MessageReceipt string `json:"message_receipt,omitempty"`
+	PublicationID  string `json:"publication_id,omitempty"`
 }
 
 type FileWorkArtifact struct {
