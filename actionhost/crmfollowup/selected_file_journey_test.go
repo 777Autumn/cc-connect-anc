@@ -191,9 +191,10 @@ func TestCUJ_CASEIPC_SelectedPrivateFilePublicationAndRealImport(t *testing.T) {
 	work = decodeWork(owner.turn("只把共同方案放进项目", "work-context", map[string]any{}))
 	var selectedFile, privateFile core.FileWorkArtifact
 	for _, artifact := range work.Artifacts {
-		if artifact.Name == "shared.docx" {
+		switch artifact.Name {
+		case "shared.docx":
 			selectedFile = artifact
-		} else if artifact.Name == "private.docx" {
+		case "private.docx":
 			privateFile = artifact
 		}
 	}
@@ -268,7 +269,7 @@ func TestCUJ_CASEIPC_SelectedPrivateFilePublicationAndRealImport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ledger.Close()
+	defer func() { _ = ledger.Close() }()
 	var payload []byte
 	if err := ledger.QueryRow("SELECT payload FROM file_state WHERE id=1").Scan(&payload); err != nil {
 		t.Fatal(err)
