@@ -91,6 +91,9 @@ func ActionToolsHandler(engines ...*Engine) http.Handler {
 		}
 		if isCaseCommand(command) {
 			ctx, principal, err = e.caseToolContext(ctx, token, principal, input)
+			if err == nil && command == "case-publish" {
+				ctx, err = e.casePublicationContext(ctx, principal, input)
+			}
 			if err != nil {
 				writeActionToolResult(w, http.StatusForbidden, map[string]any{"status": "blocked", "code": "case_source_unavailable_or_disabled"})
 				return

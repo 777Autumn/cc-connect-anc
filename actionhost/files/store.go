@@ -170,7 +170,7 @@ func (s *Store) storageError(ctx context.Context) error {
 }
 
 func validState(st state) bool {
-	if (st.Schema != 1 && st.Schema != 2 && st.Schema != 3) || st.Works == nil {
+	if (st.Schema != 1 && st.Schema != 2 && st.Schema != 3 && st.Schema != 4) || st.Works == nil {
 		return false
 	}
 	sessions, roots := map[string]bool{}, map[string]bool{}
@@ -210,7 +210,11 @@ func validState(st state) bool {
 				}
 				sameGroup := w.GroupRealm != "" && source.GroupRealm == w.GroupRealm && source.Principal.ChatID == w.Principal.ChatID
 				privateImport := w.GroupRealm == "" && w.ProjectImportRealm != "" && source.GroupRealm == w.ProjectImportRealm && source.Principal.ChatID != w.Principal.ChatID
-				if !sameGroup && !privateImport {
+				published := i.Source.PublicationID != "" && st.Schema >= 4 && validPublicationID(i.Source.PublicationID)
+				if i.Source.PublicationID != "" && !published {
+					return false
+				}
+				if !sameGroup && !privateImport && !published {
 					return false
 				}
 				d := source.Deliveries[i.Source.DeliveryID]

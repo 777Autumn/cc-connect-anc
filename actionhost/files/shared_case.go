@@ -32,7 +32,9 @@ func (h *Host) importCaseArtifact(ctx context.Context, p core.ActionPrincipal, w
 				return ErrScope
 			}
 			w.ProjectImportRealm = source.GroupRealm
-			st.Schema = 3
+			if st.Schema < 3 {
+				st.Schema = 3
+			}
 		}
 		for _, input := range append(append([]Input(nil), w.Inputs...), w.PendingInputs[p.MessageID]...) {
 			if input.Source != nil && input.Source.MessageReceipt == receipt {

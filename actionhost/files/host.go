@@ -62,10 +62,17 @@ type Host struct {
 	groupRealm        string
 	documentValidator string
 	projectAccess     ProjectAccess
+	publicationAccess func(context.Context, core.ActionPrincipal, string, string) (core.CasePublishedSource, error)
 }
 
 // SetProjectAccess is startup-only; it is not exposed through the agent tools.
 func (h *Host) SetProjectAccess(check ProjectAccess) { h.projectAccess = check }
+
+// SetPublicationAccess authorizes an independent publication, never a group
+// receipt. Like SetProjectAccess, it is wired only by trusted startup code.
+func (h *Host) SetPublicationAccess(check func(context.Context, core.ActionPrincipal, string, string) (core.CasePublishedSource, error)) {
+	h.publicationAccess = check
+}
 
 // SetGroupReferences is a startup-only opt-in for one fixed Bot/group realm.
 // The host never derives sharing authority from model-supplied arguments.
@@ -112,6 +119,12 @@ func validHash(s string) bool {
 
 func workContext(w *work) WorkContext {
 	r := WorkContext{Enabled: true, WorkID: w.ID, WorkRoot: w.Root, Inputs: append([]Input{}, w.Inputs...), OutputDir: filepath.Join(w.Root, "outputs"), LatestVersion: w.Version, Artifacts: []Artifact{}}
+	for i, input := range r.Inputs {
+		if input.Source != nil && input.Source.PublicationID != "" {
+			// Private receipt/work provenance remains in the host ledger only.
+			r.Inputs[i].Source = &core.FileWorkSource{PublicationID: input.Source.PublicationID}
+		}
+	}
 	for version := 1; version <= w.Version; version++ {
 		for _, d := range w.Deliveries {
 			if d.Version == version {
@@ -307,7 +320,15 @@ func (h *Host) ActivateInputs(ctx context.Context, p core.ActionPrincipal, workI
 				if source == nil {
 					return ErrScope
 				}
-				if source.Principal.ChatID != p.ChatID {
+				if input.Source.PublicationID != "" {
+					authorized, artifact, err := h.publishedArtifact(ctx, st, p, w.ID, input.Source.PublicationID)
+					if err != nil {
+						return err
+					}
+					if authorized.ID != source.ID || artifact.DeliveryID != input.Source.DeliveryID {
+						return ErrScope
+					}
+				} else if source.Principal.ChatID != p.ChatID {
 					// A queued/recovered private import must still have a live
 					// membership and same-project binding before publishing bytes.
 					authorized, _, err := h.sharedArtifact(ctx, st, p, input.Source.MessageReceipt, w.ID, true)
@@ -379,7 +400,7 @@ func (h *Host) FindByMessage(ctx context.Context, p core.ActionPrincipal, messag
 			}
 			matches := w.Messages[messageID]
 			for _, input := range w.Inputs {
-				matches = matches || (input.Source != nil && input.Source.MessageReceipt == messageID)
+				matches = matches || (input.Source != nil && input.Source.PublicationID == "" && input.Source.MessageReceipt == messageID)
 			}
 			if matches {
 				if result.WorkID != "" {
@@ -544,10 +565,14 @@ func (h *Host) Tool(ctx context.Context, command string, input json.RawMessage, 
 	}
 	if command == "host-case-import" {
 		var request struct {
-			Receipt string `json:"receipt"`
+			Receipt       string `json:"receipt"`
+			PublicationID string `json:"publication_id"`
 		}
-		if strictInput(input, &request) != nil || request.Receipt == "" {
+		if strictInput(input, &request) != nil || (request.Receipt == "") == (request.PublicationID == "") {
 			return fileRefusal(ErrInvalid)
+		}
+		if request.PublicationID != "" {
+			return h.importCasePublication(ctx, principal, workID, request.PublicationID)
 		}
 		return h.importCaseArtifact(ctx, principal, workID, request.Receipt)
 	}

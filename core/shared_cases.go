@@ -96,16 +96,17 @@ type CaseSource struct {
 }
 
 type CaseContext struct {
-	WorkID            string            `json:"work_id"`
-	SourceText        string            `json:"source_text"`
-	OriginalText      string            `json:"original_text,omitempty"`
-	ShareAllowed      bool              `json:"share_allowed"`
-	SourceReceipt     string            `json:"source_receipt,omitempty"`
-	SelectedCase      string            `json:"selected_case,omitempty"`
-	OfferConfirmation bool              `json:"offer_confirmation,omitempty"`
-	Confirmation      *CaseAnswer       `json:"confirmation,omitempty"`
-	session           *Session          `json:"-"`
-	state             *interactiveState `json:"-"`
+	WorkID            string                `json:"work_id"`
+	SourceText        string                `json:"source_text"`
+	OriginalText      string                `json:"original_text,omitempty"`
+	ShareAllowed      bool                  `json:"share_allowed"`
+	SourceReceipt     string                `json:"source_receipt,omitempty"`
+	SelectedCase      string                `json:"selected_case,omitempty"`
+	OfferConfirmation bool                  `json:"offer_confirmation,omitempty"`
+	Confirmation      *CaseAnswer           `json:"confirmation,omitempty"`
+	PublicationFiles  []CasePublicationFile `json:"publication_files,omitempty"`
+	session           *Session              `json:"-"`
+	state             *interactiveState     `json:"-"`
 }
 
 type CaseSelection struct {
@@ -169,8 +170,12 @@ func (e *Engine) importCaseArtifacts(ctx context.Context, token string, p Action
 	}
 	var record struct {
 		Artifacts []struct {
-			Receipt string `json:"message_receipt"`
-			Stale   bool   `json:"stale"`
+			Receipt       string `json:"message_receipt"`
+			PublicationID string `json:"publication_id"`
+			Kind          string `json:"kind"`
+			Name          string `json:"name"`
+			SHA256        string `json:"sha256"`
+			Stale         bool   `json:"stale"`
 		} `json:"artifacts"`
 	}
 	if json.Unmarshal(data, &record) != nil {
@@ -178,6 +183,11 @@ func (e *Engine) importCaseArtifacts(ctx context.Context, token string, p Action
 	}
 	host, workID := e.fileWorkForToken(token)
 	if host == nil {
+		result["file_import"] = map[string]any{"status": "unavailable", "code": "case_file_host_unavailable"}
+		return
+	}
+	if len(record.Artifacts) == 0 {
+		result["file_import"] = map[string]any{"status": "none", "imported": 0, "remaining": 0}
 		return
 	}
 	// ponytail: at most four recent artifacts per read, matching bounded intake.
@@ -187,10 +197,42 @@ func (e *Engine) importCaseArtifacts(ctx context.Context, token string, p Action
 		if count >= 4 {
 			break
 		}
-		input, _ := json.Marshal(map[string]string{"receipt": artifact.Receipt})
+		request := map[string]string{"receipt": artifact.Receipt}
+		if artifact.Kind == "published_file" && artifact.PublicationID != "" && artifact.Receipt == "" {
+			request = map[string]string{"publication_id": artifact.PublicationID}
+		} else if artifact.Receipt == "" || artifact.PublicationID != "" {
+			result["file_import"] = map[string]any{"status": "unavailable", "code": "invalid_case_file_reference"}
+			return
+		}
+		input, _ := json.Marshal(request)
 		work, err := host.Tool(ctx, "host-case-import", input, p, workID)
 		if err != nil || work == nil || work["status"] == "blocked" {
 			result["file_import"] = map[string]any{"status": "unavailable", "code": "case_receipt_import_unavailable"}
+			return
+		}
+		encoded, _ := json.Marshal(work)
+		var imported FileWorkContext
+		available := false
+		if json.Unmarshal(encoded, &imported) == nil && imported.WorkID == workID {
+			for _, file := range imported.Inputs {
+				if file.Source == nil {
+					continue
+				}
+				if artifact.PublicationID != "" {
+					available = available || (file.Source.PublicationID == artifact.PublicationID && file.SHA256 == artifact.SHA256 && file.Name == artifact.Name)
+				} else {
+					available = available || file.Source.MessageReceipt == artifact.Receipt
+				}
+			}
+			// Legacy same-work receipts already exist as accepted artifacts.
+			if artifact.PublicationID == "" {
+				for _, file := range imported.Artifacts {
+					available = available || (file.Status == "accepted" && file.MessageReceipt == artifact.Receipt)
+				}
+			}
+		}
+		if !available {
+			result["file_import"] = map[string]any{"status": "unavailable", "code": "case_file_not_in_work"}
 			return
 		}
 		result["work_context"] = work
@@ -206,7 +248,7 @@ func TrustedCaseContext(ctx context.Context) (CaseContext, bool) {
 }
 
 func isCaseCommand(command string) bool {
-	return command == "case-list" || command == "case-read" || command == "case-update" || command == "case-member-add"
+	return command == "case-list" || command == "case-read" || command == "case-update" || command == "case-member-add" || command == "case-publish"
 }
 
 // AuthorizeProjectFile is a host-only read. File intake has no model token yet;
