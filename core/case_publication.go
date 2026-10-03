@@ -36,6 +36,9 @@ type CasePublishedSource struct {
 }
 
 func (e *Engine) selectedCaseFiles(ctx context.Context, p ActionPrincipal, workID string, input json.RawMessage) ([]CasePublicationFile, error) {
+	if err := e.guardConnectionWork(ctx, "case-publish", p, "", workID); err != nil {
+		return nil, errConnectionWorkUnavailable
+	}
 	var request struct {
 		CaseName         string   `json:"case_name"`
 		ExpectedRevision *int     `json:"expected_revision"`

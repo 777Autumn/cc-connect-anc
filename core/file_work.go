@@ -273,6 +273,9 @@ func (e *Engine) handleFileWorkMessage(p Platform, msg *Message) bool {
 	if !work.Enabled || work.WorkID == "" || work.WorkRoot != root {
 		return fail(MsgFileWorkUnavailable)
 	}
+	if err := e.guardConnectionWork(e.ctx, "work-resume", principal, "", work.WorkID); err != nil {
+		return fail(MsgConnectionWorkExpired)
+	}
 	if len(msg.caseSources) > 0 && msg.ParentMessageID != "" && !msg.FileWorkNewInput {
 		scope := "Preserve private scope. A reply is not permission to share."
 		if !msg.FileWorkPrivate {

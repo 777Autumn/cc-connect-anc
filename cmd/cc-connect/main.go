@@ -283,6 +283,7 @@ func main() {
 	// Capture and remove host-only CRM credentials before update checks,
 	// config helpers, run-as probes, or Agent construction can spawn a child.
 	crmActionHosts, err := crmfollowup.NewProjectHostsFromEnv()
+	var personalConnectionHost *crmfollowup.Adapter
 	if err != nil {
 		slog.Error("CRM action host configuration invalid", "error", err)
 		os.Exit(1)
@@ -518,6 +519,18 @@ func main() {
 			}
 			combinedHost = crmActionHost
 			toolsEnabled = crmActionHost.ToolsEnabled()
+			connectionCtx, connectionCancel := context.WithTimeout(context.Background(), 30*time.Second)
+			sourceAppID, _ := proj.Platforms[0].Options["app_id"].(string)
+			connectionsEnabled, connectionErr := crmActionHost.ConfigureConnections(connectionCtx, sourceAppID)
+			connectionCancel()
+			if connectionErr != nil || (connectionsEnabled && (!proj.FileWork.Enabled || proj.FileWork.Runtime != "native")) {
+				slog.Error("personal connections require valid source binding and native controlled work", "project", proj.Name)
+				os.Exit(1)
+			}
+			if connectionsEnabled {
+				engine.SetConnectionHost(crmActionHost)
+				personalConnectionHost = crmActionHost
+			}
 			crmActionHostAttached[proj.Name] = true
 		}
 		if knowledgeHost.Enabled(proj.Name) {
@@ -1311,6 +1324,19 @@ func main() {
 	reminderCtx, stopReminders := context.WithCancel(context.Background())
 	reminderDone := make(chan struct{})
 	alertDone := make(chan struct{})
+	connectionDone := make(chan struct{})
+	if personalConnectionHost != nil {
+		go func() {
+			defer close(connectionDone)
+			personalConnectionHost.RunConnections(reminderCtx, func(user string) {
+				for _, engine := range engines {
+					engine.InvalidateConnection(user)
+				}
+			})
+		}()
+	} else {
+		close(connectionDone)
+	}
 	if alertHost != nil {
 		go func() { defer close(alertDone); alertHost.Run(reminderCtx) }()
 	} else {
@@ -1620,6 +1646,7 @@ func main() {
 	stopReminders()
 	<-reminderDone
 	<-alertDone
+	<-connectionDone
 	if crmToolServer != nil {
 		if err := crmToolServer.Close(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("CRM tool listener shutdown failed", "error", err)
