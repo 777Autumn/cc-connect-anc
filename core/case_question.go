@@ -191,6 +191,11 @@ func caseAnswerValue(text string, callback bool) int {
 }
 
 func (e *Engine) callCaseQuestion(ctx context.Context, q *CaseQuestion, resultOnly bool) (map[string]any, error) {
+	if e.connectionHost != nil {
+		if err := e.guardConnectionWork(ctx, q.Command, q.Principal, "", q.Context.WorkID); err != nil {
+			return map[string]any{"status": "blocked", "code": "personal_work_sharing_denied"}, nil
+		}
+	}
 	e.actionMu.RLock()
 	host := actionHostForCommand(e.actionHost, q.Command)
 	enabled := e.sharedCasesEnabled && e.caseConfirmationsEnabled
@@ -233,6 +238,11 @@ func (e *Engine) handleCaseAnswer(p Platform, msg *Message, content string) bool
 	e.actionMu.RUnlock()
 	if !enabled {
 		return callback
+	}
+	// Match ActionToolHandler: connection scope before confirmation state.
+	if e.connectionHost != nil {
+		e.connectionToolsMu.Lock()
+		defer e.connectionToolsMu.Unlock()
 	}
 	e.caseConfirmationMu.Lock()
 	defer e.caseConfirmationMu.Unlock()

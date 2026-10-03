@@ -464,6 +464,8 @@ type Engine struct {
 	interactiveStates        map[string]*interactiveState // key = sessionKey
 	actionHost               ActionHost
 	fileWorkHost             FileWorkHost
+	connectionHost           ConnectionHost
+	connectionToolsMu        sync.Mutex
 	sharedCasesEnabled       bool
 	caseConfirmationsEnabled bool
 	caseConfirmationMu       sync.Mutex
@@ -2952,6 +2954,9 @@ func (e *Engine) handleMessage(p Platform, msg *Message) {
 	}
 
 	content := strings.TrimSpace(msg.Content)
+	if e.handleConnectionCommand(p, msg) {
+		return
+	}
 	if content == "" && msg.ExtraContent == "" && len(msg.Images) == 0 && len(msg.Files) == 0 && msg.Location == nil && (!msg.ControlledFileWork || msg.ParentMessageID == "") {
 		return
 	}

@@ -67,6 +67,24 @@ func ActionToolsHandler(engines ...*Engine) http.Handler {
 			writeActionToolResult(w, http.StatusBadRequest, map[string]any{"status": "blocked", "code": "invalid_input"})
 			return
 		}
+		_, connectionWorkID := e.fileWorkForToken(token)
+		if e.connectionHost != nil {
+			// ponytail: serialize tools per project for the small pilot; a per-work
+			// lock can replace this if parallel office tasks become a bottleneck.
+			e.connectionToolsMu.Lock()
+			defer e.connectionToolsMu.Unlock()
+			if _, _, _, valid := e.actionToolSession(token); !valid {
+				writeActionToolResult(w, http.StatusUnauthorized, map[string]any{"status": "blocked", "code": "invalid_session"})
+				return
+			}
+		}
+		connectionCtx, connectionCancel := context.WithTimeout(r.Context(), 30*time.Second)
+		connectionErr := e.guardConnectionWork(connectionCtx, command, principal, token, connectionWorkID, input)
+		connectionCancel()
+		if connectionErr != nil {
+			writeActionToolResult(w, http.StatusForbidden, map[string]any{"status": "blocked", "code": "personal_connection_or_scope_unavailable"})
+			return
+		}
 		if isFileWorkCommand(command) {
 			e.serveFileWorkTool(w, r, token, principal, command, input)
 			return

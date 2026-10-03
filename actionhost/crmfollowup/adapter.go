@@ -51,6 +51,7 @@ type Adapter struct {
 	toolsEnabled    bool
 	run             commandRunner
 	planBinding     func(core.ActionPrincipal) map[string]any
+	connectionUsers []string
 }
 
 // NewFromEnv captures the host-only secret and removes it from the daemon
