@@ -7,9 +7,46 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestIsolationProbeDarwinAccountLookupTransientFailure(t *testing.T) {
+	for _, fixture := range []struct {
+		name, body, home, attempts string
+	}{
+		{"ready", "printf 'NFSHomeDirectory: /fixture/supervisor\\n'", "/fixture/supervisor", "1"},
+		{"transient", "[ \"$n\" -ge 3 ] || exit 1; printf 'NFSHomeDirectory: /fixture/supervisor\\n'", "/fixture/supervisor", "3"},
+		{"unresolved", "exit 1", "", "3"},
+		{"missing_attribute", "printf 'No such key\\n'", "", "3"},
+		{"failed_with_output", "printf 'NFSHomeDirectory: /fixture/supervisor\\n'; exit 1", "", "3"},
+	} {
+		t.Run(fixture.name, func(t *testing.T) {
+			dir := t.TempDir()
+			count := filepath.Join(dir, "count")
+			dscl := filepath.Join(dir, "dscl")
+			body := "#!/bin/sh\nn=0; [ ! -f " + shellQuote(count) + " ] || n=$(cat " + shellQuote(count) + ")\nn=$((n + 1)); printf '%s' \"$n\" > " + shellQuote(count) + "\n" + fixture.body + "\n"
+			if err := os.WriteFile(dscl, []byte(body), 0700); err != nil {
+				t.Fatal(err)
+			}
+			// Exercise the embedded production function with a controlled directory
+			// service, including a persistent unknown account that must stay denied.
+			script := strings.Split(string(ProbeScript()), "emit \"BEGIN probe-version=1\"")[0]
+			script = strings.ReplaceAll(script, "/usr/bin/dscl", shellQuote(dscl))
+			cmd := exec.Command("/bin/sh", "-s")
+			cmd.Stdin = strings.NewReader("uname() { printf 'Darwin\\n'; }\n" + script + "\naccount_home _fixture_supervisor\n")
+			out, err := cmd.CombinedOutput()
+			if strings.TrimSpace(string(out)) != fixture.home || (fixture.home != "" && err != nil) || (fixture.home == "" && err == nil) {
+				t.Fatalf("lookup = %q, %v; want %q", out, err, fixture.home)
+			}
+			attempts, err := os.ReadFile(count)
+			if err != nil || string(attempts) != fixture.attempts {
+				t.Fatalf("lookup attempts = %q, %v; want %s", attempts, err, fixture.attempts)
+			}
+		})
+	}
+}
 
 func TestIsolationProbeRequiresSupervisor(t *testing.T) {
 	for _, supervisor := range []string{"", "model"} {
