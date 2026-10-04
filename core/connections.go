@@ -18,6 +18,9 @@ type ConnectionHost interface {
 	ConnectionGuard(context.Context, string, ActionPrincipal, string, string, string) error
 }
 
+// ErrConnectionTemporary blocks a protected operation without expiring its work.
+var ErrConnectionTemporary = errors.New("personal connection temporarily unavailable")
+
 func (e *Engine) SetConnectionHost(host ConnectionHost) { e.connectionHost = host }
 
 func (e *Engine) guardConnectionWork(ctx context.Context, command string, principal ActionPrincipal, token, workID string, input ...json.RawMessage) error {
@@ -127,6 +130,10 @@ func (e *Engine) InvalidateConnection(userID string) {
 		ctx, cancel := context.WithTimeout(e.ctx, 15*time.Second)
 		err := e.guardConnectionWork(ctx, "work-resume", principal, "", workID)
 		cancel()
+		if errors.Is(err, ErrConnectionTemporary) {
+			slog.Warn("private connection verification temporarily unavailable")
+			continue
+		}
 		if err != nil {
 			e.cleanupInteractiveState(item.key, item.state)
 			if platform != nil {
