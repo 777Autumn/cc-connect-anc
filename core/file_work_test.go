@@ -321,6 +321,29 @@ func TestFileWorkRejectsUnboundAndUnavailableRuntimeBeforeModel(t *testing.T) {
 	}
 }
 
+func TestFileWorkTemporaryConnectionFailureDoesNotClaimWorkExpired(t *testing.T) {
+	for _, temporary := range []bool{true, false} {
+		t.Run(fmt.Sprint(temporary), func(t *testing.T) {
+			p := &filePlatformStub{stubPlatformEngine: stubPlatformEngine{n: "fixture"}}
+			a := &fileAgentStub{}
+			e := NewEngine("fixture-project", a, []Platform{p}, "", LangEnglish)
+			t.Cleanup(e.cancel)
+			if err := e.SetFileWorkHost(&fileHostStub{}, func(id string) (string, int, error) { return filepath.Join(t.TempDir(), id), 0, nil }); err != nil {
+				t.Fatal(err)
+			}
+			err, key := errors.New("expired"), MsgConnectionWorkExpired
+			if temporary {
+				err, key = fmt.Errorf("verification: %w", ErrConnectionTemporary), MsgConnectionUnavailable
+			}
+			e.SetConnectionHost(&connectionHostFixture{guardError: err})
+			e.ReceiveMessage(p, &Message{Platform: "fixture", SessionKey: "fixture:chat:user", UserID: "user", ChannelID: "chat", MessageID: "request", ControlledFileWork: true, FileWorkPrivate: true, Content: "Prepare a file"})
+			if a.attempts != 0 || len(p.getSent()) != 1 || p.getSent()[0] != e.i18n.T(key) {
+				t.Fatalf("wrong rejection or model dispatch: %v", p.getSent())
+			}
+		})
+	}
+}
+
 func TestFileWorkToolsUsePinnedWorkAndCurrentIdentity(t *testing.T) {
 	e, _, _, state := actionToolFixture(t)
 	t.Cleanup(e.cancel)

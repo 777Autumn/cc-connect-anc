@@ -274,6 +274,9 @@ func (e *Engine) handleFileWorkMessage(p Platform, msg *Message) bool {
 		return fail(MsgFileWorkUnavailable)
 	}
 	if err := e.guardConnectionWork(e.ctx, "work-resume", principal, "", work.WorkID); err != nil {
+		if errors.Is(err, ErrConnectionTemporary) {
+			return fail(MsgConnectionUnavailable)
+		}
 		return fail(MsgConnectionWorkExpired)
 	}
 	if len(msg.caseSources) > 0 && msg.ParentMessageID != "" && !msg.FileWorkNewInput {

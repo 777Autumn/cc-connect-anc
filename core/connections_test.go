@@ -107,6 +107,24 @@ func TestPersonalConnectionInvalidationKeepsOtherUsersAndGroupRunning(t *testing
 	}
 }
 
+func TestPersonalConnectionTemporaryFailurePreservesActiveWork(t *testing.T) {
+	e, _, _, owner := actionToolFixture(t)
+	h := &connectionHostFixture{guardError: ErrConnectionTemporary}
+	e.SetConnectionHost(h)
+	owner.filePrivate = true
+	owner.pendingMessages = []queuedMessage{{content: "fictional queued work", platform: owner.platform, replyCtx: owner.replyCtx}}
+	e.InvalidateConnection("owner")
+	if e.interactiveStates[owner.currentPrincipal.SessionKey] != owner || len(owner.pendingMessages) != 1 {
+		t.Fatal("temporary verification failure discarded active private work")
+	}
+	// The same preserved work must still stop on confirmed loss of its binding.
+	h.guardError = errors.New("expired")
+	e.InvalidateConnection("owner")
+	if e.interactiveStates[owner.currentPrincipal.SessionKey] != nil {
+		t.Fatal("confirmed revocation retained private work")
+	}
+}
+
 func TestPersonalConnectionPublicationCannotBypassToolGate(t *testing.T) {
 	e, _, _, state := actionToolFixture(t)
 	h := &connectionHostFixture{guardError: errors.New("private")}

@@ -63,3 +63,25 @@ func TestPersonalConnectionMaintenanceDeliversBeforeAnotherAccountFails(t *testi
 		t.Fatal("invalidation lost")
 	}
 }
+
+func TestPersonalConnectionGuardDistinguishesTemporaryFromExpired(t *testing.T) {
+	for _, code := range []string{"connection_temporarily_unavailable", "connection_session_expired", "personal_work_audience_denied"} {
+		t.Run(code, func(t *testing.T) {
+			a := &Adapter{run: func(context.Context, string, string, []byte, []string) ([]byte, error) {
+				return json.Marshal(map[string]string{"status": "blocked", "code": code})
+			}}
+			err := a.ConnectionGuard(context.Background(), "work-resume", core.ActionPrincipal{}, "", "work", "")
+			if err == nil || errors.Is(err, core.ErrConnectionTemporary) != (code == "connection_temporarily_unavailable") {
+				t.Fatalf("incorrect guard classification: %s: %v", code, err)
+			}
+		})
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	a := &Adapter{run: func(context.Context, string, string, []byte, []string) ([]byte, error) {
+		return nil, ctx.Err()
+	}}
+	if !errors.Is(a.ConnectionGuard(ctx, "work-resume", core.ActionPrincipal{}, "", "work", ""), core.ErrConnectionTemporary) {
+		t.Fatal("host call cancellation expired the connection")
+	}
+}

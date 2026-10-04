@@ -55,7 +55,13 @@ func (a *Adapter) ConnectionCommand(ctx context.Context, operation string, p cor
 func (a *Adapter) ConnectionGuard(ctx context.Context, command string, p core.ActionPrincipal, token, workID, subject string) error {
 	result, err := a.call(ctx, "host-connection-guard", map[string]any{"command": command, "principal": p, "work_id": workID, "knowledge_subject": subject}, token)
 	if err != nil {
+		if ctx.Err() != nil {
+			return core.ErrConnectionTemporary
+		}
 		return err
+	}
+	if result["status"] == "blocked" && result["code"] == "connection_temporarily_unavailable" {
+		return core.ErrConnectionTemporary
 	}
 	if result["status"] != "allowed" {
 		return errors.New("personal connection work scope rejected")
