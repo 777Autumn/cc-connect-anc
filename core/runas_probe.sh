@@ -29,7 +29,18 @@ emit() {
 
 account_home() {
     if [ "$(uname -s)" = Darwin ]; then
-        /usr/bin/dscl . -read "/Users/$1" NFSHomeDirectory 2>/dev/null | sed -n 's/^NFSHomeDirectory: //p'
+        # Directory Services may not resolve an existing account immediately
+        # after boot. Retry only this read; unresolved accounts still fail closed.
+        for attempt in 1 2 3; do
+            if record=$(/usr/bin/dscl . -read "/Users/$1" NFSHomeDirectory 2>/dev/null); then
+                home=$(printf '%s\n' "$record" | sed -n 's/^NFSHomeDirectory: //p')
+                case "$home" in
+                    /*) printf '%s\n' "$home"; return 0 ;;
+                esac
+            fi
+            [ "$attempt" -eq 3 ] || sleep 1
+        done
+        return 1
     else
         getent passwd "$1" 2>/dev/null | cut -d: -f6
     fi
