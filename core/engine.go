@@ -6422,7 +6422,13 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 			// reports it in an event. Persist it on this turn's Session, including
 			// its existing provenance and permanent connection-expiry marker.
 			if currentID := turnAgentSession.CurrentSessionID(); currentID != "" && currentID != ContinueSession && session.GetAgentSessionID() != currentID {
+				wasEmpty := session.GetAgentSessionID() == ""
 				session.SetAgentSessionID(currentID, replyAgent.Name())
+				if wasEmpty {
+					if pendingName := session.GetName(); pendingName != "" && pendingName != "session" && pendingName != "default" {
+						sessions.SetSessionName(currentID, pendingName)
+					}
+				}
 				sessions.Save()
 			}
 			state.mu.Lock()

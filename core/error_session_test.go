@@ -54,10 +54,11 @@ func TestErrorSessionIDSurvivesConcurrentCleanup(t *testing.T) {
 
 func TestErrorSessionIDPersistsForRestartWithoutRevivingExpiredWork(t *testing.T) {
 	for _, tc := range []struct {
-		name, oldID, reportedID string
-		expired, switched       bool
+		name, oldID, reportedID, pendingName string
+		expired, switched                    bool
 	}{
 		{name: "late first ID", reportedID: "late-id"},
+		{name: "named first ID", reportedID: "late-id", pendingName: "Project Alpha"},
 		{name: "forked ID", oldID: "old-id", reportedID: "late-id"},
 		{name: "empty ID", oldID: "old-id"},
 		{name: "same ID", oldID: "same-id", reportedID: "same-id"},
@@ -71,6 +72,9 @@ func TestErrorSessionIDPersistsForRestartWithoutRevivingExpiredWork(t *testing.T
 			e := NewEngine("test", &stubAgent{}, []Platform{p}, store, LangEnglish)
 			key := "test:owner"
 			session := e.sessions.GetOrCreateActive(key)
+			if tc.pendingName != "" {
+				session.SetName(tc.pendingName)
+			}
 			session.SetAgentSessionID(tc.oldID, "controllable")
 			if tc.expired {
 				if err := e.sessions.expireConnection(session); err != nil {
@@ -93,6 +97,12 @@ func TestErrorSessionIDPersistsForRestartWithoutRevivingExpiredWork(t *testing.T
 			}
 			reloaded := NewSessionManager(store)
 			saved := reloaded.sessions[session.ID]
+			if tc.pendingName != "" {
+				matched := e.matchSession([]AgentSessionInfo{{ID: want}}, reloaded, tc.pendingName)
+				if reloaded.GetSessionName(want) != tc.pendingName || matched == nil || matched.ID != want {
+					t.Fatal("failed first turn lost its custom name for list/switch")
+				}
+			}
 			if saved.GetAgentSessionID() != want || saved.AgentType != "controllable" || saved.connectionExpired() != tc.expired {
 				t.Fatalf("persisted ID=%q expired=%v", saved.GetAgentSessionID(), saved.connectionExpired())
 			}
