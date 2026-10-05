@@ -196,6 +196,11 @@ func (p *Platform) fileWorkPostContent(raw string, allowImages bool) (string, []
 	_, hasContent := fields["content"]
 	_, hasFiles := fields["files"]
 	if hasContent || hasFiles {
+		for key := range fields {
+			if key != "title" && key != "content" && key != "files" {
+				return "", nil, nil, false
+			}
+		}
 		var post postLang
 		if json.Unmarshal([]byte(raw), &post) != nil {
 			return "", nil, nil, false

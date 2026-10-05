@@ -60,6 +60,7 @@ func TestFileWorkPostAttachments(t *testing.T) {
 
 func TestFileWorkPostRejectsIncompleteBatch(t *testing.T) {
 	for _, body := range []string{
+		`{"files":[{"file_key":"quote","file_name":"quote.txt"}],"zh_cn":{"files":[{"file_key":"folder","file_name":"folder","is_folder":true}]}}`,
 		`{"content":[[{"tag":"text","text":"review"}]],"files":[{"file_key":"quote"}]}`,
 		`{"content":[],"files":[{"file_name":"quote.txt"}]}`,
 		`{"content":[],"files":[{"file_key":"quote","file_name":"folder","is_folder":true}]}`,

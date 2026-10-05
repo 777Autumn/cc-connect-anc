@@ -5058,6 +5058,11 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 	state.mu.Lock()
 	workspaceDir := state.workspaceDir
 	replyAgent := state.agent
+	turnAgentSession := state.agentSession
+	if turnAgentSession == nil {
+		state.mu.Unlock()
+		return
+	}
 	if replyAgent == nil {
 		replyAgent = e.agent
 	}
@@ -5122,7 +5127,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 		turnDeadlineCh = turnDeadlineTimer.C
 	}
 
-	events := state.agentSession.Events()
+	events := turnAgentSession.Events()
 	stopCh := state.stopSignal()
 	for {
 		var event Event
@@ -6416,17 +6421,16 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 			// A native session may acquire its resumable ID before a failed turn
 			// reports it in an event. Persist it on this turn's Session, including
 			// its existing provenance and permanent connection-expiry marker.
-			if state.agentSession != nil {
-				if currentID := state.agentSession.CurrentSessionID(); currentID != "" && currentID != ContinueSession && session.GetAgentSessionID() != currentID {
-					session.SetAgentSessionID(currentID, replyAgent.Name())
-					sessions.Save()
-				}
+			if currentID := turnAgentSession.CurrentSessionID(); currentID != "" && currentID != ContinueSession && session.GetAgentSessionID() != currentID {
+				session.SetAgentSessionID(currentID, replyAgent.Name())
+				sessions.Save()
 			}
 			state.mu.Lock()
 			state.eventsNeedResync = true
+			currentAgentSession := state.agentSession
 			state.mu.Unlock()
 			if hasRichCard && cardMessageID != nil {
-				errCard := buildResolvedRichCard(CardStatusError, "", toolSteps, partialText, false, e.composeRichStatusFooter(false, turnStart, e.agent, state.agentSession, state.workspaceDir))
+				errCard := buildResolvedRichCard(CardStatusError, "", toolSteps, partialText, false, e.composeRichStatusFooter(false, turnStart, replyAgent, turnAgentSession, workspaceDir))
 				if updater, ok := p.(MessageUpdater); ok {
 					if err := updater.UpdateMessage(e.ctx, cardMessageID, errCard); err != nil {
 						slog.Debug("rich card: failed to update error card", "platform", p.Name(), "error", err)
@@ -6446,7 +6450,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 			// Only drop queued messages if the agent session is dead.
 			// Some agents (e.g. Codex) emit EventError for per-turn failures
 			// while keeping the session alive for subsequent turns.
-			if state.agentSession == nil || !state.agentSession.Alive() {
+			if currentAgentSession == nil || !currentAgentSession.Alive() {
 				e.notifyDroppedQueuedMessages(state, event.Error)
 			}
 			return

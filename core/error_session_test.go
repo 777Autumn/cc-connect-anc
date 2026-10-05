@@ -9,6 +9,49 @@ import (
 	"time"
 )
 
+type cleanupOnErrorPlatform struct {
+	previewCapturePlatform
+	beforeError func()
+}
+
+func (p *cleanupOnErrorPlatform) UpdateMessage(ctx context.Context, target any, content string) error {
+	if payload, ok := ParseProgressCardPayload(content); ok && payload.State == ProgressCardStateFailed {
+		p.beforeError()
+	}
+	return p.previewCapturePlatform.UpdateMessage(ctx, target, content)
+}
+
+func TestErrorSessionIDSurvivesConcurrentCleanup(t *testing.T) {
+	store := filepath.Join(t.TempDir(), "sessions.json")
+	p := &cleanupOnErrorPlatform{}
+	e := NewEngine("test", &stubAgent{}, []Platform{p}, store, LangEnglish)
+	key := "test:owner"
+	session := e.sessions.GetOrCreateActive(key)
+	live := newControllableSession("late-id")
+	reply := progressHintReplyCtx{style: progressStyleCard, payload: true}
+	state := &interactiveState{agentSession: live, agent: &controllableAgent{}, platform: p, replyCtx: reply}
+	e.interactiveStates[key] = state
+	p.beforeError = func() {
+		// Finalizing the error card interleaves actual cleanup after the
+		// error is selected, before native ID persistence.
+		done := make(chan struct{})
+		go func() {
+			e.cleanupInteractiveState(key, state)
+			close(done)
+		}()
+		<-done
+		e.sessions.NewSession(key, "replacement").SetAgentSessionID("replacement-id", "controllable")
+		e.sessions.Save()
+	}
+	live.events <- Event{Type: EventToolUse, ToolName: "Read", ToolInput: "fictional.txt"}
+	live.events <- Event{Type: EventError, Error: errors.New("failed after ID allocation")}
+	e.processInteractiveEvents(state, session, e.sessions, key, "error-message", time.Now(), nil, nil, reply)
+	reloaded := NewSessionManager(store)
+	if reloaded.sessions[session.ID].GetAgentSessionID() != "late-id" || reloaded.GetOrCreateActive(key).GetAgentSessionID() != "replacement-id" {
+		t.Fatal("cleanup lost the failed turn ID or changed the replacement task")
+	}
+}
+
 func TestErrorSessionIDPersistsForRestartWithoutRevivingExpiredWork(t *testing.T) {
 	for _, tc := range []struct {
 		name, oldID, reportedID string
