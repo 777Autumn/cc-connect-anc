@@ -16,7 +16,7 @@ func (e *Engine) beginQueuedFileTurn(state *interactiveState, session *Session, 
 			state.pendingMessages = append([]queuedMessage{queued}, state.pendingMessages...)
 			state.mu.Unlock()
 		} else {
-			e.notifyDroppedQueuedMessages(state, errConnectionWorkUnavailable)
+			e.notifyDroppedQueuedMessages(state, errors.New(e.i18n.T(MsgConnectionWorkExpired)))
 		}
 		e.reply(queued.platform, queued.replyCtx, e.i18n.T(connectionFailureMessage(err)))
 		return false

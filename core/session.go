@@ -75,6 +75,14 @@ func (s *Session) connectionExpired() bool {
 	return s.ConnectionExpired
 }
 
+// File turns retain the work binding needed to verify a later native resume.
+// Cleanup must not detach that provenance, even after the file was delivered.
+func (s *Session) retainsWorkContext() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.ConnectionExpired || len(s.FileTurns) != 0
+}
+
 // Keep native IDs as tombstones: clearing/deleting them would let /switch
 // import the same expired context under a new work identity.
 func (sm *SessionManager) expireConnection(s *Session) error {
@@ -628,7 +636,7 @@ func (sm *SessionManager) FindByID(id string) *Session {
 func (sm *SessionManager) DeleteByID(id string) bool {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
-	if s, ok := sm.sessions[id]; !ok || s.hasUnfinishedFileTurns() || s.connectionExpired() {
+	if s, ok := sm.sessions[id]; !ok || s.retainsWorkContext() {
 		return false
 	}
 	sm.deleteByIDLocked(id)
@@ -648,7 +656,7 @@ func (sm *SessionManager) DeleteByAgentSessionID(agentSessionID string) int {
 
 	removed := 0
 	for id, s := range sm.sessions {
-		if s.hasUnfinishedFileTurns() || s.connectionExpired() {
+		if s.retainsWorkContext() {
 			continue
 		}
 		s.mu.Lock()
@@ -667,6 +675,9 @@ func (sm *SessionManager) DeleteByAgentSessionID(agentSessionID string) int {
 }
 
 func (sm *SessionManager) deleteByIDLocked(id string) {
+	if s := sm.sessions[id]; s != nil && s.retainsWorkContext() {
+		return
+	}
 	delete(sm.sessions, id)
 	for userKey, ids := range sm.userSessions {
 		for i, sid := range ids {
@@ -943,7 +954,7 @@ func (sm *SessionManager) PruneDuplicateSessions(mergeHistory bool) PruneResult 
 		}
 		pending := false
 		for _, s := range sessions {
-			pending = pending || s.hasUnfinishedFileTurns()
+			pending = pending || s.retainsWorkContext()
 		}
 		if pending {
 			continue
@@ -1049,7 +1060,7 @@ func (sm *SessionManager) PruneEmptySessions() int {
 
 	removed := 0
 	for _, s := range sm.sessions {
-		if s.hasUnfinishedFileTurns() {
+		if s.retainsWorkContext() {
 			continue
 		}
 		s.mu.Lock()

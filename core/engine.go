@@ -6747,8 +6747,16 @@ func (e *Engine) cmdPs(p Platform, msg *Message, args []string) {
 	// session lock and races with concurrent normal messages on the CLI's
 	// stdin, so reject instead.
 	_, sessions := e.sessionContextForKey(msg.SessionKey)
-	if session := sessions.GetOrCreateActive(msg.SessionKey); !session.Busy() {
+	session := sessions.GetOrCreateActive(msg.SessionKey)
+	if !session.Busy() {
 		e.reply(p, msg.ReplyCtx, e.i18n.T(MsgPsNoSession))
+		return
+	}
+	state.mu.Lock()
+	principal, workID := state.currentPrincipal, state.fileWorkID
+	state.mu.Unlock()
+	if err := e.guardConnectionSession(sessions, session, principal, workID); err != nil {
+		e.reply(p, msg.ReplyCtx, e.i18n.T(connectionFailureMessage(err)))
 		return
 	}
 	if err := state.agentSession.Send(text, "", nil, nil); err != nil {
