@@ -3859,6 +3859,14 @@ func (e *Engine) processInteractiveMessageWith(p Platform, msg *Message, session
 	if e.ctx.Err() != nil {
 		return
 	}
+	workID := ""
+	if msg.fileTurn != nil {
+		workID = msg.fileTurn.WorkID
+	}
+	if err := e.guardConnectionSession(sessions, session, e.actionPrincipalForMessage(msg), workID); err != nil {
+		e.reply(p, msg.ReplyCtx, e.i18n.T(connectionFailureMessage(err)))
+		return
+	}
 
 	turnStart := time.Now()
 
@@ -6739,8 +6747,16 @@ func (e *Engine) cmdPs(p Platform, msg *Message, args []string) {
 	// session lock and races with concurrent normal messages on the CLI's
 	// stdin, so reject instead.
 	_, sessions := e.sessionContextForKey(msg.SessionKey)
-	if session := sessions.GetOrCreateActive(msg.SessionKey); !session.Busy() {
+	session := sessions.GetOrCreateActive(msg.SessionKey)
+	if !session.Busy() {
 		e.reply(p, msg.ReplyCtx, e.i18n.T(MsgPsNoSession))
+		return
+	}
+	state.mu.Lock()
+	principal, workID := state.currentPrincipal, state.fileWorkID
+	state.mu.Unlock()
+	if err := e.guardConnectionSession(sessions, session, principal, workID); err != nil {
+		e.reply(p, msg.ReplyCtx, e.i18n.T(connectionFailureMessage(err)))
 		return
 	}
 	if err := state.agentSession.Send(text, "", nil, nil); err != nil {
@@ -10649,6 +10665,15 @@ func (e *Engine) runCompress(state *interactiveState, session *Session, sessions
 			session.Unlock()
 		}
 	}()
+	state.mu.Lock()
+	principal, workID := state.currentPrincipal, state.fileWorkID
+	state.mu.Unlock()
+	if err := e.guardConnectionSession(sessions, session, principal, workID); err != nil {
+		if !auto {
+			e.reply(p, replyCtx, e.i18n.T(connectionFailureMessage(err)))
+		}
+		return
+	}
 
 	// Stop unsolicited reader before taking event channel ownership.
 	e.stopUnsolicitedReader(state)

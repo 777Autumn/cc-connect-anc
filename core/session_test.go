@@ -11,6 +11,71 @@ import (
 	"time"
 )
 
+func TestPersonalConnectionExpiredSessionCannotReattachAfterReload(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sessions.json")
+	sm := NewSessionManager(path)
+	s := sm.NewSession("owner", "old private work")
+	s.SetAgentSessionID("old-native", "fixture")
+	s.SetAgentSessionID("current-native", "fixture")
+	if err := sm.expireConnection(s); err != nil {
+		t.Fatal(err)
+	}
+	fresh := sm.NewSession("owner", "fresh")
+	sm = NewSessionManager(path)
+	for _, native := range []string{"old-native", "current-native"} {
+		if _, err := sm.SwitchToAgentSession("owner", native, "fixture", "must not import"); err == nil {
+			t.Fatal("expired native context was attached to new work")
+		}
+	}
+	if _, err := sm.SwitchSession("owner", s.ID); err == nil {
+		t.Fatal("expired session switched")
+	}
+	if sm.DeleteByID(s.ID) || sm.DeleteByAgentSessionID("current-native") != 0 {
+		t.Fatal("deletion erased the expiration tombstone")
+	}
+	if sm.ActiveSessionID("owner") != fresh.ID {
+		t.Fatal("rejected resume changed active work")
+	}
+	if _, err := sm.SwitchSession("owner", fresh.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sm.SwitchToAgentSession("other", "unrelated", "fixture", "normal"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPersonalConnectionCleanupRetainsNativeProvenance(t *testing.T) {
+	for _, merge := range []bool{false, true} {
+		sm := NewSessionManager(filepath.Join(t.TempDir(), "sessions.json"))
+		old := sm.NewSession("fixture:owner", "old")
+		old.SetAgentSessionID("old-native", "fixture")
+		if err := sm.expireConnection(old); err != nil {
+			t.Fatal(err)
+		}
+		fresh := sm.NewSession("fixture:owner", "fresh")
+		fresh.AddHistory("user", "new context")
+		sm.PruneDuplicateSessions(merge)
+		sm.PruneEmptySessions()
+		if sm.FindByID(old.ID) == nil {
+			t.Fatal("pruning erased native denial")
+		}
+		if _, err := sm.SwitchToAgentSession("fixture:owner", "old-native", "fixture", "old"); err == nil {
+			t.Fatal("pruned context resumed")
+		}
+		// A completed file work still owns the binding used on the next resume.
+		bound := sm.NewSession("fixture:another", "completed")
+		bound.SetAgentSessionID("bound-native", "fixture")
+		bound.FileTurns = []FileTurn{{Status: "completed"}}
+		if sm.DeleteByID(bound.ID) || sm.DeleteByAgentSessionID("bound-native") != 0 {
+			t.Fatal("cleanup detached work provenance")
+		}
+		sm.PruneEmptySessions()
+		if sm.FindByID(bound.ID) == nil {
+			t.Fatal("pruning detached completed work")
+		}
+	}
+}
+
 func TestSessionManager_GetOrCreateActive(t *testing.T) {
 	sm := NewSessionManager("")
 	s1 := sm.GetOrCreateActive("user1")

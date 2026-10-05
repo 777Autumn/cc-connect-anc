@@ -53,11 +53,11 @@ func (s authorizedReminderSender) SendReminder(ctx context.Context, chat, text, 
 }
 
 // The CRM project-set validator has already checked exact identities, one app,
-// four or six fixed environments, private chats and a shared group. This only
+// two fixed environments per member, private chats and a shared group. This only
 // derives the private mapping; no second identity configuration is introduced.
 func reminderRoutes(cfg *config.Config, projects map[string]bool) ([]reminders.Route, error) {
-	if len(projects) != 4 && len(projects) != 6 {
-		return nil, errors.New("reminders require four or six verified environments")
+	if len(projects) < 4 || len(projects) > 10 || len(projects)%2 != 0 {
+		return nil, errors.New("reminders require paired verified environments for two to five members")
 	}
 	counts := map[string]int{}
 	for _, p := range cfg.Projects {

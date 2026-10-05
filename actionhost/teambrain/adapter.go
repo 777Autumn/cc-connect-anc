@@ -81,8 +81,8 @@ func NewFromEnv() (*Adapter, error) {
 		}
 		configured[name] = true
 	}
-	if len(configured) != 4 && len(configured) != 6 {
-		return nil, errors.New("knowledge host requires four or six explicit projects")
+	if len(configured) < 4 || len(configured) > 10 || len(configured)%2 != 0 {
+		return nil, errors.New("knowledge host requires paired explicit projects for two to five members")
 	}
 	return &Adapter{command: command, projects: configured}, nil
 }

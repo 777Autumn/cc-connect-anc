@@ -273,6 +273,38 @@ func (env *cujEnv) userSends(userID, content string) string {
 	return sessionKey
 }
 
+func TestCUJ_CONNECTION2_ExpiredContextRequiresNewWork(t *testing.T) {
+	env := newCUJEnv(t)
+	key := env.userSends("owner", "ordinary office work")
+	env.waitFor("first reply", 3*time.Second, func() bool {
+		return env.sentContains("ok") && !env.activeSession(key).Busy()
+	})
+	old := env.activeSession(key)
+	if err := env.engine.sessions.expireConnection(old); err != nil {
+		t.Fatal(err)
+	}
+	env.plat.clearSent()
+	env.userSends("owner", "continue old context")
+	env.waitFor("expired refusal", 3*time.Second, func() bool {
+		return env.sentContains(env.engine.i18n.T(MsgConnectionWorkExpired)) && !old.Busy()
+	})
+	env.agent.mu.Lock()
+	starts := len(env.agent.sessions)
+	env.agent.mu.Unlock()
+	if starts != 1 {
+		t.Fatal("refused context started a model")
+	}
+	env.userSends("owner", "/new")
+	env.plat.clearSent()
+	env.userSends("owner", "new office work")
+	env.waitFor("new work reply", 3*time.Second, func() bool {
+		return env.sentContains("ok") && !env.activeSession(key).Busy()
+	})
+	if env.activeSession(key) == old || strings.Contains(fmt.Sprint(env.activeSession(key).GetHistory(20)), "ordinary office work") {
+		t.Fatal("new task inherited expired context")
+	}
+}
+
 func plat(p *stubPlatformEngine) Platform { return p }
 
 // cujReplyCtxPlatform wraps stubPlatformEngine and additionally implements

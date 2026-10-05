@@ -24,6 +24,7 @@ type Session struct {
 	AgentSessionID      string   `json:"agent_session_id"`
 	AgentType           string   `json:"agent_type,omitempty"`
 	PastAgentSessionIDs []string `json:"past_agent_session_ids,omitempty"`
+	ConnectionExpired   bool     `json:"connection_expired,omitempty"`
 	// ActiveProvider is the agent provider name that was active when this
 	// session last took a turn. It is restored before --resume so that a
 	// cc-connect process restart does not silently drop a user's
@@ -66,6 +67,34 @@ func (s *Session) Busy() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.busy
+}
+
+func (s *Session) connectionExpired() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.ConnectionExpired
+}
+
+// File turns retain the work binding needed to verify a later native resume.
+// Cleanup must not detach that provenance, even after the file was delivered.
+func (s *Session) retainsWorkContext() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.ConnectionExpired || len(s.FileTurns) != 0
+}
+
+// Keep native IDs as tombstones: clearing/deleting them would let /switch
+// import the same expired context under a new work identity.
+func (sm *SessionManager) expireConnection(s *Session) error {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	if s == nil || sm.sessions[s.ID] != s {
+		return fmt.Errorf("connection session unavailable")
+	}
+	s.mu.Lock()
+	s.ConnectionExpired = true
+	s.mu.Unlock()
+	return sm.saveLockedError()
 }
 
 func (s *Session) Unlock() {
@@ -392,6 +421,9 @@ func (sm *SessionManager) SwitchSession(userKey, target string) (*Session, error
 	for _, sid := range sm.userSessions[userKey] {
 		s := sm.sessions[sid]
 		if s != nil && (s.ID == target || s.Name == target) {
+			if s.connectionExpired() {
+				return nil, errConnectionWorkUnavailable
+			}
 			sm.activeSession[userKey] = s.ID
 			sm.saveLocked()
 			return s, nil
@@ -406,6 +438,18 @@ func (sm *SessionManager) SwitchSession(userKey, target string) (*Session, error
 func (sm *SessionManager) SwitchToAgentSession(userKey, agentSID, agentName, summary string) (*Session, error) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
+	// Check before either reusing a binding or creating a new Session. A past
+	// ID may also have a newer alias; expiration must win over that alias.
+	for _, sid := range sm.userSessions[userKey] {
+		if s := sm.sessions[sid]; s != nil {
+			s.mu.Lock()
+			expired := s.ConnectionExpired && (s.AgentSessionID == agentSID || slices.Contains(s.PastAgentSessionIDs, agentSID))
+			s.mu.Unlock()
+			if expired {
+				return nil, errConnectionWorkUnavailable
+			}
+		}
+	}
 
 	var previous *Session
 	ambiguous := false
@@ -592,7 +636,7 @@ func (sm *SessionManager) FindByID(id string) *Session {
 func (sm *SessionManager) DeleteByID(id string) bool {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
-	if s, ok := sm.sessions[id]; !ok || s.hasUnfinishedFileTurns() {
+	if s, ok := sm.sessions[id]; !ok || s.retainsWorkContext() {
 		return false
 	}
 	sm.deleteByIDLocked(id)
@@ -612,7 +656,7 @@ func (sm *SessionManager) DeleteByAgentSessionID(agentSessionID string) int {
 
 	removed := 0
 	for id, s := range sm.sessions {
-		if s.hasUnfinishedFileTurns() {
+		if s.retainsWorkContext() {
 			continue
 		}
 		s.mu.Lock()
@@ -631,6 +675,9 @@ func (sm *SessionManager) DeleteByAgentSessionID(agentSessionID string) int {
 }
 
 func (sm *SessionManager) deleteByIDLocked(id string) {
+	if s := sm.sessions[id]; s != nil && s.retainsWorkContext() {
+		return
+	}
 	delete(sm.sessions, id)
 	for userKey, ids := range sm.userSessions {
 		for i, sid := range ids {
@@ -681,6 +728,7 @@ func (sm *SessionManager) saveLockedError() error {
 			AgentSessionID:      agentSID,
 			AgentType:           s.AgentType,
 			PastAgentSessionIDs: append([]string(nil), s.PastAgentSessionIDs...),
+			ConnectionExpired:   s.ConnectionExpired,
 			History:             append([]HistoryEntry(nil), s.History...),
 			CreatedAt:           s.CreatedAt,
 			UpdatedAt:           s.UpdatedAt,
@@ -906,7 +954,7 @@ func (sm *SessionManager) PruneDuplicateSessions(mergeHistory bool) PruneResult 
 		}
 		pending := false
 		for _, s := range sessions {
-			pending = pending || s.hasUnfinishedFileTurns()
+			pending = pending || s.retainsWorkContext()
 		}
 		if pending {
 			continue
@@ -1012,7 +1060,7 @@ func (sm *SessionManager) PruneEmptySessions() int {
 
 	removed := 0
 	for _, s := range sm.sessions {
-		if s.hasUnfinishedFileTurns() {
+		if s.retainsWorkContext() {
 			continue
 		}
 		s.mu.Lock()

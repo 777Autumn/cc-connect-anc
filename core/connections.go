@@ -40,6 +40,32 @@ func (e *Engine) guardConnectionWork(ctx context.Context, command string, princi
 	return e.connectionHost.ConnectionGuard(ctx, command, principal, token, workID, subject)
 }
 
+// Check before a native context is loaded or another queued prompt is sent.
+func (e *Engine) guardConnectionSession(sessions *SessionManager, session *Session, principal ActionPrincipal, workID string) error {
+	if session.connectionExpired() {
+		return errConnectionWorkUnavailable
+	}
+	if workID == "" {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(e.ctx, 15*time.Second)
+	defer cancel()
+	err := e.guardConnectionWork(ctx, "work-resume", principal, "", workID)
+	if err != nil && !errors.Is(err, ErrConnectionTemporary) {
+		if saveErr := sessions.expireConnection(session); saveErr != nil {
+			slog.Error("expired connection session could not be persisted", "error", saveErr)
+		}
+	}
+	return err
+}
+
+func connectionFailureMessage(err error) MsgKey {
+	if errors.Is(err, ErrConnectionTemporary) {
+		return MsgConnectionUnavailable
+	}
+	return MsgConnectionWorkExpired
+}
+
 func (e *Engine) handleConnectionCommand(p Platform, msg *Message) bool {
 	host := e.connectionHost
 	if host == nil {
@@ -125,6 +151,7 @@ func (e *Engine) InvalidateConnection(userID string) {
 	for _, item := range affected {
 		item.state.mu.Lock()
 		principal, workID := item.state.currentPrincipal, item.state.fileWorkID
+		session := item.state.fileSession
 		platform, reply := item.state.platform, item.state.replyCtx
 		item.state.mu.Unlock()
 		ctx, cancel := context.WithTimeout(e.ctx, 15*time.Second)
@@ -135,9 +162,21 @@ func (e *Engine) InvalidateConnection(userID string) {
 			continue
 		}
 		if err != nil {
+			if session != nil {
+				if saveErr := e.sessions.expireConnection(session); saveErr != nil {
+					slog.Error("expired connection session could not be persisted", "error", saveErr)
+				}
+			}
 			e.cleanupInteractiveState(item.key, item.state)
 			if platform != nil {
 				e.reply(platform, reply, e.i18n.T(MsgConnectionWorkExpired))
+			}
+		} else if session != nil {
+			item.state.mu.Lock()
+			waiting := len(item.state.pendingMessages) > 0 && !item.state.stopped && item.state.agentSession != nil && item.state.agentSession.Alive()
+			item.state.mu.Unlock()
+			if waiting && session.TryLock() {
+				go e.drainOrphanedQueue(session, e.sessions, item.key, nil, "")
 			}
 		}
 	}

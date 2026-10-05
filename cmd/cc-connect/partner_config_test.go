@@ -20,13 +20,10 @@ func partnerConfigFixtureForActors(t *testing.T, count int) (*config.Config, map
 	hosts := map[string]*crmfollowup.Adapter{}
 	root := t.TempDir()
 	routes := [][2]string{}
-	for _, actor := range []string{"owner", "partner", "test", "unapproved"}[:count] {
+	for _, actor := range []string{"owner", "partner", "test", "fourth", "fifth", "sixth"}[:count] {
 		routes = append(routes, [2]string{actor, "private-" + actor}, [2]string{actor, "group"})
 	}
-	capacity := int64(128)
-	if count > 2 {
-		capacity = 85
-	}
+	capacity := int64(512 / (2 * count))
 	for i, route := range routes {
 		name := fmt.Sprintf("environment-%d", i)
 		hosts[name] = &crmfollowup.Adapter{}
@@ -81,12 +78,9 @@ func TestValidateCRMProjectSetThreePeopleRejectsUnsafeTopologyAndCapacity(t *tes
 	if err := validateCRMProjectSet(cfg, hosts); err != nil {
 		t.Fatal("bounded capacity rejected:", err)
 	}
-	fourPeople, fourHosts := partnerConfigFixtureForActors(t, 4)
-	for i := range fourPeople.Projects {
-		fourPeople.Projects[i].Agent.Options["image_cache_capacity_mib"] = 64
-	}
-	if err := validateCRMProjectSet(fourPeople, fourHosts); err == nil {
-		t.Fatal("unapproved fourth person accepted")
+	sixPeople, sixHosts := partnerConfigFixtureForActors(t, 6)
+	if err := validateCRMProjectSet(sixPeople, sixHosts); err == nil {
+		t.Fatal("unsupported sixth person accepted")
 	}
 }
 
