@@ -130,18 +130,23 @@ func TestFileWorkPostAuthorizationPrecedesDownloads(t *testing.T) {
 			case "unknown group parent with files":
 				event = fileWorkEvent("current", "post", body, "group", "unknown-parent", true)
 			}
-			if err := p.onMessage(context.Background(), event); err != nil {
-				t.Fatal(err)
-			}
-			if requests.Load() != 0 {
-				t.Fatal("unauthorized post fetched resources or parent metadata")
-			}
-			select {
-			case msg := <-got:
+			if strings.HasPrefix(scenario, "unknown") {
+				msg := receiveFileWorkMessage(t, p, got, event)
 				if len(msg.Files) != 0 || msg.FileWorkNewInput {
 					t.Fatal("unknown parent accepted new file input")
 				}
-			default:
+			} else {
+				if err := p.onMessage(context.Background(), event); err != nil {
+					t.Fatal(err)
+				}
+				select {
+				case <-got:
+					t.Fatal("unauthorized sender or chat reached the host")
+				default:
+				}
+			}
+			if requests.Load() != 0 {
+				t.Fatal("unauthorized post fetched resources or parent metadata")
 			}
 		})
 	}
