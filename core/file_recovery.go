@@ -8,6 +8,19 @@ import (
 )
 
 func (e *Engine) beginQueuedFileTurn(state *interactiveState, session *Session, queued queuedMessage) bool {
+	if err := e.guardConnectionSession(e.sessions, session, queued.principal, queued.fileWorkID); err != nil {
+		if errors.Is(err, ErrConnectionTemporary) {
+			// The caller popped this item. Keep its position and durable queued
+			// receipt; maintenance can retry after verification becomes available.
+			state.mu.Lock()
+			state.pendingMessages = append([]queuedMessage{queued}, state.pendingMessages...)
+			state.mu.Unlock()
+		} else {
+			e.notifyDroppedQueuedMessages(state, errConnectionWorkUnavailable)
+		}
+		e.reply(queued.platform, queued.replyCtx, e.i18n.T(connectionFailureMessage(err)))
+		return false
+	}
 	if queued.fileWorkID == "" {
 		return true
 	}

@@ -11,6 +11,39 @@ import (
 	"time"
 )
 
+func TestPersonalConnectionExpiredSessionCannotReattachAfterReload(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sessions.json")
+	sm := NewSessionManager(path)
+	s := sm.NewSession("owner", "old private work")
+	s.SetAgentSessionID("old-native", "fixture")
+	s.SetAgentSessionID("current-native", "fixture")
+	if err := sm.expireConnection(s); err != nil {
+		t.Fatal(err)
+	}
+	fresh := sm.NewSession("owner", "fresh")
+	sm = NewSessionManager(path)
+	for _, native := range []string{"old-native", "current-native"} {
+		if _, err := sm.SwitchToAgentSession("owner", native, "fixture", "must not import"); err == nil {
+			t.Fatal("expired native context was attached to new work")
+		}
+	}
+	if _, err := sm.SwitchSession("owner", s.ID); err == nil {
+		t.Fatal("expired session switched")
+	}
+	if sm.DeleteByID(s.ID) || sm.DeleteByAgentSessionID("current-native") != 0 {
+		t.Fatal("deletion erased the expiration tombstone")
+	}
+	if sm.ActiveSessionID("owner") != fresh.ID {
+		t.Fatal("rejected resume changed active work")
+	}
+	if _, err := sm.SwitchSession("owner", fresh.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sm.SwitchToAgentSession("other", "unrelated", "fixture", "normal"); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestSessionManager_GetOrCreateActive(t *testing.T) {
 	sm := NewSessionManager("")
 	s1 := sm.GetOrCreateActive("user1")

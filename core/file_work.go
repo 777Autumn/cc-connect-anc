@@ -253,6 +253,9 @@ func (e *Engine) handleFileWorkMessage(p Platform, msg *Message) bool {
 	if busy != nil && busy != session {
 		return fail(MsgPreviousProcessing)
 	}
+	if session.connectionExpired() {
+		return fail(MsgConnectionWorkExpired)
+	}
 	for _, turn := range session.fileTurns() {
 		if turn.Principal.MessageID == msg.MessageID || turn.ResumeMessageID == msg.MessageID {
 			runMessageAccepted(msg)
@@ -273,11 +276,8 @@ func (e *Engine) handleFileWorkMessage(p Platform, msg *Message) bool {
 	if !work.Enabled || work.WorkID == "" || work.WorkRoot != root {
 		return fail(MsgFileWorkUnavailable)
 	}
-	if err := e.guardConnectionWork(e.ctx, "work-resume", principal, "", work.WorkID); err != nil {
-		if errors.Is(err, ErrConnectionTemporary) {
-			return fail(MsgConnectionUnavailable)
-		}
-		return fail(MsgConnectionWorkExpired)
+	if err := e.guardConnectionSession(e.sessions, session, principal, work.WorkID); err != nil {
+		return fail(connectionFailureMessage(err))
 	}
 	if len(msg.caseSources) > 0 && msg.ParentMessageID != "" && !msg.FileWorkNewInput {
 		scope := "Preserve private scope. A reply is not permission to share."

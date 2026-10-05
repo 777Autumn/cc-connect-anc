@@ -125,6 +125,41 @@ func TestPersonalConnectionTemporaryFailurePreservesActiveWork(t *testing.T) {
 	}
 }
 
+func TestPersonalConnectionQueuedVerificationPreservesTemporaryButExpiresPermanent(t *testing.T) {
+	env := newCUJEnv(t)
+	s := env.engine.sessions.NewSession("owner", "work")
+	h := &connectionHostFixture{guardError: ErrConnectionTemporary}
+	env.engine.SetConnectionHost(h)
+	q := queuedMessage{fileWorkID: "shared-personal-work", platform: env.plat, replyCtx: "reply", principal: ActionPrincipal{UserID: "owner"}}
+	state := &interactiveState{pendingMessages: []queuedMessage{{content: "second", platform: env.plat, replyCtx: "reply"}}}
+	if env.engine.beginQueuedFileTurn(state, s, q) {
+		t.Fatal("temporary check started model turn")
+	}
+	if len(state.pendingMessages) != 2 || state.pendingMessages[0].fileWorkID != q.fileWorkID || s.connectionExpired() {
+		t.Fatal("temporary check lost queue or expired work")
+	}
+	h.guardError = errors.New("revoked")
+	state.pendingMessages = state.pendingMessages[1:]
+	if env.engine.beginQueuedFileTurn(state, s, q) || !s.connectionExpired() || len(state.pendingMessages) != 0 {
+		t.Fatal("confirmed revocation retained queued context")
+	}
+}
+
+func TestPersonalConnectionExpiredSessionStopsBeforeModelStartup(t *testing.T) {
+	env := newCUJEnv(t)
+	s := env.engine.sessions.NewSession("test:owner", "old")
+	if err := env.engine.sessions.expireConnection(s); err != nil {
+		t.Fatal(err)
+	}
+	if !s.TryLock() {
+		t.Fatal("lock")
+	}
+	env.engine.processInteractiveMessage(env.plat, &Message{SessionKey: "test:owner", Content: "resume", ReplyCtx: "reply"}, s)
+	if len(env.agent.sessions) != 0 || !env.sentContains(env.engine.i18n.T(MsgConnectionWorkExpired)) {
+		t.Fatal("expired context reached model")
+	}
+}
+
 func TestPersonalConnectionPublicationCannotBypassToolGate(t *testing.T) {
 	e, _, _, state := actionToolFixture(t)
 	h := &connectionHostFixture{guardError: errors.New("private")}
