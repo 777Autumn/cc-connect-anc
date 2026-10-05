@@ -513,6 +513,22 @@ func (sm *SessionManager) ActiveSessionID(userKey string) string {
 	return sm.activeSession[userKey]
 }
 
+// bindAgentSession keeps first-assignment names consistent across successful
+// and failed turns. The caller chooses when to save the full session state.
+func (sm *SessionManager) bindAgentSession(session *Session, id, agentType string) bool {
+	oldID := session.GetAgentSessionID()
+	if id == "" || id == ContinueSession || id == oldID {
+		return false
+	}
+	session.SetAgentSessionID(id, agentType)
+	if oldID == "" {
+		if name := session.GetName(); name != "" && name != "session" && name != "default" {
+			sm.SetSessionName(id, name)
+		}
+	}
+	return true
+}
+
 // SetSessionName sets a custom display name for an agent session.
 func (sm *SessionManager) SetSessionName(agentSessionID, name string) {
 	sm.mu.Lock()

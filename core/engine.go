@@ -4381,15 +4381,7 @@ func (e *Engine) getOrCreateInteractiveStateWith(sessionKey string, p Platform, 
 		// resume (after /stop or /model) would target a stale node and lose
 		// context. Session naming binds only on first assignment to avoid
 		// polluting sessionNames with every forked ID.
-		wasEmpty := session.GetAgentSessionID() == ""
-		if session.GetAgentSessionID() != newID {
-			session.SetAgentSessionID(newID, agent.Name())
-			if wasEmpty {
-				pendingName := session.GetName()
-				if pendingName != "" && pendingName != "session" && pendingName != "default" {
-					sessions.SetSessionName(newID, pendingName)
-				}
-			}
+		if sessions.bindAgentSession(session, newID, agent.Name()) {
 			sessions.Save()
 		}
 	}
@@ -5682,15 +5674,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 				}
 			}
 			if event.SessionID != "" {
-				wasEmpty := session.GetAgentSessionID() == ""
-				if session.GetAgentSessionID() != event.SessionID {
-					session.SetAgentSessionID(event.SessionID, e.agent.Name())
-					if wasEmpty {
-						pendingName := session.GetName()
-						if pendingName != "" && pendingName != "session" && pendingName != "default" {
-							sessions.SetSessionName(event.SessionID, pendingName)
-						}
-					}
+				if sessions.bindAgentSession(session, event.SessionID, e.agent.Name()) {
 					sessions.Save()
 				}
 			}
@@ -5880,16 +5864,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 			// to not be persisted to disk, breaking session resume on next startup.
 			if state != nil && state.agentSession != nil {
 				if currentID := state.agentSession.CurrentSessionID(); currentID != "" {
-					wasEmpty := session.GetAgentSessionID() == ""
-					if session.GetAgentSessionID() != currentID {
-						session.SetAgentSessionID(currentID, e.agent.Name())
-						if wasEmpty {
-							pendingName := session.GetName()
-							if pendingName != "" && pendingName != "session" && pendingName != "default" {
-								sessions.SetSessionName(currentID, pendingName)
-							}
-						}
-					}
+					sessions.bindAgentSession(session, currentID, e.agent.Name())
 					sessions.Save()
 				}
 			}
@@ -6421,14 +6396,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 			// A native session may acquire its resumable ID before a failed turn
 			// reports it in an event. Persist it on this turn's Session, including
 			// its existing provenance and permanent connection-expiry marker.
-			if currentID := turnAgentSession.CurrentSessionID(); currentID != "" && currentID != ContinueSession && session.GetAgentSessionID() != currentID {
-				wasEmpty := session.GetAgentSessionID() == ""
-				session.SetAgentSessionID(currentID, replyAgent.Name())
-				if wasEmpty {
-					if pendingName := session.GetName(); pendingName != "" && pendingName != "session" && pendingName != "default" {
-						sessions.SetSessionName(currentID, pendingName)
-					}
-				}
+			if sessions.bindAgentSession(session, turnAgentSession.CurrentSessionID(), replyAgent.Name()) {
 				sessions.Save()
 			}
 			state.mu.Lock()
