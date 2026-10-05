@@ -6413,6 +6413,15 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 		case EventError:
 			cp.Finalize(ProgressCardStateFailed)
 			sp.discard()
+			// A native session may acquire its resumable ID before a failed turn
+			// reports it in an event. Persist it on this turn's Session, including
+			// its existing provenance and permanent connection-expiry marker.
+			if state.agentSession != nil {
+				if currentID := state.agentSession.CurrentSessionID(); currentID != "" && currentID != ContinueSession && session.GetAgentSessionID() != currentID {
+					session.SetAgentSessionID(currentID, replyAgent.Name())
+					sessions.Save()
+				}
+			}
 			state.mu.Lock()
 			state.eventsNeedResync = true
 			state.mu.Unlock()

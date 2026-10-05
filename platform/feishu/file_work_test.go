@@ -56,7 +56,7 @@ func TestFileWorkImagesUseCurrentResourceAndSharedFileBudget(t *testing.T) {
 		`{"content":[[{"tag":"img","image_key":"a"},{"tag":"img","image_key":"b"},{"tag":"img","image_key":"c"},{"tag":"img","image_key":"d"},{"tag":"img","image_key":"e"}]]}`,
 		`{"en_us":{"content":[[{"tag":"text","text":"hello"}]]},"zh_cn":{"content":[[{"tag":"img","image_key":"hidden"}]]}}`,
 	} {
-		if _, _, ok := p.fileWorkPostText(body, true); ok {
+		if _, _, _, ok := p.fileWorkPostContent(body, true); ok {
 			t.Fatal("oversize or inconsistent locale accepted")
 		}
 	}

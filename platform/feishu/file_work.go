@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sort"
 	"strings"
 
@@ -129,7 +130,7 @@ func (p *Platform) dispatchFileWork(ctx context.Context, msgType, content string
 			msg.Content = stripMentions(body.Text, mentions, p.getBotOpenID())
 		}
 	case "post":
-		text, keys, ok := p.fileWorkPostText(content, allowImages)
+		text, keys, files, ok := p.fileWorkPostContent(content, allowImages)
 		if !ok {
 			fail(core.MsgFileWorkUnavailable)
 		} else {
@@ -137,6 +138,20 @@ func (p *Platform) dispatchFileWork(ctx context.Context, msgType, content string
 			budget := &fileReceiveBudget{}
 			for _, key := range keys {
 				msg.Files = append(msg.Files, p.receiveWorkImage(ctx, msg.MessageID, key, budget))
+				if failure := msg.Files[len(msg.Files)-1].ReceiveError; failure != "" {
+					fail(failure)
+					p.dispatchCoreMessage(msg)
+					return
+				}
+			}
+			for _, file := range files {
+				attachment := p.receiveFile(ctx, msg.MessageID, file.FileKey, file.FileName, budget)
+				if attachment.ReceiveError != "" {
+					fail(attachment.ReceiveError)
+					p.dispatchCoreMessage(msg)
+					return
+				}
+				msg.Files = append(msg.Files, attachment)
 			}
 		}
 	case "image":
@@ -170,18 +185,20 @@ func (p *Platform) dispatchFileWork(ctx context.Context, msgType, content string
 	p.dispatchCoreMessage(msg)
 }
 
-// fileWorkPostText accepts only complete textual posts. Validate every locale
-// before selecting one, so an unsupported attachment cannot disappear silently.
-func (p *Platform) fileWorkPostText(raw string, allowImages bool) (string, []string, bool) {
+// Validate every locale before any download, so an unsupported attachment
+// cannot disappear silently. Images and files share the controlled batch limit.
+func (p *Platform) fileWorkPostContent(raw string, allowImages bool) (string, []string, []postFile, bool) {
 	var fields map[string]json.RawMessage
 	if json.Unmarshal([]byte(raw), &fields) != nil || len(fields) == 0 {
-		return "", nil, false
+		return "", nil, nil, false
 	}
 	var posts []postLang
-	if _, flat := fields["content"]; flat {
+	_, hasContent := fields["content"]
+	_, hasFiles := fields["files"]
+	if hasContent || hasFiles {
 		var post postLang
 		if json.Unmarshal([]byte(raw), &post) != nil {
-			return "", nil, false
+			return "", nil, nil, false
 		}
 		posts = append(posts, post)
 	} else {
@@ -193,7 +210,7 @@ func (p *Platform) fileWorkPostText(raw string, allowImages bool) (string, []str
 		for _, key := range keys {
 			var post postLang
 			if json.Unmarshal(fields[key], &post) != nil {
-				return "", nil, false
+				return "", nil, nil, false
 			}
 			posts = append(posts, post)
 		}
@@ -201,8 +218,13 @@ func (p *Platform) fileWorkPostText(raw string, allowImages bool) (string, []str
 	var selectedKeys []string
 	for i := range posts {
 		var imageKeys []string
-		if posts[i].Content == nil {
-			return "", nil, false
+		if posts[i].Content == nil && len(posts[i].Files) == 0 {
+			return "", nil, nil, false
+		}
+		for _, file := range posts[i].Files {
+			if strings.TrimSpace(file.FileKey) == "" || strings.TrimSpace(file.FileName) == "" || file.IsFolder {
+				return "", nil, nil, false
+			}
 		}
 		for _, line := range posts[i].Content {
 			for j := range line {
@@ -210,7 +232,7 @@ func (p *Platform) fileWorkPostText(raw string, allowImages bool) (string, []str
 				switch elem.Tag {
 				case "img":
 					if !allowImages || elem.ImageKey == "" || len(imageKeys) >= maxFileInputCount {
-						return "", nil, false
+						return "", nil, nil, false
 					}
 					imageKeys = append(imageKeys, elem.ImageKey)
 					// Extract text only after all resources/locale variants are checked.
@@ -222,16 +244,19 @@ func (p *Platform) fileWorkPostText(raw string, allowImages bool) (string, []str
 						elem.UserName = elem.UserId
 					}
 				default:
-					return "", nil, false
+					return "", nil, nil, false
 				}
 			}
 		}
+		if len(imageKeys)+len(posts[i].Files) > maxFileInputCount {
+			return "", nil, nil, false
+		}
 		if i == 0 {
 			selectedKeys = imageKeys
-		} else if strings.Join(imageKeys, "\x00") != strings.Join(selectedKeys, "\x00") {
-			return "", nil, false
+		} else if !slices.Equal(imageKeys, selectedKeys) || !slices.Equal(posts[i].Files, posts[0].Files) {
+			return "", nil, nil, false
 		}
 	}
 	parts, _ := p.extractPostParts("", &posts[0])
-	return strings.Join(parts, "\n"), selectedKeys, true
+	return strings.Join(parts, "\n"), selectedKeys, posts[0].Files, true
 }

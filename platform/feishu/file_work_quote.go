@@ -29,8 +29,9 @@ func (p *Platform) dispatchQuotedWorkFile(ctx context.Context, msgType, content 
 	}
 	if msgType == "post" {
 		var ok bool
-		text.Text, _, ok = p.fileWorkPostText(content, false)
-		if !ok {
+		var files []postFile
+		text.Text, _, files, ok = p.fileWorkPostContent(content, false)
+		if !ok || len(files) != 0 {
 			return
 		}
 	} else if msgType != "text" || json.Unmarshal([]byte(content), &text) != nil {

@@ -5447,9 +5447,16 @@ type postElement struct {
 	UserName string `json:"user_name,omitempty"`
 }
 
+type postFile struct {
+	FileKey  string `json:"file_key"`
+	FileName string `json:"file_name"`
+	IsFolder bool   `json:"is_folder,omitempty"`
+}
+
 type postLang struct {
 	Title   string          `json:"title"`
 	Content [][]postElement `json:"content"`
+	Files   []postFile      `json:"files"`
 }
 
 // parsePostContent handles both formats of feishu post content:
