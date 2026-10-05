@@ -1169,7 +1169,60 @@ func TestCUJ_E5_TimerDisappearsAfterFiring(t *testing.T) {
 // (history not saved on user msg) only manifested across a restart.
 // ===========================================================================
 
+type cujLateFailureSession struct{ *cujAgentSession }
+
+func (s *cujLateFailureSession) CurrentSessionID() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.sentPrompts) == 0 {
+		return ""
+	}
+	return "late-native-id"
+}
+
 func TestCUJ_B12_RestartRestoresEverything(t *testing.T) {
+	t.Run("failed first turn resumes after restart", func(t *testing.T) {
+		store := filepath.Join(t.TempDir(), "sessions.json")
+		p := &stubPlatformEngine{n: "test"}
+		live := &cujLateFailureSession{newCUJAgentSession()}
+		live.pendingEvents = []Event{{Type: EventError, Error: errors.New("fictional first turn failed")}}
+		a := &controllableAgent{startSessionFn: func(context.Context, string) (AgentSession, error) { return live, nil }}
+		first := NewEngine("test", a, []Platform{p}, store, LangEnglish)
+		t.Cleanup(func() { _ = first.Stop() })
+		env := &cujEnv{t: t, engine: first, plat: p}
+		key := env.userSends("ivy", "/new Project Alpha")
+		env.waitFor("named task confirmation", 3*time.Second, func() bool { return env.sentContains("Project Alpha") })
+		env.userSends("ivy", "prepare fictional brief")
+		env.waitFor("failed turn shown and finished", 3*time.Second, func() bool {
+			return env.sentContains("fictional first turn failed") && !env.activeSession(key).Busy()
+		})
+		_ = first.Stop()
+		p.clearSent()
+		restartedAgent := &controllableAgent{startSessionFn: func(_ context.Context, id string) (AgentSession, error) {
+			s := newCUJAgentSession()
+			s.reply = "Started a new context"
+			if id == "late-native-id" {
+				s.reply = "Recovered the fictional brief"
+			}
+			return s, nil
+		}}
+		restartedAgent.listFn = func() ([]AgentSessionInfo, error) {
+			return []AgentSessionInfo{{ID: "late-native-id"}}, nil
+		}
+		restarted := NewEngine("test", restartedAgent, []Platform{p}, store, LangEnglish)
+		t.Cleanup(func() { _ = restarted.Stop() })
+		env.engine = restarted
+		env.userSends("ivy", "/list")
+		env.waitFor("saved name listed", 3*time.Second, func() bool { return env.sentContains("Project Alpha") })
+		env.userSends("ivy", "/new Other")
+		p.clearSent()
+		env.userSends("ivy", "/switch Project Alpha")
+		env.waitFor("switch by saved name", 3*time.Second, func() bool { return env.sentContains("Project Alpha") })
+		env.userSends("ivy", "continue the brief")
+		env.waitFor("original context resumed", 3*time.Second, func() bool {
+			return env.sentContains("Recovered the fictional brief") && !env.activeSession(key).Busy()
+		})
+	})
 	dir := t.TempDir()
 	storePath := dir + "/sessions.json"
 	cronDir := dir + "/cron"
