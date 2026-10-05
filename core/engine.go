@@ -4381,15 +4381,7 @@ func (e *Engine) getOrCreateInteractiveStateWith(sessionKey string, p Platform, 
 		// resume (after /stop or /model) would target a stale node and lose
 		// context. Session naming binds only on first assignment to avoid
 		// polluting sessionNames with every forked ID.
-		wasEmpty := session.GetAgentSessionID() == ""
-		if session.GetAgentSessionID() != newID {
-			session.SetAgentSessionID(newID, agent.Name())
-			if wasEmpty {
-				pendingName := session.GetName()
-				if pendingName != "" && pendingName != "session" && pendingName != "default" {
-					sessions.SetSessionName(newID, pendingName)
-				}
-			}
+		if sessions.bindAgentSession(session, newID, agent.Name()) {
 			sessions.Save()
 		}
 	}
@@ -5058,6 +5050,11 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 	state.mu.Lock()
 	workspaceDir := state.workspaceDir
 	replyAgent := state.agent
+	turnAgentSession := state.agentSession
+	if turnAgentSession == nil {
+		state.mu.Unlock()
+		return
+	}
 	if replyAgent == nil {
 		replyAgent = e.agent
 	}
@@ -5122,7 +5119,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 		turnDeadlineCh = turnDeadlineTimer.C
 	}
 
-	events := state.agentSession.Events()
+	events := turnAgentSession.Events()
 	stopCh := state.stopSignal()
 	for {
 		var event Event
@@ -5677,15 +5674,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 				}
 			}
 			if event.SessionID != "" {
-				wasEmpty := session.GetAgentSessionID() == ""
-				if session.GetAgentSessionID() != event.SessionID {
-					session.SetAgentSessionID(event.SessionID, e.agent.Name())
-					if wasEmpty {
-						pendingName := session.GetName()
-						if pendingName != "" && pendingName != "session" && pendingName != "default" {
-							sessions.SetSessionName(event.SessionID, pendingName)
-						}
-					}
+				if sessions.bindAgentSession(session, event.SessionID, e.agent.Name()) {
 					sessions.Save()
 				}
 			}
@@ -5875,16 +5864,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 			// to not be persisted to disk, breaking session resume on next startup.
 			if state != nil && state.agentSession != nil {
 				if currentID := state.agentSession.CurrentSessionID(); currentID != "" {
-					wasEmpty := session.GetAgentSessionID() == ""
-					if session.GetAgentSessionID() != currentID {
-						session.SetAgentSessionID(currentID, e.agent.Name())
-						if wasEmpty {
-							pendingName := session.GetName()
-							if pendingName != "" && pendingName != "session" && pendingName != "default" {
-								sessions.SetSessionName(currentID, pendingName)
-							}
-						}
-					}
+					sessions.bindAgentSession(session, currentID, e.agent.Name())
 					sessions.Save()
 				}
 			}
@@ -6413,11 +6393,18 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 		case EventError:
 			cp.Finalize(ProgressCardStateFailed)
 			sp.discard()
+			// A native session may acquire its resumable ID before a failed turn
+			// reports it in an event. Persist it on this turn's Session, including
+			// its existing provenance and permanent connection-expiry marker.
+			if sessions.bindAgentSession(session, turnAgentSession.CurrentSessionID(), replyAgent.Name()) {
+				sessions.Save()
+			}
 			state.mu.Lock()
 			state.eventsNeedResync = true
+			currentAgentSession := state.agentSession
 			state.mu.Unlock()
 			if hasRichCard && cardMessageID != nil {
-				errCard := buildResolvedRichCard(CardStatusError, "", toolSteps, partialText, false, e.composeRichStatusFooter(false, turnStart, e.agent, state.agentSession, state.workspaceDir))
+				errCard := buildResolvedRichCard(CardStatusError, "", toolSteps, partialText, false, e.composeRichStatusFooter(false, turnStart, replyAgent, turnAgentSession, workspaceDir))
 				if updater, ok := p.(MessageUpdater); ok {
 					if err := updater.UpdateMessage(e.ctx, cardMessageID, errCard); err != nil {
 						slog.Debug("rich card: failed to update error card", "platform", p.Name(), "error", err)
@@ -6437,7 +6424,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 			// Only drop queued messages if the agent session is dead.
 			// Some agents (e.g. Codex) emit EventError for per-turn failures
 			// while keeping the session alive for subsequent turns.
-			if state.agentSession == nil || !state.agentSession.Alive() {
+			if currentAgentSession == nil || !currentAgentSession.Alive() {
 				e.notifyDroppedQueuedMessages(state, event.Error)
 			}
 			return
