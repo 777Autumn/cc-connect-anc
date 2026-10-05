@@ -3,6 +3,7 @@ package teambrain
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -11,6 +12,48 @@ import (
 
 	"github.com/chenhg5/cc-connect/core"
 )
+
+func TestKnowledgeTwoToFiveMembersProtectedEntrances(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("production host ownership checks require POSIX")
+	}
+	for count := 2; count <= 12; count++ {
+		t.Run(fmt.Sprint(count), func(t *testing.T) {
+			projects := []string{}
+			attached := map[string]bool{}
+			for i := 0; i < count; i++ {
+				name := fmt.Sprintf("fictional-%d", i)
+				projects = append(projects, name)
+				attached[name] = true
+			}
+			t.Setenv("CC_TEAM_BRAIN_COMMAND", "/usr/bin/true")
+			t.Setenv("CC_TEAM_BRAIN_PROJECTS", strings.Join(projects, ","))
+			a, err := NewFromEnv()
+			valid := count >= 4 && count <= 10 && count%2 == 0
+			if valid {
+				if err != nil || !a.AllAttached(attached) || a.Enabled("unregistered") {
+					t.Fatalf("fixed entrances: %v %v", a, err)
+				}
+				delete(attached, projects[0])
+				if a.AllAttached(attached) {
+					t.Fatal("missing protected entrance accepted")
+				}
+			} else if err == nil {
+				t.Fatal("unsupported entrance count accepted")
+			}
+			if os.Getenv("CC_TEAM_BRAIN_COMMAND") != "" || os.Getenv("CC_TEAM_BRAIN_PROJECTS") != "" {
+				t.Fatal("host configuration retained in inherited environment")
+			}
+		})
+	}
+	for _, names := range []string{"a,b,c,a", "a,b,c, d", "a,b,c,"} {
+		t.Setenv("CC_TEAM_BRAIN_COMMAND", "/usr/bin/true")
+		t.Setenv("CC_TEAM_BRAIN_PROJECTS", names)
+		if _, err := NewFromEnv(); err == nil {
+			t.Fatal("invalid identity mapping accepted")
+		}
+	}
+}
 
 func TestKnowledgeAttachedMatchesExactConfiguredSet(t *testing.T) {
 	a := &Adapter{projects: map[string]bool{"one": true, "two": true, "three": true, "four": true}}

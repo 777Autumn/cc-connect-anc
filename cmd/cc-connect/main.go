@@ -1809,8 +1809,8 @@ func validateCRMProjectSet(cfg *config.Config, hosts map[string]*crmfollowup.Ada
 	if len(seen) != len(hosts) {
 		return errors.New("CRM host references an unconfigured project")
 	}
-	if len(hosts) > 1 && len(hosts) != 4 && len(hosts) != 6 {
-		return errors.New("partner deployment requires four or six fixed environments")
+	if len(hosts) > 1 && (len(hosts) < 4 || len(hosts) > 10 || len(hosts)%2 != 0) {
+		return errors.New("partner deployment requires two fixed environments per member for two to five members")
 	}
 	if len(hosts) > 1 {
 		people := len(hosts) / 2

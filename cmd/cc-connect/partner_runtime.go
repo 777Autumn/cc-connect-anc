@@ -11,7 +11,7 @@ import (
 	"github.com/chenhg5/cc-connect/config"
 )
 
-// Sharing is explicit and all-or-nothing for the four fixed Codex entrances.
+// Sharing is explicit and all-or-nothing for the fixed Codex entrances.
 // The adapter also verifies canonical roots and process configuration before
 // any platform receiver is prepared.
 func sharedCodexOwner(cfg *config.Config) (string, error) {
@@ -31,8 +31,8 @@ func sharedCodexOwner(cfg *config.Config) (string, error) {
 		}
 		owner, auth = p.RunAsUser, home
 	}
-	if count != 0 && (count != 4 || count != len(cfg.Projects)) {
-		return "", errors.New("shared runtime requires all four fixed entrances; mixed modes are unsupported")
+	if count != 0 && (count < 4 || count > 10 || count%2 != 0 || count != len(cfg.Projects)) {
+		return "", errors.New("shared runtime requires all fixed entrances for two to five members; mixed modes are unsupported")
 	}
 	return owner, nil
 }

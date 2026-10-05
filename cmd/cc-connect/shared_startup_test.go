@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -11,8 +12,12 @@ import (
 )
 
 func sharedPartnerFixture(t *testing.T) (*config.Config, map[string]*crmfollowup.Adapter, func(string) (*user.User, error)) {
+	return sharedPartnerFixtureForActors(t, 2)
+}
+
+func sharedPartnerFixtureForActors(t *testing.T, count int) (*config.Config, map[string]*crmfollowup.Adapter, func(string) (*user.User, error)) {
 	t.Helper()
-	cfg, hosts := partnerConfigFixture(t)
+	cfg, hosts := partnerConfigFixtureForActors(t, count)
 	home := t.TempDir()
 	auth := filepath.Join(home, ".codex")
 	if err := os.Mkdir(auth, 0700); err != nil {
@@ -31,6 +36,37 @@ func sharedPartnerFixture(t *testing.T) (*config.Config, map[string]*crmfollowup
 	}
 	return cfg, hosts, func(name string) (*user.User, error) {
 		return &user.User{Username: name, Uid: "61009", Gid: "61009", HomeDir: home}, nil
+	}
+}
+
+func TestSharedPartnerStartupTwoToFiveMembers(t *testing.T) {
+	for count := 2; count <= 5; count++ {
+		t.Run(fmt.Sprint(count), func(t *testing.T) {
+			cfg, hosts, lookup := sharedPartnerFixtureForActors(t, count)
+			if err := validateCRMProjectSet(cfg, hosts); err != nil {
+				t.Fatal(err)
+			}
+			if err := validatePartnerRuntimeAccounts(cfg, lookup); err != nil {
+				t.Fatal(err)
+			}
+			registered := map[string]bool{}
+			for name := range hosts {
+				registered[name] = true
+			}
+			routes, err := reminderRoutes(cfg, registered)
+			if err != nil || len(routes) != 2*count {
+				t.Fatalf("reminder routes: %v %v", routes, err)
+			}
+			for _, route := range routes {
+				if route.PrivateChat != "private-"+route.User {
+					t.Fatal("cross-person reminder route", route)
+				}
+			}
+			cfg.Projects[2*count-1].Platforms[0].Options["allow_from"] = "owner"
+			if validateCRMProjectSet(cfg, hosts) == nil {
+				t.Fatal("uneven identity mapping accepted")
+			}
+		})
 	}
 }
 
