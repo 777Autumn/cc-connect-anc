@@ -640,6 +640,9 @@ func receiptCard(result map[string]any, lang core.Language) *core.Card {
 	}
 	if followup, ok := result["followup"].(map[string]any); ok {
 		b.Divider().Markdown(i18n.T(core.MsgCRMReceiptFollowupHeading) + "\n" + renderFields(followup, []string{"occurred_at", "channel", "content", "next_action", "next_followup_at"}, i18n))
+		if link := safeLink(followup["url"]); link != "" {
+			b.Markdown("[" + i18n.T(core.MsgBanquetOpenRecord) + "](" + link + ")")
+		}
 	}
 	if customer, ok := result["customer"].(map[string]any); ok {
 		b.Divider().Markdown(i18n.T(core.MsgCRMReceiptCustomerHeading) + "\n" + renderFields(customer, []string{"customer_number", "name", "contact", "phone", "email", "stage", "owner", "last_followup_at", "last_followup_content", "next_action", "next_followup_at"}, i18n))
