@@ -80,7 +80,7 @@ func TestPersonalConnectionGuardPrecedesEveryToolAndFileDispatch(t *testing.T) {
 	e, tools, _, state := actionToolFixture(t)
 	h := &connectionHostFixture{guardError: errors.New("fixture private work")}
 	e.SetConnectionHost(h)
-	for _, command := range []string{"customer", "customers", "stage", "result", "knowledge_propose", "case-publish", "file-deliver", "work-context"} {
+	for _, command := range []string{"customer", "customers", "stage", "result", "knowledge_propose", "case-publish", "file-deliver", "work-context", "banquet", "banquets", "handoff", "stage-handoff-submit", "stage-handoff-accept", "stage-handoff-return"} {
 		w := actionToolRequest(e.ActionToolHandler(), "POST", "/tool", state.actionToken, `{"command":"`+command+`","input":{}}`)
 		if w.Code != 403 || tools.toolCalls != 0 || h.principal != state.currentPrincipal {
 			t.Fatalf("scope bypass for %s: %d %s", command, w.Code, w.Body.String())

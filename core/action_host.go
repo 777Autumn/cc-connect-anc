@@ -38,13 +38,14 @@ const (
 // ActionHostResult is presentation-ready output from the action adapter. The
 // adapter owns the business wording; core only routes and refreshes the card.
 type ActionHostResult struct {
-	Kind       string
-	Status     string
-	Code       string
-	ApprovalID string
-	ChangeID   string
-	Card       *Card
-	Replayed   bool
+	Kind         string
+	Status       string
+	Code         string
+	ApprovalID   string
+	ChangeID     string
+	Card         *Card
+	Replayed     bool
+	HandoffFiles *BanquetFileCheck // Host-only proof from the claimed immutable preview.
 	// Next is one separately approved action, never an instruction to execute it.
 	Next *ActionHostResult
 }
@@ -236,7 +237,7 @@ func (e *Engine) handleTrustedCardAction(p Platform, action TrustedCardAction) T
 		action.Language = e.i18n.CurrentLang()
 	}
 
-	result, execute, err := host.Claim(e.ctx, action.ApprovalID, action.Decision, action.Principal, action.Language)
+	result, execute, err := host.Claim(e.banquetCheckContext(e.ctx), action.ApprovalID, action.Decision, action.Principal, action.Language)
 	if err != nil {
 		slog.Error("action host decision claim unconfirmed", "action_kind", action.Kind, "decision", action.Decision)
 		return TrustedCardActionResponse{Toast: e.i18n.T(MsgHostedActionResultUnknownToast), ToastType: "error"}
@@ -284,7 +285,12 @@ func (e *Engine) handleTrustedCardAction(p Platform, action TrustedCardAction) T
 		var final TrustedCardActionResponse
 		response.Complete = func() TrustedCardActionResponse {
 			once.Do(func() {
-				completed, completeErr := host.Execute(e.ctx, approvalID, principal, language)
+				executeContext := e.banquetCheckContext(e.ctx)
+				if result.HandoffFiles != nil {
+					verified := CheckBanquetFiles(executeContext, *result.HandoffFiles) == nil
+					executeContext = context.WithValue(executeContext, banquetVerifiedKey{}, verified)
+				}
+				completed, completeErr := host.Execute(executeContext, approvalID, principal, language)
 				if completeErr != nil {
 					slog.Error("action host execution receipt unconfirmed", "action_kind", action.Kind)
 					i18n := NewI18n(language)

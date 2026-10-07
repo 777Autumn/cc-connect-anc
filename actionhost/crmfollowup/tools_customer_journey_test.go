@@ -23,6 +23,14 @@ import (
 )
 
 func TestCUJ_CRMIPC2_ProfileThenIndependentFollowup(t *testing.T) {
+	runProfileJourney(t, false)
+}
+
+func TestCUJ_BANQUET1_SalesApprovalReadbackAndConversation(t *testing.T) {
+	runProfileJourney(t, true)
+}
+
+func runProfileJourney(t *testing.T, banquet bool) {
 	root := os.Getenv("MYANC_SPIKE_CRM_ROOT")
 	if root == "" {
 		t.Skip("set MYANC_SPIKE_CRM_ROOT for the offline cross-repo journey")
@@ -54,6 +62,9 @@ func TestCUJ_CRMIPC2_ProfileThenIndependentFollowup(t *testing.T) {
 		}
 		cmd := exec.CommandContext(ctx, python, "-B", filepath.Join(root, "spikes", "host_tool_fixture.py"), subcommand)
 		cmd.Env = append(env, "MYANC_SPIKE_DIR="+scratch, "MYANC_SPIKE_SEED=customer-trial")
+		if banquet {
+			cmd.Env = append(cmd.Env, "MYANC_SPIKE_BANQUET=1")
+		}
 		cmd.Stdin = bytes.NewReader(input)
 		output, err := cmd.Output()
 		if err != nil {
@@ -140,6 +151,40 @@ func TestCUJ_CRMIPC2_ProfileThenIndependentFollowup(t *testing.T) {
 		}
 	}
 	turn("customer", map[string]any{"customer_query": "C-001"}, "found")
+	if banquet {
+		person := turn("assignee", map[string]any{"query": "member@example.com"}, "resolved")
+		plan := turn("stage-banquet-create", map[string]any{"customer_query": "C-001", "name": "Fictional May banquet", "owner_ref": person["owner_ref"], "stage": "新线索", "estimated_tables": 20, "date_note": "May next year, exact date unknown"}, "pending")
+		cardID, card := p.lastCard()
+		if card == nil || !strings.Contains(card.RenderText(), "Fictional May banquet") || !strings.Contains(card.RenderText(), "20") {
+			t.Fatal("banquet fields missing from actual approval card")
+		}
+		if denied := click(plan, cardID, "sender-2", core.ActionApprove); denied.Complete != nil || denied.ToastType != "error" {
+			t.Fatal("wrong actor approved banquet")
+		}
+		finish(plan, cardID)
+		result := turn("result", map[string]any{"change_id": plan["change_id"]}, "verified")
+		id := result["receipt"].(map[string]any)["banquet"].(map[string]any)["record_id"]
+		facts := turn("banquet", map[string]any{"banquet_id": id}, "found")
+		row := facts["banquet"].(map[string]any)
+		if row["banquet_date"] != nil || row["estimated_tables"] != float64(20) {
+			t.Fatal("unknown date invented or table count lost", row)
+		}
+		followup := turn("stage-banquet-followup", map[string]any{"banquet_id": id, "occurred_at": "2026-10-07T10:00:00+08:00", "content": "Customer considers 20 tables; date unconfirmed"}, "pending")
+		followupCard, _ := p.lastCard()
+		finish(followup, followupCard)
+		facts = turn("banquet", map[string]any{"banquet_id": id}, "found")
+		if len(facts["history"].([]any)) != 1 {
+			t.Fatal("followup not linked to banquet", facts)
+		}
+		if replay := click(plan, cardID, "sender-1", core.ActionApprove); replay.Complete != nil {
+			t.Fatal("old card repeated write")
+		}
+		turn("", nil, "")
+		if executes.Load() != 2 || agent.starts.Load() != 1 || strings.Contains(p.transcript(), "INTERNAL_SPIKE_") {
+			t.Fatal("banquet broke approval or continued discussion")
+		}
+		return
+	}
 	turn("stage-customer-create", map[string]any{"name": "虚构公司"}, "needs_input")
 	person := turn("assignee", map[string]any{"query": "member@example.com"}, "resolved")
 	parent := turn("stage-customer-create", map[string]any{"name": "虚构评测公司", "contact": "示例甲", "stage": "新线索", "owner_ref": person["owner_ref"], "followup": map[string]any{"occurred_at": "2026-09-06T10:00:00+08:00", "content": "明确要求演示", "next_action": "准备演示"}}, "pending")

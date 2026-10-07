@@ -103,8 +103,8 @@ func configureFileWork(project config.ProjectConfig, engine *core.Engine, platfo
 			return nil, noop, errInvalid
 		}
 	}
+	host.SetPublicationAccess(engine.AuthorizeCasePublication)
 	if cfg.SharedCases {
-		host.SetPublicationAccess(engine.AuthorizeCasePublication)
 		host.SetProjectAccess(func(ctx context.Context, p core.ActionPrincipal, workID, receipt string, bound bool) (string, string, error) {
 			chat, err := engine.AuthorizeProjectFile(ctx, p, workID, receipt, bound)
 			if err != nil || chat == "" {

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"strings"
 	"time"
 )
 
@@ -124,6 +125,9 @@ func (e *Engine) casePublicationContext(ctx context.Context, p ActionPrincipal, 
 // AuthorizeCasePublication rechecks current project membership and the target
 // work binding. Legacy group receipts keep their separate authorization path.
 func (e *Engine) AuthorizeCasePublication(ctx context.Context, p ActionPrincipal, workID, publicationID string) (CasePublishedSource, error) {
+	if strings.HasPrefix(publicationID, "bh_") {
+		return e.authorizeHandoffPublication(ctx, p, workID, publicationID)
+	}
 	e.actionMu.RLock()
 	host := actionHostForCommand(e.actionHost, "case-read")
 	enabled := e.sharedCasesEnabled
