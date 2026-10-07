@@ -414,6 +414,28 @@ func TestApprovalCardCarriesOnlyOpaqueAuthorizationReference(t *testing.T) {
 	}
 }
 
+func TestFollowupReceiptIncludesSafeRecordLink(t *testing.T) {
+	for _, link := range []string{"https://example.feishu.cn/base/test?record=recFollowup", "", "javascript:alert(1)", "http://example.com"} {
+		t.Run(link, func(t *testing.T) {
+			card := receiptCard(map[string]any{
+				"status": "verified", "code": "banquet_write_verified",
+				"followup": map[string]any{"content": "fixture followup", "url": link},
+			}, core.LangEnglish)
+			body := card.RenderText()
+			label := core.NewI18n(core.LangEnglish).T(core.MsgBanquetOpenRecord)
+			if strings.Contains(body, "["+label+"](") != strings.HasPrefix(link, "https://") {
+				t.Fatalf("unexpected record link: %s", body)
+			}
+			if strings.HasPrefix(link, "https://") && !strings.Contains(body, link) {
+				t.Fatalf("missing exact record URL: %s", body)
+			}
+			if !strings.Contains(body, "fixture followup") {
+				t.Fatalf("missing followup: %s", body)
+			}
+		})
+	}
+}
+
 func TestApprovalCardDescribesRepairWithoutPromisingNewFollowup(t *testing.T) {
 	card := approvalCard(map[string]any{
 		"status": "pending", "approval_id": "apr_1",
