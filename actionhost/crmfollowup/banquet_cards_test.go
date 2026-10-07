@@ -27,3 +27,19 @@ func TestBanquetPreviewShowsRecipientVersionAndEveryFrozenMaterial(t *testing.T)
 		}
 	}
 }
+
+func TestBanquetLabelsUseSharedTranslations(t *testing.T) {
+	for _, language := range []core.Language{core.LangEnglish, core.LangChinese, core.LangTraditionalChinese, core.LangJapanese, core.LangSpanish} {
+		i18n := core.NewI18n(language)
+		for field, key := range banquetLabels {
+			label := i18n.T(key)
+			if label == "" || label == string(key) {
+				t.Fatalf("missing %s translation for %s", language, field)
+			}
+		}
+		body := renderBanquetReceipt(map[string]any{"venue": "Fixture hall", "url": "https://example.feishu.cn/base/test"}, i18n)
+		if !strings.Contains(body, i18n.T(core.MsgBanquetVenue)) || !strings.Contains(body, i18n.T(core.MsgBanquetOpenRecord)) {
+			t.Fatalf("card bypassed %s translations: %s", language, body)
+		}
+	}
+}

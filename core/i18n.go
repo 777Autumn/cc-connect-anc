@@ -725,6 +725,26 @@ const (
 	MsgCRMCancelButton                    MsgKey = "crm_cancel_button"
 	MsgCRMReceiptFollowupHeading          MsgKey = "crm_receipt_followup_heading"
 	MsgCRMReceiptCustomerHeading          MsgKey = "crm_receipt_customer_heading"
+	MsgBanquetVersion                     MsgKey = "banquet_version"
+	MsgBanquetRecipient                   MsgKey = "banquet_recipient"
+	MsgBanquetStatus                      MsgKey = "banquet_status"
+	MsgBanquetMissing                     MsgKey = "banquet_missing"
+	MsgBanquetReturnReason                MsgKey = "banquet_return_reason"
+	MsgBanquetMaterials                   MsgKey = "banquet_materials"
+	MsgBanquetName                        MsgKey = "banquet_name"
+	MsgBanquetNumber                      MsgKey = "banquet_number"
+	MsgBanquetSource                      MsgKey = "banquet_source"
+	MsgBanquetBanquetDate                 MsgKey = "banquet_banquet_date"
+	MsgBanquetDateNote                    MsgKey = "banquet_date_note"
+	MsgBanquetDateStatus                  MsgKey = "banquet_date_status"
+	MsgBanquetSession                     MsgKey = "banquet_session"
+	MsgBanquetVenue                       MsgKey = "banquet_venue"
+	MsgBanquetEstimatedTables             MsgKey = "banquet_estimated_tables"
+	MsgBanquetBudget                      MsgKey = "banquet_budget"
+	MsgBanquetVisitAt                     MsgKey = "banquet_visit_at"
+	MsgBanquetVisitedAt                   MsgKey = "banquet_visited_at"
+	MsgBanquetFollowupStatus              MsgKey = "banquet_followup_status"
+	MsgBanquetOpenRecord                  MsgKey = "banquet_open_record"
 	MsgCRMOpenCustomer                    MsgKey = "crm_open_customer"
 	MsgCRMFieldVerificationHeading        MsgKey = "crm_field_verification_heading"
 	MsgCRMOperationNoteFmt                MsgKey = "crm_operation_note_fmt"
@@ -830,7 +850,34 @@ const (
 	MsgConnectionWorkExpired    MsgKey = "connection_work_expired"
 )
 
+const (
+	MsgBanquetApprovalTitle MsgKey = "banquet_approval_title"
+	MsgBanquetVerifiedBody  MsgKey = "banquet_verified_body"
+)
+
 var messages = map[MsgKey]map[Language]string{
+	MsgBanquetApprovalTitle:   {LangEnglish: "Approval required: banquet CRM", LangChinese: "待审批：婚宴 CRM", LangTraditionalChinese: "待審批：婚宴 CRM", LangJapanese: "承認待ち：宴会 CRM", LangSpanish: "Pendiente: CRM de banquetes"},
+	MsgBanquetVerifiedBody:    {LangEnglish: "Saved and verified by reading the CRM record.", LangChinese: "已写入，并读回 CRM 记录核实。", LangTraditionalChinese: "已寫入，並讀回 CRM 記錄核實。", LangJapanese: "CRM 記録を保存し、再読込で確認しました。", LangSpanish: "Guardado y verificado mediante la lectura del CRM."},
+	MsgBanquetVersion:         {LangEnglish: "Handoff version", LangChinese: "交接版本", LangTraditionalChinese: "交接版本", LangJapanese: "引継ぎ版", LangSpanish: "Versión"},
+	MsgBanquetRecipient:       {LangEnglish: "Named recipient", LangChinese: "指定接手人", LangTraditionalChinese: "指定接手人", LangJapanese: "引継ぎ先", LangSpanish: "Destinatario"},
+	MsgBanquetStatus:          {LangEnglish: "Acknowledgment status", LangChinese: "确认状态", LangTraditionalChinese: "確認狀態", LangJapanese: "確認状況", LangSpanish: "Confirmación"},
+	MsgBanquetMissing:         {LangEnglish: "Missing information", LangChinese: "待补事项", LangTraditionalChinese: "待補事項", LangJapanese: "不足事項", LangSpanish: "Información pendiente"},
+	MsgBanquetReturnReason:    {LangEnglish: "Return reason", LangChinese: "退回原因", LangTraditionalChinese: "退回原因", LangJapanese: "差戻し理由", LangSpanish: "Motivo de devolución"},
+	MsgBanquetMaterials:       {LangEnglish: "Exact material versions", LangChinese: "材料及确切版本", LangTraditionalChinese: "材料及確切版本", LangJapanese: "資料と版", LangSpanish: "Materiales y versiones"},
+	MsgBanquetName:            {LangEnglish: "Banquet", LangChinese: "宴会名称", LangTraditionalChinese: "宴會名稱", LangJapanese: "宴会名", LangSpanish: "Banquete"},
+	MsgBanquetNumber:          {LangEnglish: "Business number", LangChinese: "业务编号", LangTraditionalChinese: "業務編號", LangJapanese: "案件番号", LangSpanish: "Número"},
+	MsgBanquetSource:          {LangEnglish: "Source", LangChinese: "来源", LangTraditionalChinese: "來源", LangJapanese: "流入元", LangSpanish: "Origen"},
+	MsgBanquetBanquetDate:     {LangEnglish: "Banquet date", LangChinese: "宴会日期", LangTraditionalChinese: "宴會日期", LangJapanese: "宴会日", LangSpanish: "Fecha"},
+	MsgBanquetDateNote:        {LangEnglish: "Unconfirmed date details", LangChinese: "日期待确认说明", LangTraditionalChinese: "日期待確認說明", LangJapanese: "日付の未確認事項", LangSpanish: "Fecha por confirmar"},
+	MsgBanquetDateStatus:      {LangEnglish: "Date certainty", LangChinese: "日期确认状态", LangTraditionalChinese: "日期確認狀態", LangJapanese: "日付の確定状況", LangSpanish: "Confirmación de fecha"},
+	MsgBanquetSession:         {LangEnglish: "Time slot", LangChinese: "宴会时段", LangTraditionalChinese: "宴會時段", LangJapanese: "時間帯", LangSpanish: "Horario"},
+	MsgBanquetVenue:           {LangEnglish: "Venue", LangChinese: "场地", LangTraditionalChinese: "場地", LangJapanese: "会場", LangSpanish: "Lugar"},
+	MsgBanquetEstimatedTables: {LangEnglish: "Estimated tables", LangChinese: "预计桌数", LangTraditionalChinese: "預計桌數", LangJapanese: "予定卓数", LangSpanish: "Mesas estimadas"},
+	MsgBanquetBudget:          {LangEnglish: "Budget", LangChinese: "预算", LangTraditionalChinese: "預算", LangJapanese: "予算", LangSpanish: "Presupuesto"},
+	MsgBanquetVisitAt:         {LangEnglish: "Scheduled visit", LangChinese: "到店安排", LangTraditionalChinese: "到店安排", LangJapanese: "来店予定", LangSpanish: "Visita prevista"},
+	MsgBanquetVisitedAt:       {LangEnglish: "Actual visit", LangChinese: "实际到店时间", LangTraditionalChinese: "實際到店時間", LangJapanese: "実際の来店日時", LangSpanish: "Visita realizada"},
+	MsgBanquetFollowupStatus:  {LangEnglish: "Follow-up status", LangChinese: "跟进状态", LangTraditionalChinese: "跟進狀態", LangJapanese: "フォロー状況", LangSpanish: "Estado de seguimiento"},
+	MsgBanquetOpenRecord:      {LangEnglish: "Open record", LangChinese: "打开记录", LangTraditionalChinese: "開啟記錄", LangJapanese: "記録を開く", LangSpanish: "Abrir registro"},
 	MsgConnectionUnavailable:  {LangEnglish: "The personal connection could not be verified. Try connection status later.", LangChinese: "暂时无法核验个人连接，请稍后发送“连接状态”。", LangTraditionalChinese: "暫時無法核驗個人連接，請稍後傳送「連接狀態」。", LangJapanese: "個人接続を確認できません。後でもう一度接続状況を確認してください。", LangSpanish: "No se pudo verificar la conexión personal. Consulte su estado más tarde."},
 	MsgConnectionPending:      {LangEnglish: "Authorize your own Feishu account using the link. Then send: connection status", LangChinese: "请打开链接，用你本人的飞书账号完成授权，然后回复“连接状态”。", LangTraditionalChinese: "請開啟連結，用你本人的飛書帳號完成授權，然後回覆「連接狀態」。", LangJapanese: "リンクから自分のFeishuアカウントを認証し、その後 connection status と送信してください。", LangSpanish: "Autorice su propia cuenta de Feishu con el enlace. Después envíe: connection status"},
 	MsgConnectionReady:        {LangEnglish: "Your Feishu connection is ready. You can continue working.", LangChinese: "你的飞书已连接，可以继续交办工作。", LangTraditionalChinese: "你的飛書已連接，可以繼續交辦工作。", LangJapanese: "Feishuに接続しました。作業を依頼できます。", LangSpanish: "Su conexión con Feishu está lista. Puede continuar trabajando."},

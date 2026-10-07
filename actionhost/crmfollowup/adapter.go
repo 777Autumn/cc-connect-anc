@@ -532,7 +532,7 @@ func approvalCard(result map[string]any, lang core.Language) *core.Card {
 	}
 	b := core.NewCard().Title(i18n.T(title), "blue")
 	if strings.HasPrefix(text(preview["operation_type"]), "banquet_") {
-		b.Title(banquetText(i18n, [5]string{"Approval required: banquet CRM", "待审批：婚宴 CRM", "待審批：婚宴 CRM", "承認待ち：宴会 CRM", "Pendiente: CRM de banquetes"}), "blue")
+		b.Title(i18n.T(core.MsgBanquetApprovalTitle), "blue")
 	}
 	b.Markdown(renderPreview(preview, i18n))
 	b.Divider().ButtonsEqual(
@@ -722,7 +722,7 @@ func receiptMessage(status, code string, i18n *core.I18n) string {
 	case "verified":
 		switch code {
 		case "banquet_write_verified", "handoff_write_verified":
-			return banquetText(i18n, [5]string{"Saved and verified by reading the CRM record.", "已写入，并读回 CRM 记录核实。", "已寫入，並讀回 CRM 記錄核實。", "CRM 記録を保存し、再読込で確認しました。", "Guardado y verificado mediante la lectura del CRM."})
+			return i18n.T(core.MsgBanquetVerifiedBody)
 		case "followup_and_customer_verified":
 			key = core.MsgCRMReceiptVerifiedBody
 		case "customer_created_verified":
