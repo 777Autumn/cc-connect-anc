@@ -563,6 +563,9 @@ func (h *Host) Tool(ctx context.Context, command string, input json.RawMessage, 
 	if !validPrincipal(principal) || workID == "" {
 		return fileRefusal(ErrScope)
 	}
+	if command == "host-handoff-check" {
+		return h.checkHandoffSnapshots(ctx, principal, workID, input)
+	}
 	if command == "host-case-import" {
 		var request struct {
 			Receipt       string `json:"receipt"`

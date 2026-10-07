@@ -12,12 +12,19 @@ import (
 // the ledger. A stage returns the same canonical facts to model and renderer.
 // No filesystem marker, permission response, or agent stop is involved.
 func (a *Adapter) Tool(ctx context.Context, command string, input json.RawMessage, principal core.ActionPrincipal, token string, lang core.Language) (map[string]any, *core.ActionHostResult, error) {
-	stages := command == "stage" || command == "stage-customer-create" || command == "stage-customer-update"
+	stages := command == "stage" || command == "stage-customer-create" || command == "stage-customer-update" || command == "stage-banquet-create" || command == "stage-banquet-update" || command == "stage-banquet-followup" || command == "stage-handoff-submit" || command == "stage-handoff-accept" || command == "stage-handoff-return"
 	caseTool := command == "case-list" || command == "case-read" || command == "case-update" || command == "case-member-add" || command == "case-publish" || command == "case-artifact" || command == "case-access" || command == "case-result"
-	if !a.toolsEnabled || token == "" || (!caseTool && !stages && command != "open" && command != "customer" && command != "customers" && command != "result" && command != "assignee") {
+	if !a.toolsEnabled || token == "" || (!caseTool && !stages && command != "open" && command != "customer" && command != "customers" && command != "banquet" && command != "banquets" && command != "handoff" && command != "result" && command != "assignee") {
 		return map[string]any{"status": "blocked", "code": "unsupported_tool_or_session"}, nil, nil
 	}
 	payload := map[string]any{"command": command, "request": input, "principal": principal}
+	if command == "stage-handoff-submit" {
+		binding, ok := core.TrustedBanquetContext(ctx)
+		if !ok {
+			return map[string]any{"status": "blocked", "code": "handoff_source_unavailable"}, nil, nil
+		}
+		payload["handoff_context"] = binding
+	}
 	if caseTool {
 		binding, ok := core.TrustedCaseContext(ctx)
 		if !ok {
@@ -25,7 +32,7 @@ func (a *Adapter) Tool(ctx context.Context, command string, input json.RawMessag
 		}
 		payload["case_context"] = binding
 	}
-	if stages && a.planBinding != nil {
+	if (command == "stage" || command == "stage-customer-create" || command == "stage-customer-update") && a.planBinding != nil {
 		if binding := a.planBinding(principal); binding != nil {
 			payload["plan_reminder_binding"] = binding
 		}
@@ -41,6 +48,11 @@ func (a *Adapter) Tool(ctx context.Context, command string, input json.RawMessag
 	card.Kind = Kind
 	card.Card = approvalCard(data, lang)
 	return data, &card, nil
+}
+
+// HandoffAccess is a host-only file authorization call, not a model command.
+func (a *Adapter) HandoffAccess(ctx context.Context, principal core.ActionPrincipal, workID, publicationID string) (map[string]any, error) {
+	return a.call(ctx, "host-handoff-access", map[string]any{"principal": principal, "work_id": workID, "publication_id": publicationID}, "")
 }
 
 // ConfigurePlanBinding runs only at host startup. No model field selects a route.

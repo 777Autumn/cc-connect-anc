@@ -386,6 +386,14 @@ func (a *Adapter) Claim(ctx context.Context, approvalID string, decision core.Ac
 	response.Kind = Kind
 	response.ApprovalID = approvalID
 	execute, _ := result["execute"].(bool)
+	if execute && result["file_check"] != nil {
+		data, encodeErr := json.Marshal(result["file_check"])
+		var check core.BanquetFileCheck
+		if encodeErr != nil || json.Unmarshal(data, &check) != nil {
+			return core.ActionHostResult{}, false, errors.New("invalid handoff file proof")
+		}
+		response.HandoffFiles = &check
+	}
 	if response.Status == "executing" {
 		// Only the callback that won the durable CAS may advance the card to
 		// "executing". A duplicate or conflicting click while that worker is
@@ -425,10 +433,10 @@ func (a *Adapter) Execute(ctx context.Context, approvalID string, principal core
 	if approvalID == "" {
 		return core.ActionHostResult{}, errors.New("approval id is required")
 	}
-	payload := struct {
-		ApprovalID string               `json:"approval_id"`
-		Principal  core.ActionPrincipal `json:"principal"`
-	}{approvalID, principal}
+	payload := map[string]any{"approval_id": approvalID, "principal": principal}
+	if verified, present := core.BanquetFilesVerified(ctx); present {
+		payload["handoff_files_verified"] = verified
+	}
 	result, err := a.call(ctx, "host-execute", payload, "")
 	if err != nil {
 		return core.ActionHostResult{}, err
@@ -523,6 +531,9 @@ func approvalCard(result map[string]any, lang core.Language) *core.Card {
 		title = core.MsgCRMUpdateApprovalTitle
 	}
 	b := core.NewCard().Title(i18n.T(title), "blue")
+	if strings.HasPrefix(text(preview["operation_type"]), "banquet_") {
+		b.Title(banquetText(i18n, [5]string{"Approval required: banquet CRM", "待审批：婚宴 CRM", "待審批：婚宴 CRM", "承認待ち：宴会 CRM", "Pendiente: CRM de banquetes"}), "blue")
+	}
 	b.Markdown(renderPreview(preview, i18n))
 	b.Divider().ButtonsEqual(
 		actionButton(i18n.T(core.MsgCRMApproveButton), "primary", approvalID, core.ActionApprove, lang),
@@ -618,6 +629,12 @@ func receiptCard(result map[string]any, lang core.Language) *core.Card {
 	} else if text(result["child_change_id"]) != "" || next != "" {
 		b.Markdown(i18n.T(core.MsgCRMFollowupSeparateBody))
 	}
+	if row, ok := result["banquet"].(map[string]any); ok {
+		b.Divider().Markdown(renderBanquetReceipt(row, i18n))
+	}
+	if row, ok := result["handoff"].(map[string]any); ok {
+		b.Divider().Markdown(renderHandoff(row, i18n))
+	}
 	if profile, ok := result["customer_profile"].(map[string]any); ok {
 		b.Divider().Markdown(renderCustomerProfile(profile, true, i18n))
 	}
@@ -704,6 +721,8 @@ func receiptMessage(status, code string, i18n *core.I18n) string {
 	switch status {
 	case "verified":
 		switch code {
+		case "banquet_write_verified", "handoff_write_verified":
+			return banquetText(i18n, [5]string{"Saved and verified by reading the CRM record.", "已写入，并读回 CRM 记录核实。", "已寫入，並讀回 CRM 記錄核實。", "CRM 記録を保存し、再読込で確認しました。", "Guardado y verificado mediante la lectura del CRM."})
 		case "followup_and_customer_verified":
 			key = core.MsgCRMReceiptVerifiedBody
 		case "customer_created_verified":
@@ -754,6 +773,9 @@ func receiptMessage(status, code string, i18n *core.I18n) string {
 }
 
 func renderPreview(preview map[string]any, i18n *core.I18n) string {
+	if strings.HasPrefix(text(preview["operation_type"]), "banquet_") {
+		return renderBanquet(preview, i18n)
+	}
 	if op := text(preview["operation_type"]); op == "customer_create" || op == "customer_update" {
 		return renderCustomerPreview(preview, i18n)
 	}

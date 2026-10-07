@@ -117,7 +117,17 @@ func ActionToolsHandler(engines ...*Engine) http.Handler {
 				return
 			}
 		}
+		if command == "stage-handoff-submit" {
+			ctx, err = e.banquetSubmissionContext(ctx, principal, connectionWorkID, input)
+			if err != nil {
+				writeActionToolResult(w, http.StatusForbidden, map[string]any{"status": "blocked", "code": "handoff_materials_unavailable"})
+				return
+			}
+		}
 		result, approval, err := tools.Tool(ctx, command, input, principal, token, e.i18n.CurrentLang())
+		if err == nil && command == "handoff" && result["status"] == "found" {
+			err = e.importHandoffFiles(ctx, token, principal, result)
+		}
 		if err == nil && result != nil && result["status"] == "needs_confirmation" && isCaseCommand(command) {
 			result, err = e.askCaseQuestion(ctx, command, input, principal, platform, replyCtx, result)
 		}
@@ -219,7 +229,7 @@ func decodeActionToolRequest(r io.Reader) (string, json.RawMessage, error) {
 	if err := json.Unmarshal(fields["command"], &command); err != nil {
 		return "", nil, err
 	}
-	if !isFileWorkCommand(command) && !isCaseCommand(command) && command != "open" && command != "customer" && command != "customers" && command != "stage" && command != "result" && command != "assignee" && command != "stage-customer-create" && command != "stage-customer-update" && command != "knowledge_catalog" && command != "knowledge_search" && command != "knowledge_read" && command != "knowledge_propose" && command != "knowledge_status" && command != "reminder-create" && command != "reminder-list" && command != "reminder-update" && command != "reminder-cancel" {
+	if !isFileWorkCommand(command) && !isCaseCommand(command) && !isBanquetCommand(command) && command != "open" && command != "customer" && command != "customers" && command != "stage" && command != "result" && command != "assignee" && command != "stage-customer-create" && command != "stage-customer-update" && command != "knowledge_catalog" && command != "knowledge_search" && command != "knowledge_read" && command != "knowledge_propose" && command != "knowledge_status" && command != "reminder-create" && command != "reminder-list" && command != "reminder-update" && command != "reminder-cancel" {
 		return "", nil, errors.New("unsupported tool")
 	}
 	input := bytes.TrimSpace(fields["input"])
@@ -239,4 +249,8 @@ func writeActionToolResult(w http.ResponseWriter, status int, result map[string]
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
 	_, _ = w.Write(data)
+}
+
+func isBanquetCommand(command string) bool {
+	return command == "banquet" || command == "banquets" || command == "stage-banquet-create" || command == "stage-banquet-update" || command == "stage-banquet-followup" || command == "handoff" || command == "stage-handoff-submit" || command == "stage-handoff-accept" || command == "stage-handoff-return"
 }

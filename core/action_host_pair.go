@@ -89,6 +89,9 @@ func findActionCommand(host ActionHost, command string) ActionHost {
 func ValidateActionHosts(host ActionHost) error {
 	kinds := map[string]bool{}
 	commands := map[string]bool{}
+	for _, command := range []string{"banquet", "banquets", "stage-banquet-create", "stage-banquet-update", "stage-banquet-followup", "handoff", "stage-handoff-submit", "stage-handoff-accept", "stage-handoff-return"} {
+		commands[command] = true
+	}
 	for _, command := range []string{"open", "customer", "customers", "stage", "result", "assignee", "stage-customer-create", "stage-customer-update", "case-list", "case-read", "case-update", "case-member-add", "case-publish"} {
 		commands[command] = true
 	}
