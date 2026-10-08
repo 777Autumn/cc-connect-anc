@@ -57,10 +57,11 @@ func (e *capacityEvents) write(kind string, data any) {
 // host callback; these receipts never claim delivery to an actual Feishu user.
 type capacityPlatform struct {
 	core.Platform
-	root    string
-	events  *capacityEvents
-	mu      sync.Mutex
-	replies int
+	root       string
+	events     *capacityEvents
+	mu         sync.Mutex
+	replies    int
+	captureErr error
 }
 
 func (*capacityPlatform) Name() string                        { return "feishu" }
@@ -80,7 +81,15 @@ func (p *capacityPlatform) Send(ctx context.Context, route any, content string) 
 func (*capacityPlatform) FileReplyRoute(route any) (json.RawMessage, error) {
 	return json.Marshal(route)
 }
-func (p *capacityPlatform) SendFileWithReceipt(_ context.Context, route json.RawMessage, file core.FileAttachment, id string) (string, error) {
+func (p *capacityPlatform) SendFileWithReceipt(_ context.Context, route json.RawMessage, file core.FileAttachment, id string) (receipt string, resultErr error) {
+	defer func() {
+		if resultErr != nil {
+			p.mu.Lock()
+			p.captureErr = resultErr
+			p.mu.Unlock()
+			p.events.write("file_capture_failed", map[string]any{"error": resultErr.Error()})
+		}
+	}()
 	if filepath.Base(file.FileName) != file.FileName || file.FileName == "" {
 		return "", core.ErrFileNotSubmitted
 	}
@@ -205,6 +214,7 @@ func TestCapacityNative(t *testing.T) {
 		}
 	}
 	used := map[int]bool{}
+	ids := map[string]bool{}
 	for _, j := range m.Jobs {
 		if j.Entrance < 0 || j.Entrance >= 4*m.Cohorts || used[j.Entrance] || j.ID == "" || j.Prompt == "" || j.DeadlineSeconds < 1 || j.DeadlineSeconds > 600 {
 			t.Fatal("invalid job or duplicate entrance")
@@ -212,6 +222,12 @@ func TestCapacityNative(t *testing.T) {
 		used[j.Entrance] = true
 		if j.Queries != 0 && (j.Queries != 3 || j.Entrance%2 != 1) {
 			t.Fatal("three sequential probes require a shared read entrance")
+		}
+		for _, id := range capacityJobIDs(j) {
+			if ids[id] {
+				t.Fatal("duplicate expanded task ID")
+			}
+			ids[id] = true
 		}
 	}
 	processes, err := exec.Command("/bin/ps", "-axo", "uid=,comm=").Output()
@@ -331,14 +347,10 @@ func TestCapacityNative(t *testing.T) {
 		go func(j capacityJob) {
 			defer wg.Done()
 			<-barrier
-			count := j.Queries
-			if count == 0 {
-				count = 1
-			}
-			for n := 0; n < count; n++ {
+			for _, id := range capacityJobIDs(j) {
 				probe := j
-				if count > 1 {
-					probe.ID = fmt.Sprintf("%s-%d", j.ID, n+1)
+				probe.ID = id
+				if j.Queries > 1 {
 					probe.Prompt += fmt.Sprintf("\n本次查询编号 %s；必须重新读取，不复述上一轮。", probe.ID)
 				}
 				if !capacityRunJob(ctx, t, probe, engines[j.Entrance], platforms[j.Entrance], events) {
@@ -387,7 +399,12 @@ func capacityRunJob(ctx context.Context, t *testing.T, j capacityJob, e *core.En
 		}
 		p.mu.Lock()
 		replied := p.replies > previousReplies
+		captureErr := p.captureErr
 		p.mu.Unlock()
+		if captureErr != nil {
+			t.Errorf("%s file evidence capture failed: %v", j.ID, captureErr)
+			break
+		}
 		if len(sessions) > 0 && !busy && replied {
 			// A refusal or EventError can also reply and unlock. Require the
 			// existing Engine EventResult receipt for this exact message ID.
@@ -409,6 +426,17 @@ func capacityRunJob(ctx context.Context, t *testing.T, j capacityJob, e *core.En
 	e.ReceiveMessage(p, &stop)
 	t.Errorf("%s cancelled or exceeded the frozen test deadline; no escalation", j.ID)
 	return false
+}
+
+func capacityJobIDs(j capacityJob) []string {
+	if j.Queries == 0 {
+		return []string{j.ID}
+	}
+	ids := make([]string, j.Queries)
+	for i := range ids {
+		ids[i] = fmt.Sprintf("%s-%d", j.ID, i+1)
+	}
+	return ids
 }
 
 func capacityCompleted(raw []byte, id string) bool {
@@ -434,5 +462,22 @@ func TestCapacityCompletionEvidence(t *testing.T) {
 	}
 	if !capacityCompleted([]byte(`{"msg":"turn complete","msg_id":"case"}`), "case") {
 		t.Fatal("matching Engine result missing")
+	}
+}
+
+func TestCapacityCaptureFailure(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "events")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	p := &capacityPlatform{root: filepath.Join(t.TempDir(), "missing"), events: &capacityEvents{file: f}}
+	_, err = p.SendFileWithReceipt(context.Background(), nil, core.FileAttachment{FileName: "test.pdf", Data: []byte("fixture")}, "id")
+	if !errors.Is(err, core.ErrFileNotSubmitted) || p.captureErr == nil {
+		t.Fatal("failed file capture must persist as a test failure")
+	}
+	ids := capacityJobIDs(capacityJob{ID: "query", Queries: 3})
+	if strings.Join(ids, ",") != "query-1,query-2,query-3" {
+		t.Fatal("expanded task IDs differ from submitted IDs")
 	}
 }
