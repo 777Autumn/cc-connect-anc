@@ -7,8 +7,10 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/user"
@@ -86,12 +88,12 @@ func (p *capacityPlatform) SendFileWithReceipt(_ context.Context, route json.Raw
 	path := filepath.Join(p.root, name)
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
-		return "", core.ErrFileNotSubmitted
+		return "", fmt.Errorf("capture file: %w: %w", core.ErrFileNotSubmitted, err)
 	}
 	_, writeErr := f.Write(file.Data)
 	closeErr := f.Close()
 	if writeErr != nil || closeErr != nil {
-		return "", core.ErrFileNotSubmitted
+		return "", fmt.Errorf("write captured file: %w: %w", core.ErrFileNotSubmitted, errors.Join(writeErr, closeErr))
 	}
 	p.events.write("fixture_file_capture", map[string]any{"route": json.RawMessage(route), "name": file.FileName, "path": path, "sha256": fmt.Sprintf("%x", sha256.Sum256(file.Data)), "bytes": len(file.Data)})
 	return "capacity-fixture-" + id, nil
@@ -285,10 +287,16 @@ func TestCapacityNative(t *testing.T) {
 		t.Fatal("exclusive tool port unavailable", err)
 	}
 	t.Cleanup(func() { _ = server.Close() })
-	go func() { _ = server.Serve() }()
 	barrier := make(chan struct{})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	go func() {
+		if err := server.Serve(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			events.write("tool_server_failed", map[string]any{"error": err.Error()})
+			t.Errorf("capacity tool server failed: %v", err)
+			cancel()
+		}
+	}()
 	// An operator can create this protected marker; models cannot write m.Root.
 	go func() {
 		warningSince := time.Time{}
@@ -381,6 +389,14 @@ func capacityRunJob(ctx context.Context, t *testing.T, j capacityJob, e *core.En
 		replied := p.replies > previousReplies
 		p.mu.Unlock()
 		if len(sessions) > 0 && !busy && replied {
+			// A refusal or EventError can also reply and unlock. Require the
+			// existing Engine EventResult receipt for this exact message ID.
+			raw, err := os.ReadFile(events.file.Name())
+			if err != nil || !capacityCompleted(raw, j.ID) {
+				events.write("missing_success_event", map[string]any{"case": j.ID})
+				t.Errorf("%s ended without a confirmed Engine result", j.ID)
+				return false
+			}
 			events.write("engine_finished", map[string]any{"case": j.ID, "elapsed_ms": time.Since(started).Milliseconds(), "quality": "requires_artifact_and_native_event_validation"})
 			return true
 		}
@@ -393,4 +409,30 @@ func capacityRunJob(ctx context.Context, t *testing.T, j capacityJob, e *core.En
 	e.ReceiveMessage(p, &stop)
 	t.Errorf("%s cancelled or exceeded the frozen test deadline; no escalation", j.ID)
 	return false
+}
+
+func capacityCompleted(raw []byte, id string) bool {
+	for _, line := range bytes.Split(raw, []byte("\n")) {
+		var event struct{ Msg, MsgID string }
+		var fields map[string]json.RawMessage
+		if json.Unmarshal(line, &fields) == nil {
+			_ = json.Unmarshal(fields["msg"], &event.Msg)
+			_ = json.Unmarshal(fields["msg_id"], &event.MsgID)
+			if event.Msg == "turn complete" && event.MsgID == id {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func TestCapacityCompletionEvidence(t *testing.T) {
+	for _, raw := range []string{`{"msg":"agent error","msg_id":"case"}`, `{"msg":"turn complete","msg_id":"other"}`, `{"kind":"platform_reply"}`} {
+		if capacityCompleted([]byte(raw), "case") {
+			t.Fatal("reply/error/another turn is not successful completion")
+		}
+	}
+	if !capacityCompleted([]byte(`{"msg":"turn complete","msg_id":"case"}`), "case") {
+		t.Fatal("matching Engine result missing")
+	}
 }
