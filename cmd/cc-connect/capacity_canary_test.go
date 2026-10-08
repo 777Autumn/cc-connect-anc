@@ -57,11 +57,41 @@ func (e *capacityEvents) write(kind string, data any) {
 // host callback; these receipts never claim delivery to an actual Feishu user.
 type capacityPlatform struct {
 	core.Platform
-	root       string
-	events     *capacityEvents
-	mu         sync.Mutex
-	replies    int
-	captureErr error
+	root           string
+	actor, chat    string
+	enabled        bool
+	authorizeReply func(core.Message, string) error
+	observeReply   func(core.Message, string) error
+	events         *capacityEvents
+	mu             sync.Mutex
+	replies        int
+	captureErr     error
+}
+
+var _ core.FileWorkReceiver = (*capacityPlatform)(nil)
+var _ core.FileReceiptSender = (*capacityPlatform)(nil)
+
+type capacityRoute struct{ Actor, Chat, Session, Message string }
+
+func (p *capacityPlatform) SetFileWorkEnabled(enabled bool, authorize func(core.Message, string) error) error {
+	if enabled && (p.actor == "" || p.chat == "" || authorize == nil) {
+		return core.ErrFileNotSubmitted
+	}
+	p.enabled, p.authorizeReply = enabled, authorize
+	return nil
+}
+func (p *capacityPlatform) SetFileWorkReplyObserver(observer func(core.Message, string) error) {
+	p.observeReply = observer
+}
+func (p *capacityPlatform) validRoute(r capacityRoute) bool {
+	return p.enabled && r.Actor == p.actor && r.Chat == p.chat && r.Session == "feishu:"+p.chat+":"+p.actor && r.Message != ""
+}
+func (p *capacityPlatform) FileWorkReplyContext(raw json.RawMessage) (any, error) {
+	var r capacityRoute
+	if json.Unmarshal(raw, &r) != nil || !p.validRoute(r) {
+		return nil, core.ErrFileNotSubmitted
+	}
+	return r, nil
 }
 
 func (*capacityPlatform) Name() string                        { return "feishu" }
@@ -69,16 +99,31 @@ func (*capacityPlatform) Start(core.MessageHandler) error     { return nil }
 func (*capacityPlatform) Stop() error                         { return nil }
 func (*capacityPlatform) SetFileWorkImagesEnabled(bool) error { return nil }
 func (p *capacityPlatform) Reply(_ context.Context, route any, content string) error {
+	r, ok := route.(capacityRoute)
+	if !ok || !p.validRoute(r) {
+		return core.ErrFileNotSubmitted
+	}
 	p.mu.Lock()
 	p.replies++
+	receipt := fmt.Sprintf("capacity-reply-%s-%d", r.Message, p.replies)
 	p.mu.Unlock()
 	p.events.write("platform_reply", map[string]any{"route": route, "text": content})
+	if p.observeReply != nil {
+		msg := core.Message{Platform: p.Name(), UserID: r.Actor, ChannelID: r.Chat, SessionKey: r.Session, MessageID: r.Message, ControlledFileWork: true}
+		if err := p.observeReply(msg, receipt); err != nil {
+			p.events.write("reply_association_failed", map[string]any{"message": r.Message, "error": err.Error()})
+		}
+	}
 	return nil
 }
 func (p *capacityPlatform) Send(ctx context.Context, route any, content string) error {
 	return p.Reply(ctx, route, content)
 }
-func (*capacityPlatform) FileReplyRoute(route any) (json.RawMessage, error) {
+func (p *capacityPlatform) FileReplyRoute(route any) (json.RawMessage, error) {
+	r, ok := route.(capacityRoute)
+	if !ok || !p.validRoute(r) {
+		return nil, core.ErrFileNotSubmitted
+	}
 	return json.Marshal(route)
 }
 func (p *capacityPlatform) SendFileWithReceipt(_ context.Context, route json.RawMessage, file core.FileAttachment, id string) (receipt string, resultErr error) {
@@ -90,6 +135,9 @@ func (p *capacityPlatform) SendFileWithReceipt(_ context.Context, route json.Raw
 			p.events.write("file_capture_failed", map[string]any{"error": resultErr.Error()})
 		}
 	}()
+	if _, err := p.FileWorkReplyContext(route); err != nil {
+		return "", err
+	}
 	if filepath.Base(file.FileName) != file.FileName || file.FileName == "" {
 		return "", core.ErrFileNotSubmitted
 	}
@@ -230,17 +278,24 @@ func TestCapacityNative(t *testing.T) {
 			ids[id] = true
 		}
 	}
+	// Preflight constructs the real hosts but returns before opening a tool
+	// listener or starting any model turn. Safe alongside the live receiver.
+	preflight := os.Getenv("ANC_CAPACITY_PREFLIGHT") == "1"
 	processes, err := exec.Command("/bin/ps", "-axo", "uid=,comm=").Output()
 	if err != nil {
 		t.Fatal("cannot verify exclusive model ownership", err)
 	}
 	for _, line := range strings.Split(string(processes), "\n") {
 		fields := strings.Fields(line)
-		if len(fields) >= 2 && fields[0] == "451" && filepath.Base(fields[1]) == "codex" {
+		if !preflight && len(fields) >= 2 && fields[0] == "451" && filepath.Base(fields[1]) == "codex" {
 			t.Fatal("an existing model owner is still running; use normal maintenance lifecycle")
 		}
 	}
-	logFile, err := os.OpenFile(filepath.Join(m.Root, "events.jsonl"), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	logName := "events.jsonl"
+	if preflight {
+		logName = "preflight.jsonl"
+	}
+	logFile, err := os.OpenFile(filepath.Join(m.Root, logName), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -261,7 +316,7 @@ func TestCapacityNative(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			platform := &capacityPlatform{root: filepath.Join(base, "delivered"), events: events}
+			platform := &capacityPlatform{root: filepath.Join(base, "delivered"), events: events, actor: p.Platforms[0].Options["allow_from"].(string), chat: p.Platforms[0].Options["allow_chat"].(string)}
 			engine := core.NewEngine(p.Name, ag, []core.Platform{platform}, filepath.Join(base, "sessions.json"), core.LangChinese)
 			closeFiles := func() {}
 			t.Cleanup(func() {
@@ -297,6 +352,10 @@ func TestCapacityNative(t *testing.T) {
 			engines = append(engines, engine)
 			platforms = append(platforms, platform)
 		}
+	}
+	if preflight {
+		events.write("host_preflight_passed", map[string]any{"engines": len(engines)})
+		return
 	}
 	server, err := core.ListenActionTools("127.0.0.1:18743", core.ActionToolsHandler(engines...))
 	if err != nil {
@@ -380,7 +439,7 @@ func capacityRunJob(ctx context.Context, t *testing.T, j capacityJob, e *core.En
 	}
 	key := "feishu:" + chat + ":" + actor
 	msg := &core.Message{Platform: "feishu", SessionKey: key, ChannelID: chat, UserID: actor, MessageID: j.ID,
-		Content: j.Prompt, ReplyCtx: j.ID, ControlledFileWork: true, FileWorkPrivate: i%2 == 0}
+		Content: j.Prompt, ReplyCtx: capacityRoute{actor, chat, key, j.ID}, ControlledFileWork: true, FileWorkPrivate: i%2 == 0}
 	events.write("submitted", map[string]any{"case": j.ID, "entrance": j.Entrance})
 	p.mu.Lock()
 	previousReplies := p.replies
@@ -471,8 +530,39 @@ func TestCapacityCaptureFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer f.Close()
-	p := &capacityPlatform{root: filepath.Join(t.TempDir(), "missing"), events: &capacityEvents{file: f}}
-	_, err = p.SendFileWithReceipt(context.Background(), nil, core.FileAttachment{FileName: "test.pdf", Data: []byte("fixture")}, "id")
+	p := &capacityPlatform{root: filepath.Join(t.TempDir(), "missing"), events: &capacityEvents{file: f}, actor: "sender-1", chat: "private-sender-1"}
+	denied := errors.New("parent denied")
+	if p.SetFileWorkEnabled(true, nil) == nil {
+		t.Fatal("missing host guard accepted")
+	}
+	if err := p.SetFileWorkEnabled(true, func(core.Message, string) error { return denied }); err != nil {
+		t.Fatal(err)
+	}
+	if !errors.Is(p.authorizeReply(core.Message{}, "parent"), denied) {
+		t.Fatal("host guard replaced")
+	}
+	r := capacityRoute{p.actor, p.chat, "feishu:" + p.chat + ":" + p.actor, "id"}
+	raw, err := p.FileReplyRoute(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.FileWorkReplyContext(raw); err != nil {
+		t.Fatal(err)
+	}
+	wrong := r
+	wrong.Actor = "sender-2"
+	if _, err := p.FileReplyRoute(wrong); err == nil {
+		t.Fatal("cross actor route accepted")
+	}
+	called := false
+	p.SetFileWorkReplyObserver(func(m core.Message, receipt string) error {
+		called = m.UserID == p.actor && m.MessageID == "id" && receipt != ""
+		return nil
+	})
+	if err := p.Reply(context.Background(), r, "test"); err != nil || !called {
+		t.Fatal("real host observer not invoked", err)
+	}
+	_, err = p.SendFileWithReceipt(context.Background(), raw, core.FileAttachment{FileName: "test.pdf", Data: []byte("fixture")}, "id")
 	if !errors.Is(err, core.ErrFileNotSubmitted) || p.captureErr == nil {
 		t.Fatal("failed file capture must persist as a test failure")
 	}
