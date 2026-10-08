@@ -459,6 +459,10 @@ func capacityWatchStop(ctx context.Context, cancel context.CancelFunc, root stri
 
 func capacityRunJob(ctx context.Context, t *testing.T, j capacityJob, e *core.Engine, p *capacityPlatform, events *capacityEvents) bool {
 	t.Helper()
+	if err := ctx.Err(); err != nil {
+		t.Errorf("%s cancelled before submission: %v", j.ID, err)
+		return false
+	}
 	i := j.Entrance % 4
 	actor, chat := p.actor, p.chat
 	key := "feishu:" + chat + ":" + actor
@@ -469,9 +473,6 @@ func capacityRunJob(ctx context.Context, t *testing.T, j capacityJob, e *core.En
 	previousReplies := p.replies
 	p.mu.Unlock()
 	started := time.Now()
-	if ctx.Err() != nil {
-		return false
-	}
 	e.ReceiveMessage(p, msg)
 	deadline := started.Add(time.Duration(j.DeadlineSeconds) * time.Second)
 	for ctx.Err() == nil && time.Now().Before(deadline) {
@@ -545,6 +546,35 @@ func TestCapacityCompletionEvidence(t *testing.T) {
 	}
 	if !capacityCompleted([]byte(`{"msg":"turn complete","msg_id":"case"}`), "case") {
 		t.Fatal("matching Engine result missing")
+	}
+}
+
+func TestCapacityPreCancelledJobFails(t *testing.T) {
+	if os.Getenv("ANC_CAPACITY_CANCEL_TEST_CHILD") == "1" {
+		f, err := os.CreateTemp(t.TempDir(), "events")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer f.Close()
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		// No Engine, model, host listener or credentials: cancellation must
+		// fail the test before dispatch can dereference the nil Engine.
+		if capacityRunJob(ctx, t, capacityJob{ID: "cancelled-probe"}, nil, &capacityPlatform{}, &capacityEvents{file: f}) {
+			t.Fatal("cancelled job reported completion")
+		}
+		return
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(executable, "-test.run=^TestCapacityPreCancelledJobFails$")
+	cmd.Env = append(os.Environ(), "ANC_CAPACITY_CANCEL_TEST_CHILD=1")
+	out, err := cmd.CombinedOutput()
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 1 || !bytes.Contains(out, []byte("cancelled before submission")) {
+		t.Fatalf("expected the cancelled job to fail its test, got %v: %s", err, out)
 	}
 }
 
