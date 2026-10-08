@@ -53,6 +53,12 @@ func (e *capacityEvents) write(kind string, data any) {
 	}
 }
 
+func (e *capacityEvents) close() error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return errors.Join(e.err, e.file.Sync(), e.file.Close())
+}
+
 // Only Feishu input/output is substituted. File bytes are copied from the real
 // host callback; these receipts never claim delivery to an actual Feishu user.
 type capacityPlatform struct {
@@ -111,6 +117,9 @@ func (p *capacityPlatform) Reply(_ context.Context, route any, content string) e
 	if p.observeReply != nil {
 		msg := core.Message{Platform: p.Name(), UserID: r.Actor, ChannelID: r.Chat, SessionKey: r.Session, MessageID: r.Message, ControlledFileWork: true}
 		if err := p.observeReply(msg, receipt); err != nil {
+			p.mu.Lock()
+			p.captureErr = err
+			p.mu.Unlock()
 			p.events.write("reply_association_failed", map[string]any{"message": r.Message, "error": err.Error()})
 		}
 	}
@@ -217,6 +226,76 @@ func capacityConfig(t *testing.T, m capacityManifest, source *config.Config, coh
 // TestCapacityNative is opt-in and requires a protected pre-provisioned manifest
 // and an exclusive maintenance window. It cannot start a Feishu receiver.
 func TestCapacityNative(t *testing.T) {
+	m, source, preflight := capacityLoadManifest(t)
+	logName := "events.jsonl"
+	if preflight {
+		logName = "preflight.jsonl"
+	}
+	logFile, err := os.OpenFile(filepath.Join(m.Root, logName), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := &capacityEvents{file: logFile}
+	t.Cleanup(func() {
+		if err := events.close(); err != nil {
+			t.Errorf("capacity evidence persistence: %v", err)
+		}
+	})
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(logFile, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	engines, platforms := capacityEngines(t, m, source, events)
+	if preflight {
+		events.write("host_preflight_passed", map[string]any{"engines": len(engines)})
+		return
+	}
+	server, err := core.ListenActionTools("127.0.0.1:18743", core.ActionToolsHandler(engines...))
+	if err != nil {
+		t.Fatal("exclusive tool port unavailable", err)
+	}
+	t.Cleanup(func() { _ = server.Close() })
+	barrier := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		if err := server.Serve(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			events.write("tool_server_failed", map[string]any{"error": err.Error()})
+			t.Errorf("capacity tool server failed: %v", err)
+			cancel()
+		}
+	}()
+	go capacityWatchStop(ctx, cancel, m.Root, events)
+	var wg sync.WaitGroup
+	for _, job := range m.Jobs {
+		wg.Add(1)
+		go func(j capacityJob) {
+			defer wg.Done()
+			<-barrier
+			for _, id := range capacityJobIDs(j) {
+				probe := j
+				probe.ID = id
+				if j.Queries > 1 {
+					probe.Prompt += fmt.Sprintf("\n本次查询编号 %s；必须重新读取，不复述上一轮。", probe.ID)
+				}
+				if !capacityRunJob(ctx, t, probe, engines[j.Entrance], platforms[j.Entrance], events) {
+					cancel()
+					return
+				}
+			}
+		}(job)
+	}
+	close(barrier)
+	wg.Wait()
+	events.mu.Lock()
+	err = events.err
+	events.mu.Unlock()
+	if err != nil {
+		t.Fatal("capacity evidence write failed", err)
+	}
+}
+
+func capacityLoadManifest(t *testing.T) (capacityManifest, *config.Config, bool) {
+	t.Helper()
 	path := os.Getenv("ANC_CAPACITY_MANIFEST")
 	if path == "" {
 		t.Skip("requires reviewed exclusive-window capacity manifest")
@@ -291,19 +370,11 @@ func TestCapacityNative(t *testing.T) {
 			t.Fatal("an existing model owner is still running; use normal maintenance lifecycle")
 		}
 	}
-	logName := "events.jsonl"
-	if preflight {
-		logName = "preflight.jsonl"
-	}
-	logFile, err := os.OpenFile(filepath.Join(m.Root, logName), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-	if err != nil {
-		t.Fatal(err)
-	}
-	events := &capacityEvents{file: logFile}
-	t.Cleanup(func() { logFile.Close() })
-	previous := slog.Default()
-	slog.SetDefault(slog.New(slog.NewJSONHandler(logFile, nil)))
-	t.Cleanup(func() { slog.SetDefault(previous) })
+	return m, source, preflight
+}
+
+func capacityEngines(t *testing.T, m capacityManifest, source *config.Config, events *capacityEvents) ([]*core.Engine, []*capacityPlatform) {
+	t.Helper()
 	engines := []*core.Engine{}
 	platforms := []*capacityPlatform{}
 	for cohort := 0; cohort < m.Cohorts; cohort++ {
@@ -353,90 +424,43 @@ func TestCapacityNative(t *testing.T) {
 			platforms = append(platforms, platform)
 		}
 	}
-	if preflight {
-		events.write("host_preflight_passed", map[string]any{"engines": len(engines)})
-		return
-	}
-	server, err := core.ListenActionTools("127.0.0.1:18743", core.ActionToolsHandler(engines...))
-	if err != nil {
-		t.Fatal("exclusive tool port unavailable", err)
-	}
-	t.Cleanup(func() { _ = server.Close() })
-	barrier := make(chan struct{})
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go func() {
-		if err := server.Serve(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			events.write("tool_server_failed", map[string]any{"error": err.Error()})
-			t.Errorf("capacity tool server failed: %v", err)
-			cancel()
-		}
-	}()
+	return engines, platforms
+}
+
+func capacityWatchStop(ctx context.Context, cancel context.CancelFunc, root string, events *capacityEvents) {
 	// An operator can create this protected marker; models cannot write m.Root.
-	go func() {
-		warningSince := time.Time{}
-		ticker := time.NewTicker(5 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
+
+	warningSince := time.Time{}
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			_, markerErr := os.Lstat(filepath.Join(root, "CANCEL"))
+			probeCtx, probeCancel := context.WithTimeout(ctx, 3*time.Second)
+			pressure, probeErr := exec.CommandContext(probeCtx, "/usr/sbin/sysctl", "-n", "kern.memorystatus_vm_pressure_level").Output()
+			probeCancel()
+			level := strings.TrimSpace(string(pressure))
+			if level == "2" && warningSince.IsZero() {
+				warningSince = time.Now()
+			} else if level != "2" {
+				warningSince = time.Time{}
+			}
+			if markerErr == nil || !os.IsNotExist(markerErr) || probeErr != nil || (level != "1" && level != "2") || (!warningSince.IsZero() && time.Since(warningSince) >= time.Minute) {
+				events.write("stop_requested", map[string]any{"pressure": level, "operator_marker": markerErr == nil, "probe_failed": probeErr != nil})
+				cancel()
 				return
-			case <-ticker.C:
-				_, markerErr := os.Lstat(filepath.Join(m.Root, "CANCEL"))
-				probeCtx, probeCancel := context.WithTimeout(ctx, 3*time.Second)
-				pressure, probeErr := exec.CommandContext(probeCtx, "/usr/sbin/sysctl", "-n", "kern.memorystatus_vm_pressure_level").Output()
-				probeCancel()
-				level := strings.TrimSpace(string(pressure))
-				if level == "2" && warningSince.IsZero() {
-					warningSince = time.Now()
-				} else if level != "2" {
-					warningSince = time.Time{}
-				}
-				if markerErr == nil || !os.IsNotExist(markerErr) || probeErr != nil || (level != "1" && level != "2") || (!warningSince.IsZero() && time.Since(warningSince) >= time.Minute) {
-					events.write("stop_requested", map[string]any{"pressure": level, "operator_marker": markerErr == nil, "probe_failed": probeErr != nil})
-					cancel()
-					return
-				}
 			}
 		}
-	}()
-	var wg sync.WaitGroup
-	for _, job := range m.Jobs {
-		wg.Add(1)
-		go func(j capacityJob) {
-			defer wg.Done()
-			<-barrier
-			for _, id := range capacityJobIDs(j) {
-				probe := j
-				probe.ID = id
-				if j.Queries > 1 {
-					probe.Prompt += fmt.Sprintf("\n本次查询编号 %s；必须重新读取，不复述上一轮。", probe.ID)
-				}
-				if !capacityRunJob(ctx, t, probe, engines[j.Entrance], platforms[j.Entrance], events) {
-					cancel()
-					return
-				}
-			}
-		}(job)
-	}
-	close(barrier)
-	wg.Wait()
-	events.mu.Lock()
-	err = events.err
-	events.mu.Unlock()
-	if err != nil {
-		t.Fatal("capacity evidence write failed", err)
 	}
 }
 
 func capacityRunJob(ctx context.Context, t *testing.T, j capacityJob, e *core.Engine, p *capacityPlatform, events *capacityEvents) bool {
 	t.Helper()
 	i := j.Entrance % 4
-	actor := fmt.Sprintf("sender-%d", i/2+1)
-	chat := "group-1"
-	if i%2 == 0 {
-		chat = "private-" + actor
-	}
+	actor, chat := p.actor, p.chat
 	key := "feishu:" + chat + ":" + actor
 	msg := &core.Message{Platform: "feishu", SessionKey: key, ChannelID: chat, UserID: actor, MessageID: j.ID,
 		Content: j.Prompt, ReplyCtx: capacityRoute{actor, chat, key, j.ID}, ControlledFileWork: true, FileWorkPrivate: i%2 == 0}
@@ -562,6 +586,11 @@ func TestCapacityCaptureFailure(t *testing.T) {
 	if err := p.Reply(context.Background(), r, "test"); err != nil || !called {
 		t.Fatal("real host observer not invoked", err)
 	}
+	p.SetFileWorkReplyObserver(func(core.Message, string) error { return denied })
+	if err := p.Reply(context.Background(), r, "test"); err != nil || !errors.Is(p.captureErr, denied) {
+		t.Fatal("failed host association must fail evidence without resending", err)
+	}
+	p.captureErr = nil
 	_, err = p.SendFileWithReceipt(context.Background(), raw, core.FileAttachment{FileName: "test.pdf", Data: []byte("fixture")}, "id")
 	if !errors.Is(err, core.ErrFileNotSubmitted) || p.captureErr == nil {
 		t.Fatal("failed file capture must persist as a test failure")
@@ -569,5 +598,20 @@ func TestCapacityCaptureFailure(t *testing.T) {
 	ids := capacityJobIDs(capacityJob{ID: "query", Queries: 3})
 	if strings.Join(ids, ",") != "query-1,query-2,query-3" {
 		t.Fatal("expanded task IDs differ from submitted IDs")
+	}
+}
+
+func TestCapacityEvidenceFailure(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "events")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	e := &capacityEvents{file: f}
+	e.write("host_preflight_passed", nil)
+	if e.close() == nil {
+		t.Fatal("failed preflight evidence must not pass")
 	}
 }
