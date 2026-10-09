@@ -160,6 +160,12 @@ type MsgKey string
 
 const (
 	MsgStarting                  MsgKey = "starting"
+	MsgTaskProcessing            MsgKey = "task_processing"
+	MsgTaskActivity              MsgKey = "task_activity"
+	MsgTaskWaiting               MsgKey = "task_waiting"
+	MsgTaskEnded                 MsgKey = "task_ended"
+	MsgTaskStopped               MsgKey = "task_stopped"
+	MsgTaskInterrupted           MsgKey = "task_interrupted"
 	MsgThinking                  MsgKey = "thinking"
 	MsgTool                      MsgKey = "tool"
 	MsgToolResult                MsgKey = "tool_result"
@@ -856,6 +862,30 @@ const (
 )
 
 var messages = map[MsgKey]map[Language]string{
+	MsgTaskProcessing: {
+		LangEnglish: "Task in progress.", LangChinese: "任务处理中。",
+		LangTraditionalChinese: "任務處理中。", LangJapanese: "タスクを処理しています。", LangSpanish: "Tarea en curso.",
+	},
+	MsgTaskActivity: {
+		LangEnglish: "Tool activity received; processing continues.", LangChinese: "最近收到工具活动，继续处理。",
+		LangTraditionalChinese: "最近收到工具活動，繼續處理。", LangJapanese: "ツールの動作を受信し、処理を続けています。", LangSpanish: "Se recibió actividad de herramientas; el procesamiento continúa.",
+	},
+	MsgTaskWaiting: {
+		LangEnglish: "Waiting for your response.", LangChinese: "等待你的确认。",
+		LangTraditionalChinese: "等待你的確認。", LangJapanese: "確認をお待ちしています。", LangSpanish: "Esperando su respuesta.",
+	},
+	MsgTaskEnded: {
+		LangEnglish: "This turn has ended. Check the answer and delivery receipts for results.", LangChinese: "本轮处理已结束，结果以答复及交付回执为准。",
+		LangTraditionalChinese: "本輪處理已結束，結果以答覆及交付回執為準。", LangJapanese: "今回の処理は終了しました。結果は回答と送付記録で確認してください。", LangSpanish: "Este turno terminó. Consulte la respuesta y los recibos de entrega para conocer los resultados.",
+	},
+	MsgTaskStopped: {
+		LangEnglish: "Task stopped.", LangChinese: "已停止。",
+		LangTraditionalChinese: "已停止。", LangJapanese: "停止しました。", LangSpanish: "Tarea detenida.",
+	},
+	MsgTaskInterrupted: {
+		LangEnglish: "Processing interrupted. Results are not confirmed by this status.", LangChinese: "处理已中断，此状态不代表结果已确认。",
+		LangTraditionalChinese: "處理已中斷，此狀態不代表結果已確認。", LangJapanese: "処理が中断されました。この状態は結果の確認を意味しません。", LangSpanish: "Procesamiento interrumpido. Este estado no confirma los resultados.",
+	},
 	MsgBanquetApprovalTitle:   {LangEnglish: "Approval required: banquet CRM", LangChinese: "待审批：婚宴 CRM", LangTraditionalChinese: "待審批：婚宴 CRM", LangJapanese: "承認待ち：宴会 CRM", LangSpanish: "Pendiente: CRM de banquetes"},
 	MsgBanquetVerifiedBody:    {LangEnglish: "Saved and verified by reading the CRM record.", LangChinese: "已写入，并读回 CRM 记录核实。", LangTraditionalChinese: "已寫入，並讀回 CRM 記錄核實。", LangJapanese: "CRM 記録を保存し、再読込で確認しました。", LangSpanish: "Guardado y verificado mediante la lectura del CRM."},
 	MsgBanquetVersion:         {LangEnglish: "Handoff version", LangChinese: "交接版本", LangTraditionalChinese: "交接版本", LangJapanese: "引継ぎ版", LangSpanish: "Versión"},

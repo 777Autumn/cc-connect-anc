@@ -203,6 +203,7 @@ type DisplayConfig struct {
 	ReplyFooter          *bool   `toml:"reply_footer"`           // whether Codex-like footer is shown; default true
 	HideAgentFooter      *bool   `toml:"hide_agent_footer"`      // strip agent-emitted model/token footer lines; default false
 	FinalResponseOnly    *bool   `toml:"final_response_only"`    // suppress intermediate agent text/streaming; default false
+	TaskProgress         *bool   `toml:"task_progress"`          // delayed host-only status; default false
 }
 
 // StreamPreviewConfig controls real-time streaming preview in IM.
@@ -950,6 +951,14 @@ func EffectiveFinalResponseOnly(cfg *Config, proj *ProjectConfig) bool {
 		return *proj.Display.FinalResponseOnly
 	}
 	return cfg != nil && cfg.Display.FinalResponseOnly != nil && *cfg.Display.FinalResponseOnly
+}
+
+// EffectiveTaskProgress is opt-in, with project display overriding global.
+func EffectiveTaskProgress(cfg *Config, proj *ProjectConfig) bool {
+	if proj != nil && proj.Display != nil && proj.Display.TaskProgress != nil {
+		return *proj.Display.TaskProgress
+	}
+	return cfg != nil && cfg.Display.TaskProgress != nil && *cfg.Display.TaskProgress
 }
 
 // EffectiveHistoryMaxLen returns the per-entry /history truncation length.

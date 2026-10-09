@@ -1,11 +1,51 @@
 package core
 
 import (
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestCUJ_I4_TaskProgressKeepsFinalOnlyAndQueuedRoutes(t *testing.T) {
+	env, s, send := newFinalDisplayJourney(t)
+	env.engine.SetDisplayConfig(DisplayCfg{Mode: "quiet", FinalResponseOnly: true, TaskProgress: true})
+	send("first long action")
+	env.waitFor("agent started", time.Second, func() bool { return len(s.getSentPrompts()) == 1 })
+	s.events <- Event{Type: EventThinking, Content: "PRIVATE_THOUGHT"}
+	s.events <- Event{Type: EventText, Content: "PRIVATE_NARRATION"}
+	s.events <- Event{Type: EventToolUse, ToolName: "PRIVATE_COMMAND", ToolInput: "PRIVATE_PATH"}
+	s.events <- Event{Type: EventToolResult, ToolResult: "PRIVATE_RESULT"}
+	s.events <- Event{Type: EventResult, Content: "PRIVATE_PARTIAL", Done: false}
+	env.waitFor("30-second host status", 35*time.Second, func() bool { return len(env.streamingPlat().getPreviewOpens()) == 1 })
+	if got := env.streamingPlat().getPreviewOpens()[0]; got != "Tool activity received; processing continues." {
+		t.Fatalf("unsafe initial status: %q", got)
+	}
+	send("second queued action")
+	s.events <- Event{Type: EventResult, Content: "first answer", Done: true}
+	env.waitFor("queued send", time.Second, func() bool { return len(s.getSentPrompts()) == 2 })
+	s.events <- Event{Type: EventResult, Content: "second answer", Done: true}
+	env.waitFor("queued answer", time.Second, func() bool {
+		return env.sentContains("second answer") && !env.engine.sessions.GetOrCreateActive("test:owner").Busy()
+	})
+	send("third short action")
+	env.waitFor("third send", time.Second, func() bool { return len(s.getSentPrompts()) == 3 })
+	s.events <- Event{Type: EventError, Error: errors.New("synthetic failed turn")}
+	env.waitFor("third error", time.Second, func() bool { return env.sentContains("synthetic failed turn") })
+	if len(env.streamingPlat().getPreviewOpens()) != 1 {
+		t.Fatal("short/queued work created another card")
+	}
+	env.waitFor("first card terminal", time.Second, func() bool { return len(env.streamingPlat().getPreviewUpdates()) > 0 })
+	for _, update := range env.streamingPlat().getPreviewUpdates() {
+		if !strings.Contains(update.Content, "This turn has ended") {
+			t.Fatalf("queued/failed turn overwrote earlier card: %+v", update)
+		}
+	}
+	if strings.Contains(strings.Join(env.plat.getSent(), "\n"), "PRIVATE_") {
+		t.Fatal("model content leaked")
+	}
+}
 
 // Manual events model the external process boundary; all user turns still go
 // through ReceiveMessage and assertions observe the actual platform output.
