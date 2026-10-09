@@ -358,6 +358,7 @@ type Engine struct {
 	speech                SpeechCfg
 	tts                   *TTSCfg
 	display               DisplayCfg
+	taskProgressEnabled   atomic.Bool // The asynchronous status path must tolerate display reloads.
 	injectSender          bool
 	attachmentSendEnabled bool
 	startedAt             time.Time
@@ -918,6 +919,7 @@ func (e *Engine) SetTTSSaveFunc(fn func(mode string) error) {
 // SetDisplayConfig overrides the default truncation settings.
 func (e *Engine) SetDisplayConfig(cfg DisplayCfg) {
 	e.display = cfg
+	e.taskProgressEnabled.Store(cfg.TaskProgress)
 }
 
 // SetInstantReply configures the immediate confirmation reply.
@@ -5122,7 +5124,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 
 	events := turnAgentSession.Events()
 	stopCh := state.stopSignal()
-	tp := newTaskProgress(e.ctx, state.platform, replyCtx, e.i18n.CurrentLang(), e.display.TaskProgress, stopCh, turnStart, 30*time.Second, 5*time.Second)
+	tp := newTaskProgress(e.ctx, state.platform, replyCtx, e.i18n.CurrentLang(), e.taskProgressEnabled.Load(), stopCh, turnStart, 30*time.Second, 5*time.Second)
 	defer func() { tp.finish(MsgTaskInterrupted) }()
 	for {
 		var event Event
@@ -6326,7 +6328,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 				// it for the reply quote. Without this reassignment, msg2's
 				// reply would quote msg1's bubble.
 				replyCtx = queued.replyCtx
-				tp = newTaskProgress(e.ctx, queued.platform, queued.replyCtx, e.i18n.CurrentLang(), e.display.TaskProgress, stopCh, turnStart, 30*time.Second, 5*time.Second)
+				tp = newTaskProgress(e.ctx, queued.platform, queued.replyCtx, e.i18n.CurrentLang(), e.taskProgressEnabled.Load(), stopCh, turnStart, 30*time.Second, 5*time.Second)
 				// Rich-mode per-turn state must reset too — otherwise EventText for
 				// the queued message would StreamRichCardText against the previous
 				// turn's cardID, overwriting that card's body with the new turn's

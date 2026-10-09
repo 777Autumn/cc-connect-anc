@@ -4,9 +4,34 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
+
+func TestTaskProgressConfigReloadWhileStartingTurns(t *testing.T) {
+	e := &Engine{}
+	var writers sync.WaitGroup
+	writers.Add(1)
+	go func() {
+		defer writers.Done()
+		for i := 0; i < 1000; i++ {
+			e.SetDisplayConfig(DisplayCfg{TaskProgress: i%2 == 0})
+		}
+	}()
+	for i := 0; i < 1000; i++ {
+		p := &taskStatusPlatform{}
+		tp := newTaskProgress(context.Background(), p, "owner", LangEnglish, e.taskProgressEnabled.Load(), nil, time.Now(), time.Hour, time.Second)
+		if tp != nil {
+			finishTaskStatus(t, tp, MsgTaskEnded)
+		}
+	}
+	writers.Wait()
+	e.SetDisplayConfig(DisplayCfg{TaskProgress: true})
+	if !e.taskProgressEnabled.Load() {
+		t.Fatal("reload did not enable task progress")
+	}
+}
 
 type taskStatusCall struct {
 	route  any
