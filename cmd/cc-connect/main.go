@@ -701,6 +701,7 @@ func main() {
 				HistoryMaxLen:     &historyMaxLen,
 				HideAgentFooter:   hideAgentFooter,
 				FinalResponseOnly: config.EffectiveFinalResponseOnly(cfg, &proj),
+				TaskProgress:      config.EffectiveTaskProgress(cfg, &proj),
 			})
 		}
 
@@ -2265,6 +2266,7 @@ func reloadConfig(configPath, projName string, engine *core.Engine) (*core.Confi
 		HistoryMaxLen:     &historyMaxLen,
 		HideAgentFooter:   hideAgentFooter,
 		FinalResponseOnly: config.EffectiveFinalResponseOnly(cfg, proj),
+		TaskProgress:      config.EffectiveTaskProgress(cfg, proj),
 	})
 	result.DisplayUpdated = true
 

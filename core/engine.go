@@ -330,6 +330,7 @@ type DisplayCfg struct {
 	HistoryMaxLen     *int // max runes for /history entries; nil = default, 0 = no truncation
 	HideAgentFooter   bool // strip model/token footer lines emitted as agent text
 	FinalResponseOnly bool // hold intermediate agent text; keep questions, errors and hosted cards visible
+	TaskProgress      bool // delayed host-only status, independent of model narration
 }
 
 // InstantReplyCfg controls the immediate confirmation reply sent when a message
@@ -357,6 +358,7 @@ type Engine struct {
 	speech                SpeechCfg
 	tts                   *TTSCfg
 	display               DisplayCfg
+	taskProgressEnabled   atomic.Bool // The asynchronous status path must tolerate display reloads.
 	injectSender          bool
 	attachmentSendEnabled bool
 	startedAt             time.Time
@@ -917,6 +919,7 @@ func (e *Engine) SetTTSSaveFunc(fn func(mode string) error) {
 // SetDisplayConfig overrides the default truncation settings.
 func (e *Engine) SetDisplayConfig(cfg DisplayCfg) {
 	e.display = cfg
+	e.taskProgressEnabled.Store(cfg.TaskProgress)
 }
 
 // SetInstantReply configures the immediate confirmation reply.
@@ -5121,12 +5124,15 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 
 	events := turnAgentSession.Events()
 	stopCh := state.stopSignal()
+	tp := newTaskProgress(e.ctx, state.platform, replyCtx, e.i18n.CurrentLang(), e.taskProgressEnabled.Load(), stopCh, turnStart, 30*time.Second, 5*time.Second)
+	defer func() { tp.finish(MsgTaskInterrupted) }()
 	for {
 		var event Event
 		var ok bool
 
 		select {
 		case <-stopCh:
+			tp.finish(MsgTaskStopped)
 			sp.discard()
 			return
 		case event, ok = <-events:
@@ -5160,6 +5166,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 			}
 			continue
 		case <-idleCh:
+			tp.finish(MsgTaskInterrupted)
 			slog.Error("agent session idle timeout: no events for too long, killing session",
 				"session_key", sessionKey, "timeout", e.eventIdleTimeout, "elapsed", time.Since(turnStart))
 			cp.Finalize(ProgressCardStateFailed)
@@ -5172,6 +5179,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 			e.cleanupInteractiveState(sessionKey, state)
 			return
 		case <-turnDeadlineCh:
+			tp.finish(MsgTaskInterrupted)
 			elapsed := time.Since(turnStart)
 			slog.Warn("agent turn exceeded max_turn_time: sending stop signal, will force-kill if needed",
 				"session_key", sessionKey, "max_turn_time", e.maxTurnTime, "elapsed", elapsed)
@@ -5227,6 +5235,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 		}
 
 		if state.isStopped() {
+			tp.finish(MsgTaskStopped)
 			sp.discard()
 			state.mu.Lock()
 			state.eventsNeedResync = true
@@ -5374,6 +5383,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 
 		case EventToolUse:
 			toolCount++
+			tp.set(MsgTaskActivity, false)
 			if finalResponseOnly {
 				finalSegmentStart = len(textParts)
 				break
@@ -5507,6 +5517,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 			}
 
 		case EventToolResult:
+			tp.set(MsgTaskActivity, false)
 			if finalResponseOnly {
 				break
 			}
@@ -5727,7 +5738,9 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 						return
 					}
 					// The publisher already reports failure to the legacy handoff user.
-					_ = e.publishHostedAction(actionHost, result, principal, p, replyCtx)
+					if err := e.publishHostedAction(actionHost, result, principal, p, replyCtx); err == nil {
+						tp.finish(MsgTaskEnded)
+					}
 					return
 				}
 			}
@@ -5825,7 +5838,9 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 				idleTimer.Stop()
 			}
 
+			tp.set(MsgTaskWaiting, false)
 			<-pending.Resolved
+			tp.set(MsgTaskProcessing, false)
 			slog.Info("permission resolved", "request_id", event.RequestID)
 
 			// The stream preview was frozen+detached when this permission
@@ -6190,6 +6205,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 			}
 
 			// Auto-compress after finishing a turn, before sending any queued messages.
+			tp.finish(MsgTaskEnded)
 			if triggerAutoCompress {
 				compressor, ok := e.agent.(ContextCompressor)
 				if ok && compressor.CompressCommand() != "" {
@@ -6312,6 +6328,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 				// it for the reply quote. Without this reassignment, msg2's
 				// reply would quote msg1's bubble.
 				replyCtx = queued.replyCtx
+				tp = newTaskProgress(e.ctx, queued.platform, queued.replyCtx, e.i18n.CurrentLang(), e.taskProgressEnabled.Load(), stopCh, turnStart, 30*time.Second, 5*time.Second)
 				// Rich-mode per-turn state must reset too — otherwise EventText for
 				// the queued message would StreamRichCardText against the previous
 				// turn's cardID, overwriting that card's body with the new turn's

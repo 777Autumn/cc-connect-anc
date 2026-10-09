@@ -521,6 +521,25 @@ func TestEffectiveDisplayHideAgentFooter(t *testing.T) {
 	}
 }
 
+func TestEffectiveTaskProgress(t *testing.T) {
+	tru, fal := true, false
+	if EffectiveTaskProgress(nil, nil) || EffectiveTaskProgress(&Config{}, &ProjectConfig{}) {
+		t.Fatal("must default off")
+	}
+	cfg := &Config{Display: DisplayConfig{TaskProgress: &tru}}
+	if !EffectiveTaskProgress(cfg, nil) {
+		t.Fatal("global enable ignored")
+	}
+	proj := &ProjectConfig{Display: &DisplayConfig{TaskProgress: &fal}}
+	if EffectiveTaskProgress(cfg, proj) {
+		t.Fatal("project disable ignored")
+	}
+	proj.Display.TaskProgress = &tru
+	if !EffectiveTaskProgress(&Config{}, proj) {
+		t.Fatal("project enable ignored")
+	}
+}
+
 func TestEffectiveFinalResponseOnly(t *testing.T) {
 	tru, fal := true, false
 	if EffectiveFinalResponseOnly(nil, nil) || EffectiveFinalResponseOnly(&Config{}, &ProjectConfig{}) {

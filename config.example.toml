@@ -127,6 +127,7 @@ level = "info" # debug, info, warn, error
 #                                # 在助手回复底部显示类似 Codex 的状态行（默认 true 显示）
 # hide_agent_footer = false      # Strip standalone model/token footer lines emitted by agents (default: false)
 # final_response_only = false    # Hold model narration/streaming until final answer; questions, errors and business cards stay visible
+# task_progress = false          # Host-only status after 30s; one editable message, independent of narration
 #                                # 过滤 agent 自己混入正文的模型/token 统计 footer 行（默认 false 不过滤）
 
 # Per-project override: each [[projects]] entry may have its own [projects.display]
@@ -144,6 +145,7 @@ level = "info" # debug, info, warn, error
 # tool_messages = false
 # hide_agent_footer = true   # Hide agent-emitted model/token footer only for this project
 # final_response_only = true # Opt this project into final answers only; does not change tool permissions
+# task_progress = true      # Optional per-project override; no tool payloads or model thinking are displayed
 
 # Agent idle timeout: max minutes between consecutive agent events before
 # considering the session stuck. Set to 0 to disable the timeout entirely.
