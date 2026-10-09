@@ -10,7 +10,7 @@ import (
 
 func TestTaskProgressSingleAttemptAfterLostCreateResponse(t *testing.T) {
 	for _, create := range []bool{false, true} {
-		for _, outcome := range []string{"lost_response", "server_failure", "missing_receipt", "success"} {
+		for _, outcome := range []string{"lost_response", "server_failure", "missing_receipt", "redirect", "success"} {
 			t.Run(outcome+map[bool]string{false: "/reply", true: "/create"}[create], func(t *testing.T) {
 				p, observed := fileDeliveryFixture(t, outcome)
 				p.useInteractiveCard, p.noReplyToTrigger = true, create
@@ -32,9 +32,10 @@ func TestTaskProgressSingleAttemptAfterLostCreateResponse(t *testing.T) {
 				handle, err := p.StartTaskProgress(ctx, rc, "任务处理中。")
 				observed.mu.Lock()
 				calls := len(observed.paths)
+				redirects := observed.redirects
 				observed.mu.Unlock()
-				if calls != 1 {
-					t.Fatalf("uncertain create retried: %d API calls", calls)
+				if calls != 1 || redirects != 0 {
+					t.Fatalf("uncertain create retried: %d API calls, %d redirects", calls, redirects)
 				}
 				if outcome == "success" {
 					if err != nil || handle == nil || callbacks != 1 {
@@ -49,12 +50,16 @@ func TestTaskProgressSingleAttemptAfterLostCreateResponse(t *testing.T) {
 }
 
 func TestTaskProgressSingleAttemptPatchFailure(t *testing.T) {
-	p, observed := fileDeliveryFixture(t, "server_failure")
-	p.useInteractiveCard = true
-	err := p.UpdateTaskProgress(context.Background(), &feishuPreviewHandle{messageID: "accepted-file"}, "已停止。")
-	observed.mu.Lock()
-	defer observed.mu.Unlock()
-	if err == nil || len(observed.paths) != 1 {
-		t.Fatalf("patch retried or accepted failure: calls=%d err=%v", len(observed.paths), err)
+	for _, outcome := range []string{"server_failure", "redirect"} {
+		t.Run(outcome, func(t *testing.T) {
+			p, observed := fileDeliveryFixture(t, outcome)
+			p.useInteractiveCard = true
+			err := p.UpdateTaskProgress(context.Background(), &feishuPreviewHandle{messageID: "accepted-file"}, "已停止。")
+			observed.mu.Lock()
+			defer observed.mu.Unlock()
+			if err == nil || len(observed.paths) != 1 || observed.redirects != 0 {
+				t.Fatalf("patch retried or accepted failure: calls=%d redirects=%d err=%v", len(observed.paths), observed.redirects, err)
+			}
+		})
 	}
 }
