@@ -190,8 +190,19 @@ func newMatrixEngine(t *testing.T) (*core.Engine, *matrixAgent, *matrixPlatform)
 	platform := &matrixPlatform{}
 	engine := core.NewEngine("release-core", agent, []core.Platform{platform}, t.TempDir()+"/sessions.json", core.LangEnglish)
 	t.Cleanup(func() {
-		engine.Stop()
-		_ = agent.Stop()
+		// Receiving the prompt does not mean the turn finished saving its session.
+		deadline := time.Now().Add(2 * time.Second)
+		for _, session := range engine.GetSessions().AllSessions() {
+			for session.Busy() && time.Now().Before(deadline) {
+				time.Sleep(10 * time.Millisecond)
+			}
+			if session.Busy() {
+				t.Error("engine turn still busy at test cleanup")
+			}
+		}
+		if err := engine.Stop(); err != nil {
+			t.Errorf("stop engine: %v", err)
+		}
 	})
 	return engine, agent, platform
 }
