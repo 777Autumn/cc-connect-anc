@@ -45,7 +45,7 @@ func TestErrorSessionIDSurvivesConcurrentCleanup(t *testing.T) {
 	}
 	live.events <- Event{Type: EventToolUse, ToolName: "Read", ToolInput: "fictional.txt"}
 	live.events <- Event{Type: EventError, Error: errors.New("failed after ID allocation")}
-	e.processInteractiveEvents(state, session, e.sessions, key, "error-message", time.Now(), nil, nil, reply)
+	e.processInteractiveEvents(state, session, e.sessions, key, "error-message", time.Now(), nil, nil, reply, nil)
 	reloaded := NewSessionManager(store)
 	if reloaded.sessions[session.ID].GetAgentSessionID() != "late-id" || reloaded.GetOrCreateActive(key).GetAgentSessionID() != "replacement-id" {
 		t.Fatal("cleanup lost the failed turn ID or changed the replacement task")
@@ -90,7 +90,7 @@ func TestErrorSessionIDPersistsForRestartWithoutRevivingExpiredWork(t *testing.T
 			live := newControllableSession(tc.reportedID)
 			state := &interactiveState{agentSession: live, agent: &controllableAgent{}, platform: p, replyCtx: "ctx"}
 			live.events <- Event{Type: EventError, Error: errors.New("synthetic failed turn")}
-			e.processInteractiveEvents(state, session, e.sessions, key, "error-message", time.Now(), nil, nil, "ctx")
+			e.processInteractiveEvents(state, session, e.sessions, key, "error-message", time.Now(), nil, nil, "ctx", nil)
 			want := tc.reportedID
 			if want == "" || want == ContinueSession {
 				want = tc.oldID

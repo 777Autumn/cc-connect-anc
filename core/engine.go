@@ -3874,6 +3874,9 @@ func (e *Engine) processInteractiveMessageWith(p Platform, msg *Message, session
 	turnStart := time.Now()
 
 	e.i18n.DetectAndSet(msg.Content)
+	// Include synchronous native startup in the same turn's waiting status.
+	tp := newTaskProgress(e.ctx, p, msg.ReplyCtx, e.i18n.CurrentLang(), e.taskProgressEnabled.Load(), nil, turnStart, 30*time.Second, 5*time.Second)
+	defer func() { tp.finish(MsgTaskInterrupted) }()
 	session.AddHistory("user", msg.Content)
 	// Persist user message immediately so crashes between user input and
 	// assistant reply don't lose it (the assistant-side Save below depends
@@ -3886,6 +3889,7 @@ func (e *Engine) processInteractiveMessageWith(p Platform, msg *Message, session
 		agentOverride = agent
 	}
 	state := e.getOrCreateInteractiveStateWith(interactiveKey, p, msg.ReplyCtx, session, sessions, agentOverride, ccSessionKey)
+	tp.watchStop(state.stopSignal())
 
 	// Set workspaceDir on the state for idle reaper identification
 	if workspaceDir != "" {
@@ -4008,7 +4012,7 @@ func (e *Engine) processInteractiveMessageWith(p Platform, msg *Message, session
 		sendDone <- as.Send(promptContent, msg.MessageID, msg.Images, msg.Files)
 	}()
 
-	e.processInteractiveEvents(state, session, sessions, interactiveKey, msg.MessageID, turnStart, stopTyping, sendDone, msg.ReplyCtx)
+	e.processInteractiveEvents(state, session, sessions, interactiveKey, msg.MessageID, turnStart, stopTyping, sendDone, msg.ReplyCtx, tp)
 	if elapsed := time.Since(sendStart); elapsed >= slowAgentSend {
 		slog.Warn("slow agent send", "elapsed", elapsed, "session", msg.SessionKey, "content_len", len(msg.Content))
 	}
@@ -5010,7 +5014,8 @@ func (e *Engine) agentErrorMessage(err error) string {
 	return fmt.Sprintf(e.i18n.T(MsgError), err)
 }
 
-func (e *Engine) processInteractiveEvents(state *interactiveState, session *Session, sessions *SessionManager, sessionKey string, msgID string, turnStart time.Time, stopTypingFn func(), sendDone <-chan error, replyCtx any) {
+func (e *Engine) processInteractiveEvents(state *interactiveState, session *Session, sessions *SessionManager, sessionKey string, msgID string, turnStart time.Time, stopTypingFn func(), sendDone <-chan error, replyCtx any, tp *taskProgress) {
+	defer func() { tp.finish(MsgTaskInterrupted) }()
 	// Keep one display policy for a whole turn, including all streaming paths.
 	// A queued turn picks up a fresh policy after a configuration reload.
 	finalResponseOnly := e.display.FinalResponseOnly
@@ -5124,8 +5129,6 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 
 	events := turnAgentSession.Events()
 	stopCh := state.stopSignal()
-	tp := newTaskProgress(e.ctx, state.platform, replyCtx, e.i18n.CurrentLang(), e.taskProgressEnabled.Load(), stopCh, turnStart, 30*time.Second, 5*time.Second)
-	defer func() { tp.finish(MsgTaskInterrupted) }()
 	for {
 		var event Event
 		var ok bool
@@ -6673,7 +6676,9 @@ func (e *Engine) drainPendingMessages(state *interactiveState, session *Session,
 		}
 
 		slog.Info("processing queued message", "session", sessionKey)
-		e.processInteractiveEvents(state, session, sessions, sessionKey, queued.messageID, time.Now(), stopTyping, sendDone, queued.replyCtx)
+		turnStart := time.Now()
+		tp := newTaskProgress(e.ctx, queued.platform, queued.replyCtx, e.i18n.CurrentLang(), e.taskProgressEnabled.Load(), state.stopSignal(), turnStart, 30*time.Second, 5*time.Second)
+		e.processInteractiveEvents(state, session, sessions, sessionKey, queued.messageID, turnStart, stopTyping, sendDone, queued.replyCtx, tp)
 	}
 }
 
