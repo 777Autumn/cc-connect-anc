@@ -201,3 +201,19 @@ func TestTaskProgressDisabledOrUnsupported(t *testing.T) {
 		t.Fatal("unsupported platform accepted")
 	}
 }
+
+func TestTaskProgressAttachesStoppedSessionAfterStartup(t *testing.T) {
+	p := &taskStatusPlatform{}
+	tp := newTaskProgress(context.Background(), p, "owner", LangEnglish, true, nil, time.Now(), time.Hour, time.Second)
+	stop := make(chan struct{})
+	close(stop)
+	tp.watchStop(stop)
+	select {
+	case <-tp.done:
+	case <-time.After(time.Second):
+		t.Fatal("late stop binding leaked progress worker")
+	}
+	if len(p.snapshotCalls()) != 0 {
+		t.Fatal("stopped startup created a status message")
+	}
+}

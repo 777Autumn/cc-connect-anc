@@ -21,6 +21,7 @@ type taskProgress struct {
 	mu    sync.Mutex
 	phase MsgKey
 	ended bool
+	stop  <-chan struct{}
 	wake  chan struct{}
 	done  chan struct{}
 }
@@ -30,8 +31,8 @@ func newTaskProgress(ctx context.Context, p Platform, replyCtx any, lang Languag
 	if !enabled || !supported {
 		return nil
 	}
-	tp := &taskProgress{phase: MsgTaskProcessing, wake: make(chan struct{}, 1), done: make(chan struct{})}
-	go tp.run(ctx, sender, replyCtx, NewI18n(lang), stop, start, delay, interval)
+	tp := &taskProgress{phase: MsgTaskProcessing, stop: stop, wake: make(chan struct{}, 1), done: make(chan struct{})}
+	go tp.run(ctx, sender, replyCtx, NewI18n(lang), start, delay, interval)
 	return tp
 }
 
@@ -52,13 +53,27 @@ func (tp *taskProgress) set(phase MsgKey, end bool) {
 
 func (tp *taskProgress) finish(phase MsgKey) { tp.set(phase, true) }
 
-func (tp *taskProgress) snapshot() (MsgKey, bool) {
+// watchStop attaches the native session once startup has returned.
+func (tp *taskProgress) watchStop(stop <-chan struct{}) {
+	if tp == nil {
+		return
+	}
 	tp.mu.Lock()
-	defer tp.mu.Unlock()
-	return tp.phase, tp.ended
+	tp.stop = stop
+	tp.mu.Unlock()
+	select {
+	case tp.wake <- struct{}{}:
+	default:
+	}
 }
 
-func (tp *taskProgress) run(ctx context.Context, sender TaskProgressPlatform, replyCtx any, tr *I18n, stop <-chan struct{}, start time.Time, delay, interval time.Duration) {
+func (tp *taskProgress) snapshot() (MsgKey, bool, <-chan struct{}) {
+	tp.mu.Lock()
+	defer tp.mu.Unlock()
+	return tp.phase, tp.ended, tp.stop
+}
+
+func (tp *taskProgress) run(ctx context.Context, sender TaskProgressPlatform, replyCtx any, tr *I18n, start time.Time, delay, interval time.Duration) {
 	defer close(tp.done)
 	timer := time.NewTimer(time.Until(start.Add(delay)))
 	defer timer.Stop()
@@ -68,6 +83,10 @@ func (tp *taskProgress) run(ctx context.Context, sender TaskProgressPlatform, re
 	ready := false
 	stopped := false
 	for {
+		_, _, stop := tp.snapshot()
+		if stopped {
+			stop = nil
+		}
 		select {
 		case <-ctx.Done():
 			tp.finish(MsgTaskInterrupted)
@@ -77,13 +96,16 @@ func (tp *taskProgress) run(ctx context.Context, sender TaskProgressPlatform, re
 		case <-timer.C:
 			ready = true
 		}
-		// A stop can race the initial timer; check it again before any creation.
+		// Startup may attach a stopped session while the initial timer fires.
+		phase, ended, currentStop := tp.snapshot()
+		if !stopped {
+			stop = currentStop
+		}
 		select {
 		case <-stop:
 			stopped, stop = true, nil
 		default:
 		}
-		phase, ended := tp.snapshot()
 		if (ended || stopped) && handle == nil {
 			return
 		}
