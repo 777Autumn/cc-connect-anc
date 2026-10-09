@@ -7,6 +7,14 @@ import (
 	"time"
 )
 
+// TaskProgressPlatform must make at most one message API attempt per call.
+// Preview APIs with implicit retries cannot guarantee a single status message
+// when the remote service accepts a create but loses its response.
+type TaskProgressPlatform interface {
+	StartTaskProgress(context.Context, any, string) (any, error)
+	UpdateTaskProgress(context.Context, any, string) error
+}
+
 // taskProgress owns one turn's fixed reply route. Only host-selected message
 // keys cross this boundary; agent text and tool payloads are never accepted.
 type taskProgress struct {
@@ -18,13 +26,12 @@ type taskProgress struct {
 }
 
 func newTaskProgress(ctx context.Context, p Platform, replyCtx any, lang Language, enabled bool, stop <-chan struct{}, start time.Time, delay, interval time.Duration) *taskProgress {
-	starter, starts := p.(PreviewStarter)
-	updater, updates := p.(MessageUpdater)
-	if !enabled || !starts || !updates {
+	sender, supported := p.(TaskProgressPlatform)
+	if !enabled || !supported {
 		return nil
 	}
 	tp := &taskProgress{phase: MsgTaskProcessing, wake: make(chan struct{}, 1), done: make(chan struct{})}
-	go tp.run(ctx, starter, updater, replyCtx, NewI18n(lang), stop, start, delay, interval)
+	go tp.run(ctx, sender, replyCtx, NewI18n(lang), stop, start, delay, interval)
 	return tp
 }
 
@@ -51,7 +58,7 @@ func (tp *taskProgress) snapshot() (MsgKey, bool) {
 	return tp.phase, tp.ended
 }
 
-func (tp *taskProgress) run(ctx context.Context, starter PreviewStarter, updater MessageUpdater, replyCtx any, tr *I18n, stop <-chan struct{}, start time.Time, delay, interval time.Duration) {
+func (tp *taskProgress) run(ctx context.Context, sender TaskProgressPlatform, replyCtx any, tr *I18n, stop <-chan struct{}, start time.Time, delay, interval time.Duration) {
 	defer close(tp.done)
 	timer := time.NewTimer(time.Until(start.Add(delay)))
 	defer timer.Stop()
@@ -96,9 +103,9 @@ func (tp *taskProgress) run(ctx context.Context, starter PreviewStarter, updater
 		callCtx, cancel := context.WithTimeout(parent, 2*time.Second)
 		var err error
 		if handle == nil {
-			handle, err = starter.SendPreviewStart(callCtx, replyCtx, tr.T(phase))
+			handle, err = sender.StartTaskProgress(callCtx, replyCtx, tr.T(phase))
 		} else {
-			err = updater.UpdateMessage(callCtx, handle, tr.T(phase))
+			err = sender.UpdateTaskProgress(callCtx, handle, tr.T(phase))
 		}
 		cancel()
 		if err != nil || handle == nil {

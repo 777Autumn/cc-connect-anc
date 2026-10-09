@@ -1,12 +1,21 @@
 package core
 
 import (
+	"context"
 	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
+
+func (p *cujStreamingPlatform) StartTaskProgress(ctx context.Context, route any, content string) (any, error) {
+	return p.SendPreviewStart(ctx, route, content)
+}
+
+func (p *cujStreamingPlatform) UpdateTaskProgress(ctx context.Context, handle any, content string) error {
+	return p.UpdateMessage(ctx, handle, content)
+}
 
 func TestCUJ_I4_TaskProgressKeepsFinalOnlyAndQueuedRoutes(t *testing.T) {
 	env, s, send := newFinalDisplayJourney(t)

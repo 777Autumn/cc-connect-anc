@@ -21,7 +21,7 @@ type taskStatusPlatform struct {
 	gate                   <-chan struct{}
 }
 
-func (p *taskStatusPlatform) SendPreviewStart(ctx context.Context, route any, text string) (any, error) {
+func (p *taskStatusPlatform) StartTaskProgress(ctx context.Context, route any, text string) (any, error) {
 	p.mu.Lock()
 	p.calls = append(p.calls, taskStatusCall{route, text, time.Now(), true})
 	fail, gate := p.failCreate, p.gate
@@ -38,7 +38,7 @@ func (p *taskStatusPlatform) SendPreviewStart(ctx context.Context, route any, te
 	}
 	return route, nil
 }
-func (p *taskStatusPlatform) UpdateMessage(_ context.Context, handle any, text string) error {
+func (p *taskStatusPlatform) UpdateTaskProgress(_ context.Context, handle any, text string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.calls = append(p.calls, taskStatusCall{handle, text, time.Now(), false})
