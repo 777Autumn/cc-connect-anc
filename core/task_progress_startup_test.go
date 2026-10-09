@@ -36,7 +36,11 @@ func TestTaskProgressDuringColdStart(t *testing.T) {
 	e := NewEngine("test", a, []Platform{p}, filepath.Join(t.TempDir(), "sessions.json"), LangEnglish)
 	e.SetReplyFooterEnabled(false)
 	e.SetDisplayConfig(DisplayCfg{Mode: "quiet", FinalResponseOnly: true, TaskProgress: true})
-	defer e.Stop()
+	defer func() {
+		if err := e.Stop(); err != nil {
+			t.Errorf("stop engine: %v", err)
+		}
+	}()
 	var once sync.Once
 	release := func() { once.Do(func() { close(a.release) }) }
 	defer release()
@@ -67,7 +71,11 @@ func TestTaskProgressColdStartFailureEndsOriginalStatus(t *testing.T) {
 	a := &slowStartingProgressAgent{entered: make(chan struct{}), release: make(chan struct{}), err: errors.New("startup failure")}
 	e := NewEngine("test", a, []Platform{p}, filepath.Join(t.TempDir(), "sessions.json"), LangEnglish)
 	e.SetDisplayConfig(DisplayCfg{FinalResponseOnly: true, TaskProgress: true})
-	defer e.Stop()
+	defer func() {
+		if err := e.Stop(); err != nil {
+			t.Errorf("stop engine: %v", err)
+		}
+	}()
 	var once sync.Once
 	release := func() { once.Do(func() { close(a.release) }) }
 	defer release()
