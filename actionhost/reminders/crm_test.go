@@ -16,7 +16,7 @@ import (
 func planFixture(h *Host, project string, revision int) CRMPlan {
 	p := principal(project, "approved")
 	r := h.routes[project]
-	return CRMPlan{EventID: fmt.Sprintf("event-%d", revision), Namespace: "fixture-crm", CustomerID: "customer-1", Revision: revision, ChangeID: fmt.Sprintf("change-%d", revision), Principal: p, At: h.now().Add(time.Hour).Format(time.RFC3339), Content: "Prepare fictional follow-up", Enabled: true, CustomerQuery: "C-001", CustomerName: "Fictional customer", Binding: CRMRoute{r.User, r.Chat, r.Project, r.PrivateChat}}
+	return CRMPlan{EventID: fmt.Sprintf("event-%d", revision), Namespace: "fixture-crm", CustomerID: "customer-1", Revision: revision, ChangeID: fmt.Sprintf("change-%d", revision), Principal: p, At: h.now().Add(time.Hour).Format(time.RFC3339), Content: "Prepare fictional follow-up", Enabled: true, CustomerQuery: "C-001", CustomerName: "Fictional customer", Binding: r.crmBinding()}
 }
 
 func planStore(t *testing.T, h *Host, fn func(*state)) {
@@ -47,7 +47,7 @@ func currentBridge(h *Host, current *CRMPlan) {
 }
 
 func TestCRMPlanRejectsMissingOrForgedBindings(t *testing.T) {
-	p := CRMPlan{EventID: "event", Namespace: "sandbox", CustomerID: "record", Revision: 1, ChangeID: "change", Principal: principal("ap", "message"), At: "2026-09-20T09:00:00+08:00", Content: "follow up", CustomerQuery: "C-1", Enabled: true, Binding: CRMRoute{"a", "pa", "ap", "pa"}}
+	p := CRMPlan{EventID: "event", Namespace: "sandbox", CustomerID: "record", Revision: 1, ChangeID: "change", Principal: principal("ap", "message"), At: "2026-09-20T09:00:00+08:00", Content: "follow up", CustomerQuery: "C-1", Enabled: true, Binding: CRMRoute{User: "a", Chat: "pa", Project: "ap", Private: "pa"}}
 	if !validCRMPlan(p) {
 		t.Fatal("valid plan rejected")
 	}

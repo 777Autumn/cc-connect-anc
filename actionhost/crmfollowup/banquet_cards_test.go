@@ -7,6 +7,26 @@ import (
 	"github.com/chenhg5/cc-connect/core"
 )
 
+func TestHandoffReceiptSeparatesNotificationFromVerifiedBusiness(t *testing.T) {
+	for _, status := range []string{"verified", "verification_unknown"} {
+		card := receiptCard(map[string]any{"status": status, "code": "handoff_write_verified", "handoff": map[string]any{"status": "待接手"}, "notification_note": "untrusted notice text"}, core.LangChinese)
+		found := false
+		for _, element := range card.Elements {
+			if text, ok := element.(core.CardPlainText); ok {
+				if text.Content == core.NewI18n(core.LangChinese).T(core.MsgHandoffNotificationSeparate) {
+					found = true
+				}
+				if strings.Contains(text.Content, "untrusted") {
+					t.Fatal("raw notice text displayed")
+				}
+			}
+		}
+		if found != (status == "verified") {
+			t.Fatal("wrong notification receipt", status)
+		}
+	}
+}
+
 func TestBanquetPreviewShowsRecipientVersionAndEveryFrozenMaterial(t *testing.T) {
 	preview := map[string]any{"operation_type": "banquet_handoff_submit", "actor": "Fixture owner",
 		"handoff": map[string]any{"name": "Synthetic banquet", "version": 2,

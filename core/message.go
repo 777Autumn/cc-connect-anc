@@ -380,6 +380,7 @@ type Message struct {
 	FileWorkNewInput bool
 	fileTurn         *FileTurn
 	fileSession      *Session
+	handoffStart     *handoffStartRequest // Host-only, created by a verified notice callback.
 	caseSources      []CaseSource
 
 	SessionKey   string // unique key for user context, e.g. "feishu:{chatID}:{userID}"

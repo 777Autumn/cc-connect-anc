@@ -31,10 +31,25 @@ type CRMPlan struct {
 }
 
 type CRMRoute struct {
-	User    string `json:"user_id"`
-	Chat    string `json:"source_chat_id"`
-	Project string `json:"project"`
-	Private string `json:"private_chat_id"`
+	User           string `json:"user_id"`
+	Chat           string `json:"source_chat_id"`
+	Project        string `json:"project"`
+	Private        string `json:"private_chat_id"`
+	Member         string `json:"member_id,omitempty"`
+	PrivateProject string `json:"private_project,omitempty"`
+	PrivateUser    string `json:"private_user_id,omitempty"`
+	PrivateAppID   string `json:"private_app_id,omitempty"`
+}
+
+func (r Route) crmBinding() CRMRoute {
+	return CRMRoute{User: r.User, Chat: r.Chat, Project: r.Project, Private: r.PrivateChat, Member: r.Member, PrivateProject: r.PrivateProject, PrivateUser: r.PrivateUser, PrivateAppID: r.PrivateAppID}
+}
+
+func (r CRMRoute) memberID() string {
+	if r.Member != "" {
+		return r.Member
+	}
+	return r.User
 }
 
 // Disabled is notification state for this revision. Outbox replay cannot undo
@@ -77,15 +92,19 @@ func (h *Host) EnableCRM(call func(context.Context, string, string, map[string]a
 
 func (h *Host) PlanBinding(p core.ActionPrincipal) map[string]any {
 	r, ok := h.routes[p.Project]
-	if !ok || p.Platform != "feishu" || p.UserID != r.User || p.ChatID != r.Chat || !h.authorized(r.User) || !h.sourceAuthorized(p.Project, r.User) {
+	if !ok || p.Platform != "feishu" || p.UserID != r.User || p.ChatID != r.Chat || !h.authorized(r.MemberID()) || !h.sourceAuthorized(p.Project, r.User) {
 		return nil
 	}
-	return map[string]any{"user_id": r.User, "source_chat_id": r.Chat, "project": r.Project, "private_chat_id": r.PrivateChat}
+	binding := map[string]any{"user_id": r.User, "source_chat_id": r.Chat, "project": r.Project, "private_chat_id": r.PrivateChat}
+	if r.Member != "" {
+		binding["member_id"], binding["private_project"], binding["private_user_id"], binding["private_app_id"] = r.Member, r.PrivateProject, r.PrivateUser, r.PrivateAppID
+	}
+	return binding
 }
 
 func (h *Host) crmRouteCurrent(p CRMPlan) bool {
 	r, ok := h.routes[p.Principal.Project]
-	return ok && p.Principal.UserID == r.User && p.Principal.ChatID == r.Chat && p.Binding == (CRMRoute{r.User, r.Chat, r.Project, r.PrivateChat}) && h.authorized(r.User) && h.sourceAuthorized(r.Project, r.User)
+	return ok && p.Principal.UserID == r.User && p.Principal.ChatID == r.Chat && p.Binding == r.crmBinding() && h.authorized(r.MemberID()) && h.sourceAuthorized(r.Project, r.User)
 }
 
 func decodeCRMPlan(value any) (CRMPlan, error) {
@@ -130,7 +149,7 @@ func (h *Host) applyCRMPlan(ctx context.Context, plan CRMPlan, lang core.Languag
 			return nil
 		}
 		at, _ := time.Parse(time.RFC3339, plan.At)
-		item := &Reminder{ID: "rem_" + uuid.NewString(), User: plan.Principal.UserID, Chat: plan.Principal.ChatID, Destination: plan.Binding.Private, Content: core.NewI18n(lang).Tf(core.MsgCRMReminderContent, plan.CustomerName, plan.Content), At: at.Unix(), Version: 1, Status: "pending", CRM: &plan}
+		item := &Reminder{ID: "rem_" + uuid.NewString(), User: plan.Binding.memberID(), Chat: plan.Principal.ChatID, Destination: plan.Binding.Private, Content: core.NewI18n(lang).Tf(core.MsgCRMReminderContent, plan.CustomerName, plan.Content), At: at.Unix(), Version: 1, Status: "pending", CRM: &plan}
 		if !h.crmRouteCurrent(plan) {
 			item.Status = "paused"
 			item.PauseReason = "crm_plan_unverified"
@@ -250,7 +269,7 @@ func (h *Host) updateCRM(ctx context.Context, route Route, in input, principal c
 		}
 		copy := *item.CRM
 		plan = &copy
-		if item.User != route.User || (route.Chat != route.PrivateChat && item.Chat != route.Chat) {
+		if item.User != route.MemberID() || (route.Chat != route.PrivateChat && item.Chat != route.Chat) {
 			failure = blocked("not_found")
 		} else if item.Version != *in.Version {
 			failure = blocked("version_conflict")

@@ -58,7 +58,7 @@ func (h *Host) queueList(st *state, r Route, items []*Reminder, lang core.Langua
 		lines = append(lines, fmt.Sprintf("%s\n%s · %s\n%s", item.Content, reminderDate(item.At, lang), status, core.NewI18n(lang).Tf(core.MsgReminderNumber, item.ID)))
 	}
 	for _, text := range pages(header, lines) {
-		h.addBatch(st, r.User, r.PrivateChat, nil, text)
+		h.addBatch(st, r.MemberID(), r.PrivateChat, nil, text)
 	}
 }
 
@@ -98,7 +98,7 @@ func (h *Host) privateRoute(user string) string {
 		return ""
 	}
 	for _, r := range h.routes {
-		if r.User == user {
+		if r.MemberID() == user {
 			return r.PrivateChat
 		}
 	}

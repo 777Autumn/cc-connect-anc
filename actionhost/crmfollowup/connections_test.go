@@ -85,3 +85,55 @@ func TestPersonalConnectionGuardDistinguishesTemporaryFromExpired(t *testing.T) 
 		t.Fatal("host call cancellation expired the connection")
 	}
 }
+
+func TestConnectionStartupChecksPhysicalMemberAndAppBinding(t *testing.T) {
+	route := ConnectionRoute{Project: "owner-private", AppID: "owner-app", TenantKey: "tenant", MemberID: "owner", UserID: "owner-personal-open", ChatID: "private", Audience: "private"}
+	for _, tamper := range []string{"", "member_id", "user_id", "chat_id", "project", "source_app_id", "source_tenant_key", "audience", "disabled"} {
+		t.Run(tamper, func(t *testing.T) {
+			a := &Adapter{run: func(_ context.Context, _, command string, input []byte, _ []string) ([]byte, error) {
+				var request map[string]any
+				if err := json.Unmarshal(input, &request); err != nil {
+					t.Fatal(err)
+				}
+				if command != "host-connection-config" || request["project"] != route.Project || request["source_app_id"] != route.AppID || request["source_tenant_key"] != route.TenantKey {
+					t.Fatal("startup source binding missing")
+				}
+				binding := map[string]any{"audience": route.Audience, "platform": "feishu", "project": route.Project, "member_id": route.MemberID, "user_id": route.UserID, "chat_id": route.ChatID}
+				result := map[string]any{"status": "enabled", "project": route.Project, "source_app_id": route.AppID, "source_tenant_key": route.TenantKey, "users": []string{"owner", "partner"}, "bindings": []any{binding}}
+				if tamper == "disabled" {
+					result["status"] = "disabled"
+				} else if _, ok := result[tamper]; ok {
+					result[tamper] = "forged"
+				} else if tamper != "" {
+					binding[tamper] = "forged"
+				}
+				return json.Marshal(result)
+			}}
+			enabled, err := a.ConfigureConnections(context.Background(), route)
+			if (err == nil) != (tamper == "") || enabled != (tamper == "") {
+				t.Fatalf("binding validation: %v %v", enabled, err)
+			}
+		})
+	}
+}
+
+func TestConnectionMaintenanceUsesMemberInsteadOfCrossAppOpenID(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	a := &Adapter{connectionUsers: []string{"stable-owner"}, connectionMembers: true, run: func(_ context.Context, _, command string, input []byte, _ []string) ([]byte, error) {
+		var request map[string]string
+		if err := json.Unmarshal(input, &request); err != nil {
+			t.Fatal(err)
+		}
+		if command != "host-connection-tick" || request["member_id"] != "stable-owner" || request["user_id"] != "" {
+			t.Fatal("physical open_id used as member")
+		}
+		cancel()
+		return []byte(`{"changes":[{"member_id":"stable-owner","status":"expired"}]}`), nil
+	}}
+	changed := ""
+	a.RunConnections(ctx, func(member string) { changed = member })
+	if changed != "stable-owner" {
+		t.Fatal("member invalidation missing")
+	}
+}

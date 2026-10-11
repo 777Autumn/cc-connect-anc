@@ -520,8 +520,14 @@ func main() {
 			combinedHost = crmActionHost
 			toolsEnabled = crmActionHost.ToolsEnabled()
 			connectionCtx, connectionCancel := context.WithTimeout(context.Background(), 30*time.Second)
-			sourceAppID, _ := proj.Platforms[0].Options["app_id"].(string)
-			connectionsEnabled, connectionErr := crmActionHost.ConfigureConnections(connectionCtx, sourceAppID)
+			options := proj.Platforms[0].Options
+			sourceAppID, _ := options["app_id"].(string)
+			tenant, _ := options["source_tenant_key"].(string)
+			member, _ := options["member_id"].(string)
+			physicalUser, _ := options["allow_from"].(string)
+			chat, _ := options["allow_chat"].(string)
+			audience := connectionAudience(options)
+			connectionsEnabled, connectionErr := crmActionHost.ConfigureConnections(connectionCtx, crmfollowup.ConnectionRoute{Project: proj.Name, AppID: sourceAppID, TenantKey: tenant, MemberID: member, UserID: physicalUser, ChatID: chat, Audience: audience})
 			connectionCancel()
 			if connectionErr != nil || (connectionsEnabled && (!proj.FileWork.Enabled || proj.FileWork.Runtime != "native")) {
 				slog.Error("personal connections require valid source binding and native controlled work", "project", proj.Name)
@@ -530,6 +536,12 @@ func main() {
 			if connectionsEnabled {
 				engine.SetConnectionHost(crmActionHost)
 				personalConnectionHost = crmActionHost
+				if member != "" && audience == "private" {
+					if err := engine.SetHandoffNotifications(platforms[0], crmActionHost, core.HandoffNotificationRoute{AppID: sourceAppID, TenantKey: tenant, MemberID: member, UserID: physicalUser, ChatID: chat}); err != nil {
+						slog.Error("personal handoff route rejected", "project", proj.Name, "error", err)
+						os.Exit(1)
+					}
+				}
 			}
 			crmActionHostAttached[proj.Name] = true
 		}
@@ -1147,7 +1159,7 @@ func main() {
 		for _, r := range identityRoutes {
 			if r.Chat == r.PrivateChat {
 				if sender, ok := reminderPlatforms[r.Project].(core.ReminderSender); ok {
-					senders[r.User] = authorizedReminderSender{engine: reminderEngines[r.Project], user: r.User, sender: sender}
+					senders[r.MemberID()] = authorizedReminderSender{engine: reminderEngines[r.Project], user: r.User, sender: sender}
 				}
 			}
 		}
@@ -1330,8 +1342,12 @@ func main() {
 		go func() {
 			defer close(connectionDone)
 			personalConnectionHost.RunConnections(reminderCtx, func(user string) {
-				for _, engine := range engines {
-					engine.InvalidateConnection(user)
+				for i, engine := range engines {
+					options := cfg.Projects[i].Platforms[0].Options
+					if routeMember(options) == user {
+						physicalUser, _ := options["allow_from"].(string)
+						engine.InvalidateConnection(physicalUser)
+					}
 				}
 			})
 		}()
@@ -1740,6 +1756,13 @@ func validateCRMProjectSet(cfg *config.Config, hosts map[string]*crmfollowup.Ada
 	seen := make(map[string]bool)
 	users, dirs, routes := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	appID, domain, credential := "", "", ""
+	personal := personalRoutesConfigured(cfg)
+	if personal {
+		if err := validatePersonalRoutes(cfg, sharedOwner); err != nil {
+			return err
+		}
+	}
+	appCredentials := map[string]string{}
 	senders, chats := map[string]int{}, map[string]int{}
 	var totalCapacity int64
 	for _, proj := range cfg.Projects {
@@ -1788,13 +1811,13 @@ func validateCRMProjectSet(cfg *config.Config, hosts map[string]*crmfollowup.Ada
 				return errors.New("fixed routes require one exact sender and actual chat ID")
 			}
 		}
-		route := sender + "\x00" + chat
+		route := sender + "\x00" + fixedChatKey(opts)
 		if routes[route] {
 			return errors.New("duplicate fixed sender/chat route")
 		}
 		routes[route] = true
-		senders[sender]++
-		chats[chat]++
+		senders[routeMember(opts)]++
+		chats[fixedChatKey(opts)]++
 		id, _ := opts["app_id"].(string)
 		secret, _ := opts["app_secret"].(string)
 		endpoint, _ := opts["domain"].(string)
@@ -1802,9 +1825,13 @@ func validateCRMProjectSet(cfg *config.Config, hosts map[string]*crmfollowup.Ada
 		if endpoint == "" {
 			endpoint = "https://open.feishu.cn"
 		}
-		if id == "" || secret == "" || (appID != "" && (id != appID || endpoint != domain || secret != credential)) {
+		if id == "" || secret == "" || (!personal && appID != "" && (id != appID || endpoint != domain || secret != credential)) {
 			return errors.New("fixed CRM environments must share one receiving app")
 		}
+		if previous, ok := appCredentials[id]; ok && previous != endpoint+"\x00"+secret {
+			return errors.New("receiving app domain and credentials must be consistent")
+		}
+		appCredentials[id] = endpoint + "\x00" + secret
 		appID, domain, credential = id, endpoint, secret
 	}
 	if len(seen) != len(hosts) {

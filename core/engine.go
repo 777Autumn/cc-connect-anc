@@ -467,6 +467,7 @@ type Engine struct {
 	actionHost               ActionHost
 	fileWorkHost             FileWorkHost
 	connectionHost           ConnectionHost
+	handoffNotifications     *handoffNotifications
 	connectionToolsMu        sync.Mutex
 	sharedCasesEnabled       bool
 	caseConfirmationsEnabled bool
@@ -2409,6 +2410,7 @@ func (e *Engine) Start() error {
 	}
 
 	e.startObserver()
+	e.startHandoffNotifications()
 	return nil
 }
 
@@ -2419,6 +2421,9 @@ func (e *Engine) Stop() error {
 
 	// Cancel first so late lifecycle callbacks observe shutdown immediately.
 	e.cancel()
+	if e.handoffNotifications != nil {
+		e.handoffNotifications.wg.Wait()
+	}
 
 	if e.observeCancel != nil {
 		e.observeCancel()

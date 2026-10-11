@@ -40,18 +40,19 @@ type commandRunner func(context.Context, string, string, []byte, []string) ([]by
 // Adapter is the only business adapter in this fork. The helper owns its
 // SQLite ledger, approval state machine, Feishu writes, and read-back receipt.
 type Adapter struct {
-	command         string
-	hostSecret      string
-	hostSecretFile  string
-	workDir         string
-	runAsUser       string
-	runAsUID        int
-	stageDir        string
-	validateCommand bool
-	toolsEnabled    bool
-	run             commandRunner
-	planBinding     func(core.ActionPrincipal) map[string]any
-	connectionUsers []string
+	command           string
+	hostSecret        string
+	hostSecretFile    string
+	workDir           string
+	runAsUser         string
+	runAsUID          int
+	stageDir          string
+	validateCommand   bool
+	toolsEnabled      bool
+	run               commandRunner
+	planBinding       func(core.ActionPrincipal) map[string]any
+	connectionUsers   []string
+	connectionMembers bool
 }
 
 // NewFromEnv captures the host-only secret and removes it from the daemon
@@ -634,6 +635,9 @@ func receiptCard(result map[string]any, lang core.Language) *core.Card {
 	}
 	if row, ok := result["handoff"].(map[string]any); ok {
 		b.Divider().Markdown(renderHandoff(row, i18n))
+		if status == "verified" && text(result["notification_note"]) != "" {
+			b.PlainText(i18n.T(core.MsgHandoffNotificationSeparate))
+		}
 	}
 	if profile, ok := result["customer_profile"].(map[string]any); ok {
 		b.Divider().Markdown(renderCustomerProfile(profile, true, i18n))

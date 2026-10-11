@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -84,7 +85,7 @@ func TestDisabledHostAndSessionEnvironmentExposeNoPrivateConfiguration(t *testin
 	if err != nil || len(env) != 1 || env[0] != "TEAM_BRAIN_SESSION_TOKEN=session" {
 		t.Fatal("private config in model env")
 	}
-	for _, command := range []string{"approve", "execute", "raw-api"} {
+	for _, command := range []string{"approve", "execute", "raw-api", "pending", "knowledge_pending"} {
 		result, card, err := a.Tool(context.Background(), command, json.RawMessage(`{}`), core.ActionPrincipal{}, "session", core.LangEnglish)
 		if err != nil || card != nil || result["status"] != "blocked" {
 			t.Fatal("model obtained privileged operation")
@@ -208,5 +209,84 @@ func TestSubprocessReceivesAuthenticatedPrincipalAndNoInheritedSecrets(t *testin
 	actor := request["principal"].(map[string]any)
 	if actor["user_id"] != "member" || actor["project"] != "project" || request["operation"] != "tool" || request["session_token"] != "scoped-token" {
 		t.Fatal("lost trusted context")
+	}
+}
+
+func TestPendingActionsHostEnvelopeAndFailClosedResults(t *testing.T) {
+	// Build a tiny native host so the private subprocess contract also runs on Windows.
+	directory := t.TempDir()
+	source := filepath.Join(directory, "host.go")
+	host := filepath.Join(directory, "host")
+	goTool := filepath.Join(runtime.GOROOT(), "bin", "go")
+	if runtime.GOOS == "windows" {
+		host += ".exe"
+		goTool += ".exe"
+	}
+	program := `package main
+import ("io"; "os")
+func main() {
+ if os.Getenv("SYNTHETIC_SECRET") != "" { os.Exit(2) }
+ request, err := io.ReadAll(os.Stdin); if err != nil { os.Exit(3) }
+ if os.WriteFile("request.json", request, 0600) != nil { os.Exit(4) }
+ response, err := os.ReadFile("response.json"); if err != nil { os.Exit(5) }
+ os.Stdout.Write(response)
+}`
+	if err := os.WriteFile(source, []byte(program), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command(goTool, "build", "-o", host, source).CombinedOutput(); err != nil {
+		t.Fatalf("build fixture host: %v: %s", err, out)
+	}
+	t.Setenv("SYNTHETIC_SECRET", "must-not-forward")
+	a := &Adapter{command: host, projects: map[string]bool{"project": true}}
+	principal := core.ActionPrincipal{Platform: "feishu", UserID: "fixture-member", ChatID: "fixture-chat",
+		SessionKey: "physical-session", Project: "project", MessageID: "switch-card"}
+	for _, tc := range []struct {
+		name, response  string
+		pending, failed bool
+	}{
+		{"pending", `{"pending":true}`, true, false},
+		{"clear", `{"pending":false}`, false, false},
+		{"blocked", `{"status":"blocked","code":"principal_mismatch"}`, false, true},
+		{"missing", `{}`, false, true},
+		{"null", `{"pending":null}`, false, true},
+		{"string", `{"pending":"false"}`, false, true},
+		{"extra", `{"pending":false,"approval_id":"must-not-surface"}`, false, true},
+		{"invalid", `not-json`, false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := os.WriteFile(filepath.Join(directory, "response.json"), []byte(tc.response), 0600); err != nil {
+				t.Fatal(err)
+			}
+			pending, err := a.PendingActions(context.Background(), principal)
+			if pending != tc.pending || (err != nil) != tc.failed {
+				t.Fatalf("pending=%t err=%v", pending, err)
+			}
+			if err != nil && strings.Contains(err.Error(), "must-not-surface") {
+				t.Fatal("host details leaked")
+			}
+		})
+	}
+	raw, err := os.ReadFile(filepath.Join(directory, "request.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var request map[string]json.RawMessage
+	if json.Unmarshal(raw, &request) != nil || len(request) != 2 || string(request["operation"]) != `"pending"` {
+		t.Fatal("pending request exposed a model token or omitted the operation")
+	}
+	var got core.ActionPrincipal
+	if json.Unmarshal(request["principal"], &got) != nil || got != principal {
+		t.Fatal("pending query lost the authenticated physical principal")
+	}
+	principal.Project = "not-configured"
+	if pending, err := a.PendingActions(context.Background(), principal); pending || err == nil {
+		t.Fatal("disabled project passed pending query")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	principal.Project = "project"
+	if pending, err := a.PendingActions(ctx, principal); pending || err == nil {
+		t.Fatal("cancelled pending query passed")
 	}
 }

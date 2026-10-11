@@ -141,7 +141,7 @@ func fixture(t *testing.T) (*Host, *senderStub, *time.Time, string) {
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	s := &senderStub{}
-	h, err := New(store, []Route{{"a", "pa", "ap", "pa"}, {"a", "group", "ag", "pa"}, {"b", "pb", "bp", "pb"}, {"b", "group", "bg", "pb"}, {"c", "pc", "cp", "pc"}, {"c", "group", "cg", "pc"}}, map[string]Sender{"a": s, "b": s, "c": s}, func(string, string) bool { return true })
+	h, err := New(store, []Route{{User: "a", Chat: "pa", Project: "ap", PrivateChat: "pa"}, {User: "a", Chat: "group", Project: "ag", PrivateChat: "pa"}, {User: "b", Chat: "pb", Project: "bp", PrivateChat: "pb"}, {User: "b", Chat: "group", Project: "bg", PrivateChat: "pb"}, {User: "c", Chat: "pc", Project: "cp", PrivateChat: "pc"}, {User: "c", Chat: "group", Project: "cg", PrivateChat: "pc"}}, map[string]Sender{"a": s, "b": s, "c": s}, func(string, string) bool { return true })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -403,7 +403,7 @@ func TestReminderProcessHelper(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = store.Close() }()
-	h, err := New(store, []Route{{"a", "pa", "ap", "pa"}}, map[string]Sender{"a": &senderStub{}}, func(string, string) bool { return true })
+	h, err := New(store, []Route{{User: "a", Chat: "pa", Project: "ap", PrivateChat: "pa"}}, map[string]Sender{"a": &senderStub{}}, func(string, string) bool { return true })
 	if err != nil {
 		t.Fatal(err)
 	}

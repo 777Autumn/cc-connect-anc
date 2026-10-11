@@ -3,6 +3,7 @@ package feishu
 import (
 	"errors"
 	"github.com/chenhg5/cc-connect/core"
+	larkevent "github.com/larksuite/oapi-sdk-go/v3/event"
 	"log/slog"
 	"strings"
 	"sync"
@@ -65,6 +66,16 @@ func (p *Platform) Prepare(handler core.MessageHandler) error {
 				return errors.New("fixed routes require one exact sender and chat")
 			}
 		}
+		if p.memberID != "" || p.sourceTenantKey != "" {
+			for _, value := range []string{p.memberID, p.sourceTenantKey} {
+				if value == "" || strings.ContainsAny(value, "*, \t\r\n\x00") {
+					return errors.New("invalid personal route identity")
+				}
+			}
+		}
+		if p.legacyPrivateChat != "" && (p.memberID == "" || p.legacyPrivateChat == p.allowChat || strings.ContainsAny(p.legacyPrivateChat, "*, \t\r\n\x00") || strings.TrimSpace(p.legacyPrivateRedirect) == "") {
+			return errors.New("invalid legacy private redirect")
+		}
 		if p.shareSessionInChannel || p.threadIsolation || p.shouldUseWebhookMode() {
 			return errors.New("fixed routes require isolated sessions and one websocket transport")
 		}
@@ -73,7 +84,9 @@ func (p *Platform) Prepare(handler core.MessageHandler) error {
 	for _, sibling := range group.allPlatforms() {
 		if sibling != p && (p.strictRoutes || sibling.strictRoutes) &&
 			(!p.strictRoutes || !sibling.strictRoutes || (p.allowFrom == sibling.allowFrom && p.allowChat == sibling.allowChat) ||
-				p.appSecret != sibling.appSecret) {
+				p.appSecret != sibling.appSecret || p.sourceTenantKey != sibling.sourceTenantKey ||
+				(p.legacyPrivateChat != "" && (p.legacyPrivateChat == sibling.allowChat || p.legacyPrivateChat == sibling.legacyPrivateChat)) ||
+				(sibling.legacyPrivateChat != "" && sibling.legacyPrivateChat == p.allowChat)) {
 			unregisterSharedWS(p)
 			return errors.New("ambiguous or inconsistent fixed receiver routes")
 		}
@@ -83,6 +96,22 @@ func (p *Platform) Prepare(handler core.MessageHandler) error {
 	p.handler = handler
 	p.mu.Unlock()
 	return nil
+}
+
+func (p *Platform) acceptSource(event *larkevent.EventV2Base) bool {
+	return p.memberID == "" || (event != nil && event.Header != nil && event.Header.AppID == p.appID && event.Header.TenantKey == p.sourceTenantKey)
+}
+
+func (p *Platform) acceptLegacyPrivate(sender, chat string) bool {
+	if !p.strictRoutes || p.sharedGroup == nil || p.legacyPrivateChat == "" || sender != p.allowFrom || chat != p.legacyPrivateChat {
+		return false
+	}
+	for _, sibling := range p.sharedGroup.allPlatforms() {
+		if sibling != p && (sibling.allowChat == chat || sibling.legacyPrivateChat == chat) {
+			return false
+		}
+	}
+	return true
 }
 
 func (p *Platform) acceptFixedRoute(sender, chat string) bool {
