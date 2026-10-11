@@ -75,3 +75,17 @@ func TestOperationsRecipientRequiresUniqueVerifiedPrivateProject(t *testing.T) {
 		t.Fatal("unwrapped authorization bypass")
 	}
 }
+
+func TestOperationsRecipientUsesMemberSenderAndFreezesPersonalApp(t *testing.T) {
+	route := reminders.Route{User: "personal-open-owner", Member: "owner", AppID: "personal-app", Chat: "personal-chat", PrivateChat: "personal-chat", Project: "owner-private"}
+	senders := map[string]reminders.Sender{"owner": authorizedReminderSender{engine: &core.Engine{}, user: route.User, sender: opsTestSender{}}}
+	selected := operationsRecipient(route.Project, []reminders.Route{route}, senders)()
+	if selected.Sender == nil || selected.Chat != route.PrivateChat {
+		t.Fatal("owner member not routed to personal app")
+	}
+	route.AppID = "different-personal-app"
+	changed := operationsRecipient(route.Project, []reminders.Route{route}, senders)()
+	if selected.Binding == changed.Binding {
+		t.Fatal("changing personal app retained frozen alert binding")
+	}
+}

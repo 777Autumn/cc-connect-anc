@@ -861,7 +861,32 @@ const (
 	MsgBanquetVerifiedBody  MsgKey = "banquet_verified_body"
 )
 
+const (
+	MsgHandoffNoticeTitle          MsgKey = "handoff_notice_title"
+	MsgHandoffNotificationSeparate MsgKey = "handoff_notification_separate"
+	MsgHandoffNoticeSubmit         MsgKey = "handoff_notice_submit"
+	MsgHandoffNoticeAccepted       MsgKey = "handoff_notice_accepted"
+	MsgHandoffNoticeReturned       MsgKey = "handoff_notice_returned"
+	MsgHandoffStart                MsgKey = "handoff_start"
+	MsgHandoffStarted              MsgKey = "handoff_started"
+	MsgHandoffAlreadyStarted       MsgKey = "handoff_already_started"
+	MsgHandoffUnavailable          MsgKey = "handoff_unavailable"
+	MsgHandoffBusy                 MsgKey = "handoff_busy"
+	MsgHandoffCheckReply           MsgKey = "handoff_check_reply"
+)
+
 var messages = map[MsgKey]map[Language]string{
+	MsgHandoffNotificationSeparate: {LangEnglish: "The business change is verified. Assistant notification is recorded separately; query the handoff for its delivery status.", LangChinese: "交接业务处理已完成。助手通知单独记录，可在交接查询中查看通知状态。", LangTraditionalChinese: "交接業務處理已完成。助手通知單獨記錄，可在交接查詢中查看通知狀態。", LangJapanese: "業務の変更は検証済みです。通知結果は別に記録されます。引継ぎを照会して配信状況を確認してください。", LangSpanish: "El cambio de negocio está verificado. La notificación se registra por separado; consulta el traspaso para conocer su entrega."},
+	MsgHandoffNoticeTitle:          {LangEnglish: "Handoff update", LangChinese: "交接动态", LangTraditionalChinese: "交接動態", LangJapanese: "引継ぎの更新", LangSpanish: "Actualización del traspaso"},
+	MsgHandoffNoticeSubmit:         {LangEnglish: "Published materials await your review. Organize them when ready, or open My pending handoffs. Acceptance still requires your confirmation.", LangChinese: "已发布的材料等待你查看。准备好后点击整理交接，也可从“我的待接手”进入；接手仍需本人确认。", LangTraditionalChinese: "已發布的材料等待你查看。準備好後點擊整理交接，也可從「我的待接手」進入；接手仍需本人確認。", LangJapanese: "公開済み資料の確認待ちです。準備ができたら整理するか、引継ぎ待ち一覧を開いてください。受領には本人の確認が必要です。", LangSpanish: "Hay materiales publicados pendientes de revisión. Organízalos cuando puedas o abre Mis traspasos pendientes. La aceptación requiere tu confirmación."},
+	MsgHandoffNoticeAccepted:       {LangEnglish: "The recipient confirmed acceptance. Open the handoff record to view the result.", LangChinese: "指定接手人已确认接手。可打开交接记录查看结果。", LangTraditionalChinese: "指定接手人已確認接手。可開啟交接記錄查看結果。", LangJapanese: "指定の担当者が受領を確認しました。引継ぎ記録で結果を確認できます。", LangSpanish: "El destinatario confirmó la aceptación. Consulta el registro del traspaso."},
+	MsgHandoffNoticeReturned:       {LangEnglish: "The recipient returned the handoff. Open the record to review missing items before publishing a new version.", LangChinese: "指定接手人已退回交接。请查看记录中的缺项，补充后再发布新版。", LangTraditionalChinese: "指定接手人已退回交接。請查看記錄中的缺項，補充後再發布新版。", LangJapanese: "引継ぎが差し戻されました。記録の不足事項を確認し、補完して新版を公開してください。", LangSpanish: "El destinatario devolvió el traspaso. Revisa lo que falta antes de publicar otra versión."},
+	MsgHandoffStart:                {LangEnglish: "Organize handoff", LangChinese: "整理交接", LangTraditionalChinese: "整理交接", LangJapanese: "引継ぎを整理", LangSpanish: "Organizar traspaso"},
+	MsgHandoffStarted:              {LangEnglish: "Handoff organization started in a new task.", LangChinese: "已另起新任务整理交接。", LangTraditionalChinese: "已另起新任務整理交接。", LangJapanese: "新しいタスクで引継ぎ整理を開始しました。", LangSpanish: "Se inició un nuevo trabajo para organizar el traspaso."},
+	MsgHandoffAlreadyStarted:       {LangEnglish: "This notice was already used. Check the existing task or My pending handoffs; clicking again will not start another task.", LangChinese: "这条通知已处理。请查看原任务或“我的待接手”；重复点击不会另起任务。", LangTraditionalChinese: "這條通知已處理。請查看原任務或「我的待接手」；重複點擊不會另起任務。", LangJapanese: "この通知は処理済みです。元のタスクか引継ぎ待ち一覧を確認してください。再クリックしても新しいタスクは始まりません。", LangSpanish: "Este aviso ya se usó. Revisa el trabajo existente o Mis traspasos pendientes; no se iniciará otro trabajo."},
+	MsgHandoffUnavailable:          {LangEnglish: "This handoff could not be verified. No organization task started. Open My pending handoffs to check the current version, access and connection.", LangChinese: "暂时无法核验这项交接，未启动整理任务。请从“我的待接手”核对当前版本、权限和个人连接。", LangTraditionalChinese: "暫時無法核驗這項交接，未啟動整理任務。請從「我的待接手」核對目前版本、權限和個人連接。", LangJapanese: "引継ぎを検証できず、整理を開始しませんでした。引継ぎ待ち一覧で版、権限、接続を確認してください。", LangSpanish: "No se pudo verificar el traspaso; no se inició la organización. Revisa su versión, permisos y conexión en Mis traspasos pendientes."},
+	MsgHandoffBusy:                 {LangEnglish: "Another task or approval is pending. Finish it and click Organize handoff again.", LangChinese: "当前还有任务或审批待处理。完成后再点击“整理交接”，不会打断当前工作。", LangTraditionalChinese: "目前還有任務或審批待處理。完成後再點擊「整理交接」，不會打斷目前工作。", LangJapanese: "別のタスクまたは承認が保留中です。完了後に再度引継ぎを整理してください。", LangSpanish: "Hay un trabajo o una aprobación pendiente. Termínalo y vuelve a pulsar Organizar traspaso."},
+	MsgHandoffCheckReply:           {LangEnglish: "Check the assistant's message for the result.", LangChinese: "请查看助手发来的处理提示。", LangTraditionalChinese: "請查看助手發來的處理提示。", LangJapanese: "アシスタントのメッセージを確認してください。", LangSpanish: "Consulta el mensaje del asistente."},
 	MsgTaskProcessing: {
 		LangEnglish: "Task in progress.", LangChinese: "任务处理中。",
 		LangTraditionalChinese: "任務處理中。", LangJapanese: "タスクを処理しています。", LangSpanish: "Tarea en curso.",

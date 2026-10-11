@@ -219,6 +219,9 @@ func (e *Engine) failClosedHostedTurn(sessionKey string, state *interactiveState
 }
 
 func (e *Engine) handleTrustedCardAction(p Platform, action TrustedCardAction) TrustedCardActionResponse {
+	if action.Kind == handoffStartKind {
+		return e.handleHandoffStart(p, action)
+	}
 	e.actionMu.RLock()
 	host := e.actionHost
 	e.actionMu.RUnlock()

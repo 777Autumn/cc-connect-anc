@@ -19,8 +19,16 @@ import (
 	"github.com/google/uuid"
 )
 
-// Route is populated only from the six verified host environments.
-type Route struct{ User, Chat, Project, PrivateChat string }
+// Route preserves the physical sender while Member selects the personal destination.
+type Route struct{ User, Chat, Project, PrivateChat, Member, AppID, PrivateProject, PrivateUser, PrivateAppID string }
+
+func (r Route) MemberID() string {
+	if r.Member != "" {
+		return r.Member
+	}
+	return r.User
+}
+
 type Sender interface {
 	SendReminder(context.Context, string, string, string) (string, error)
 }
@@ -47,15 +55,15 @@ func New(store *Store, routes []Route, senders map[string]Sender, sourceAuthoriz
 		if r.User == "" || r.Chat == "" || r.Project == "" || r.PrivateChat == "" || h.routes[r.Project].Project != "" {
 			return nil, errors.New("invalid reminder routes")
 		}
-		if chat := private[r.User]; chat != "" && chat != r.PrivateChat {
+		if chat := private[r.MemberID()]; chat != "" && chat != r.PrivateChat {
 			return nil, errors.New("ambiguous private route")
 		}
 		for user, chat := range private {
-			if user != r.User && chat == r.PrivateChat {
+			if user != r.MemberID() && chat == r.PrivateChat {
 				return nil, errors.New("shared private route")
 			}
 		}
-		private[r.User] = r.PrivateChat
+		private[r.MemberID()] = r.PrivateChat
 		h.routes[r.Project] = r
 	}
 	for user, sender := range senders {
@@ -145,7 +153,7 @@ func blocked(code string) map[string]any { return map[string]any{"status": "bloc
 
 func (h *Host) Tool(ctx context.Context, command string, raw json.RawMessage, p core.ActionPrincipal, token string, lang core.Language) (map[string]any, *core.ActionHostResult, error) {
 	r, ok := h.routes[p.Project]
-	if !ok || p.Platform != "feishu" || r.User != p.UserID || r.Chat != p.ChatID || p.MessageID == "" || !h.authorized(r.User) || !h.sourceAuthorized(p.Project, p.UserID) {
+	if !ok || p.Platform != "feishu" || r.User != p.UserID || r.Chat != p.ChatID || p.MessageID == "" || !h.authorized(r.MemberID()) || !h.sourceAuthorized(p.Project, p.UserID) {
 		return blocked("invalid_identity"), nil, nil
 	}
 	in, err := decode(raw)
@@ -180,7 +188,7 @@ func (h *Host) Tool(ctx context.Context, command string, raw json.RawMessage, p 
 		switch command {
 		case "reminder-create":
 			at, _ := time.Parse(time.RFC3339, *in.At)
-			item := &Reminder{ID: "rem_" + uuid.NewString(), User: r.User, Chat: r.Chat, Destination: r.PrivateChat, Content: strings.TrimSpace(*in.Content), At: at.Unix(), Version: 1, Status: "pending"}
+			item := &Reminder{ID: "rem_" + uuid.NewString(), User: r.MemberID(), Chat: r.Chat, Destination: r.PrivateChat, Content: strings.TrimSpace(*in.Content), At: at.Unix(), Version: 1, Status: "pending"}
 			st.Items[item.ID] = item
 			result = map[string]any{"status": "created", "reminder": visible(item)}
 		case "reminder-list":
@@ -207,7 +215,7 @@ var beijing = time.FixedZone("Asia/Shanghai", 8*60*60)
 
 func changeReminder(st *state, r Route, command string, in input) map[string]any {
 	item := st.Items[*in.ID]
-	if item == nil || item.User != r.User || (r.Chat != r.PrivateChat && item.Chat != r.Chat) {
+	if item == nil || item.User != r.MemberID() || (r.Chat != r.PrivateChat && item.Chat != r.Chat) {
 		return blocked("not_found")
 	}
 	if item.Version != *in.Version {
@@ -345,7 +353,7 @@ func visible(r *Reminder) map[string]any {
 func scopedItems(st *state, r Route, all bool) []*Reminder {
 	items := []*Reminder{}
 	for _, item := range st.Items {
-		if item.User == r.User && (r.Chat == r.PrivateChat || all || item.Chat == r.Chat) {
+		if item.User == r.MemberID() && (r.Chat == r.PrivateChat || all || item.Chat == r.Chat) {
 			items = append(items, item)
 		}
 	}

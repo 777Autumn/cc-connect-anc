@@ -202,6 +202,19 @@ func (e *Engine) handleFileWorkMessage(p Platform, msg *Message) bool {
 			busy = existing
 		}
 	}
+	if msg.handoffStart != nil {
+		active := e.sessions.FindByID(e.sessions.ActiveSessionID(msg.SessionKey))
+		if busy != nil || (active != nil && active.hasUnfinishedFileTurns()) {
+			return fail(MsgHandoffBusy)
+		}
+		if _, pending := e.lookupPending(msg.SessionKey); pending != nil {
+			return fail(MsgHandoffBusy)
+		}
+		if key := e.prepareHandoffStart(msg); key != "" {
+			return fail(key)
+		}
+		intent = "new"
+	}
 	if busy != nil && msg.ParentMessageID == "" && (!msg.FileWorkPrivate || intent == "new") {
 		if intent == "new" {
 			return fail(MsgFileNewWorkBusy)
@@ -219,7 +232,9 @@ func (e *Engine) handleFileWorkMessage(p Platform, msg *Message) bool {
 		return fail(MsgFileRecoveryUnknown)
 	}
 	sourceReceipt := ""
-	if lookupErr == nil && ref.Import {
+	if msg.handoffStart != nil {
+		session = e.sessions.NewSession(msg.SessionKey, "handoff")
+	} else if lookupErr == nil && ref.Import {
 		if msg.FileWorkPrivate || msg.ParentMessageID == "" {
 			return fail(MsgFileWorkAssociationRequired)
 		}
@@ -323,6 +338,9 @@ func (e *Engine) handleFileWorkMessage(p Platform, msg *Message) bool {
 	if err != nil {
 		return fail(MsgFileWorkUnavailable)
 	}
+	if msg.handoffStart != nil && !e.claimHandoffStart(msg, session, work.WorkID) {
+		return fail(MsgHandoffUnavailable)
+	}
 	e.interactiveMu.Lock()
 	old := e.interactiveStates[msg.SessionKey]
 	different := false
@@ -364,6 +382,9 @@ func (e *Engine) handleFileWorkMessage(p Platform, msg *Message) bool {
 	state.mu.Unlock()
 	e.interactiveMu.Unlock()
 	session.TouchUserActivity()
+	if msg.handoffStart != nil {
+		msg.handoffStart.accepted = true
+	}
 	runMessageAccepted(msg)
 	go e.processInteractiveMessageWith(p, msg, session, agent, e.sessions, msg.SessionKey, "", msg.SessionKey)
 	return true

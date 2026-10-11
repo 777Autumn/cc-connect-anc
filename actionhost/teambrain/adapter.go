@@ -213,6 +213,20 @@ func (a *Adapter) BindCard(ctx context.Context, id string, principal core.Action
 	return nil
 }
 
+// PendingActions checks every work owned by the authenticated physical principal.
+// It is a host operation, never a model command or session-token capability.
+func (a *Adapter) PendingActions(ctx context.Context, principal core.ActionPrincipal) (bool, error) {
+	result, err := a.call(ctx, "pending", principal, map[string]any{})
+	if err != nil {
+		return false, err
+	}
+	pending, ok := result["pending"].(bool)
+	if len(result) != 1 || !ok {
+		return false, hostError("pending", "invalid_pending_result")
+	}
+	return pending, nil
+}
+
 func (a *Adapter) Claim(ctx context.Context, id string, decision core.ActionDecision, principal core.ActionPrincipal, lang core.Language) (core.ActionHostResult, bool, error) {
 	result, err := a.call(ctx, "claim", principal, map[string]any{"approval_id": id, "decision": decision})
 	if err != nil {

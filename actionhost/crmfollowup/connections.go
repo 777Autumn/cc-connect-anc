@@ -23,28 +23,57 @@ func (a *Adapter) ConnectionOperation(text string) string {
 	return ""
 }
 
-func (a *Adapter) ConfigureConnections(ctx context.Context, sourceAppID string) (bool, error) {
-	result, err := a.call(ctx, "host-connection-config", map[string]any{"source_app_id": sourceAppID}, "")
+type ConnectionRoute struct {
+	Project, AppID, TenantKey, MemberID, UserID, ChatID, Audience string
+}
+
+func (a *Adapter) ConfigureConnections(ctx context.Context, route ConnectionRoute) (bool, error) {
+	input := map[string]any{"source_app_id": route.AppID}
+	if route.MemberID != "" {
+		input["project"], input["source_tenant_key"] = route.Project, route.TenantKey
+	}
+	result, err := a.call(ctx, "host-connection-config", input, "")
 	if err != nil {
 		return false, err
 	}
 	if result["status"] == "disabled" {
+		if route.MemberID != "" {
+			return false, errors.New("personal member mapping requires configured connections")
+		}
 		return false, nil
 	}
 	if result["status"] != "enabled" {
 		return false, errors.New("personal connection configuration rejected")
 	}
+	if route.MemberID != "" {
+		bindings, ok := result["bindings"].([]any)
+		if !ok || len(bindings) != 1 || result["project"] != route.Project || result["source_app_id"] != route.AppID || result["source_tenant_key"] != route.TenantKey {
+			return false, errors.New("personal connection source binding rejected")
+		}
+		binding, ok := bindings[0].(map[string]any)
+		if !ok || (route.Audience != "private" && route.Audience != "shared") || binding["audience"] != route.Audience || binding["platform"] != "feishu" || binding["project"] != route.Project || binding["member_id"] != route.MemberID || binding["user_id"] != route.UserID || binding["chat_id"] != route.ChatID {
+			return false, errors.New("personal connection member binding rejected")
+		}
+	}
 	users, ok := result["users"].([]any)
 	if !ok || len(users) == 0 {
 		return false, errors.New("personal connection users missing")
 	}
+	configured := []string{}
+	seen := map[string]bool{}
 	for _, raw := range users {
 		user, ok := raw.(string)
-		if !ok || user == "" {
+		if !ok || user == "" || seen[user] {
 			return false, errors.New("personal connection user invalid")
 		}
-		a.connectionUsers = append(a.connectionUsers, user)
+		seen[user] = true
+		configured = append(configured, user)
 	}
+	if route.MemberID != "" && !seen[route.MemberID] {
+		return false, errors.New("personal connection member maintenance missing")
+	}
+	a.connectionUsers = configured
+	a.connectionMembers = route.MemberID != ""
 	return true, nil
 }
 
@@ -77,14 +106,18 @@ func (a *Adapter) RunConnections(ctx context.Context, changed func(string)) {
 	for {
 		for _, user := range a.connectionUsers {
 			callCtx, cancel := context.WithTimeout(ctx, 50*time.Second)
-			result, err := a.call(callCtx, "host-connection-tick", map[string]any{"user_id": user}, "")
+			key := "user_id"
+			if a.connectionMembers {
+				key = "member_id"
+			}
+			result, err := a.call(callCtx, "host-connection-tick", map[string]any{key: user}, "")
 			cancel()
 			if err != nil && ctx.Err() == nil {
 				slog.Warn("personal connection maintenance unavailable")
 			} else if changes, ok := result["changes"].([]any); ok {
 				for _, raw := range changes {
 					if change, ok := raw.(map[string]any); ok {
-						if user, ok := change["user_id"].(string); ok && changed != nil {
+						if user, ok := change[key].(string); ok && changed != nil {
 							changed(user)
 						}
 					}

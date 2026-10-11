@@ -636,6 +636,73 @@ type fileSessionJourneyAgent struct {
 	resumeIDs []string
 }
 
+func TestCUJ_B3_PersonalHandoffClickKeepsPrivateHistoryAndStartsOnce(t *testing.T) {
+	e, p, _ := notificationFixture(t)
+	a := &fileSessionJourneyAgent{}
+	e.agent = a
+	path := filepath.Join(t.TempDir(), "sessions.json")
+	e.sessions = NewSessionManager(path)
+	h := &handoffStartHost{}
+	e.handoffNotifications.host = h
+	files := &handoffJourneyFiles{}
+	root := t.TempDir()
+	if err := e.SetFileWorkHost(files, func(id string) (string, int, error) { return filepath.Join(root, id), 0, nil }); err != nil {
+		t.Fatal(err)
+	}
+	e.initPlatformCapabilities(p)
+	t.Cleanup(func() { _ = e.Stop() })
+	env := &cujEnv{t: t}
+	key := p.principal.SessionKey
+	send := func(id, content string) {
+		p.clearSent()
+		e.ReceiveMessage(p, &Message{Platform: p.Name(), SessionKey: key, UserID: "user", ChannelID: "chat", MessageID: id, Content: content, ControlledFileWork: true, FileWorkPrivate: true})
+		env.waitFor("recipient reply", 3*time.Second, func() bool { return len(p.getSent()) > 0 && !e.sessions.GetOrCreateActive(key).Busy() })
+	}
+	send("private-one", "Private draft not included in handoff")
+	prior := e.sessions.GetOrCreateActive(key)
+	action := TrustedCardAction{Kind: handoffStartKind, ApprovalID: "event", Decision: "start", Principal: p.principal}
+	action.Principal.MessageID = "notice-message"
+	prior.TryLock()
+	p.clearSent()
+	p.callback(action)
+	if !strings.Contains(strings.Join(p.getSent(), "\n"), "当前还有任务") || h.claims != 0 {
+		t.Fatal("busy work interrupted")
+	}
+	prior.UnlockWithoutUpdate()
+	forged := action
+	forged.Principal.UserID = "other"
+	if got := p.callback(forged); got.ToastType != "error" || h.claims != 0 {
+		t.Fatal("wrong user started a task")
+	}
+	p.clearSent()
+	if got := p.callback(action); got.Toast != e.i18n.T(MsgHandoffStarted) {
+		t.Fatal("click did not start", got)
+	}
+	env.waitFor("handoff reply", 3*time.Second, func() bool { return len(p.getSent()) > 0 && !e.sessions.GetOrCreateActive(key).Busy() })
+	current := e.sessions.GetOrCreateActive(key)
+	if current.ID == prior.ID || h.claims != 1 {
+		t.Fatal("handoff reused prior work")
+	}
+	send("handoff-followup", "List missing items only; do not accept")
+	if strings.Contains(fmt.Sprint(current.GetHistory(0)), "Private draft not included") {
+		t.Fatal("private prior context copied")
+	}
+	a.mu.Lock()
+	nativeStarts := len(a.resumeIDs)
+	a.mu.Unlock()
+	e.sessions = NewSessionManager(path)
+	p.clearSent()
+	p.callback(action)
+	if !strings.Contains(strings.Join(p.getSent(), "\n"), "这条通知已处理") || h.claims != 1 {
+		t.Fatal("repeat after reload started again")
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if len(a.resumeIDs) != nativeStarts || nativeStarts != 2 || a.resumeIDs[0] != "" || a.resumeIDs[1] != "" {
+		t.Fatal("handoff resumed another native conversation", a.resumeIDs)
+	}
+}
+
 func (a *fileSessionJourneyAgent) ForFileWork(string) (Agent, error) { return a, nil }
 func (a *fileSessionJourneyAgent) ListSessions(context.Context) ([]AgentSessionInfo, error) {
 	return []AgentSessionInfo{{ID: "original-thread", Summary: "original work"}}, nil

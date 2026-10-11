@@ -30,11 +30,15 @@ func operationsRecipient(project string, routes []reminders.Route, senders map[s
 		if matches != 1 {
 			return opsalerts.Recipient{}
 		}
-		sender, ok := senders[chosen.User].(authorizedReminderSender)
+		sender, ok := senders[chosen.MemberID()].(authorizedReminderSender)
 		if !ok {
 			return opsalerts.Recipient{}
 		}
-		result := opsalerts.Recipient{Binding: opsalerts.Scope(chosen.Project + "\x00" + chosen.User + "\x00" + chosen.PrivateChat), Chat: chosen.PrivateChat}
+		binding := chosen.Project + "\x00" + chosen.User + "\x00" + chosen.PrivateChat
+		if chosen.Member != "" {
+			binding += "\x00" + chosen.Member + "\x00" + chosen.AppID
+		}
+		result := opsalerts.Recipient{Binding: opsalerts.Scope(binding), Chat: chosen.PrivateChat}
 		if sender.ReminderAuthorized() {
 			result.Sender = sender
 		}
@@ -52,7 +56,7 @@ func (s authorizedReminderSender) SendReminder(ctx context.Context, chat, text, 
 	return s.sender.SendReminder(ctx, chat, text, id)
 }
 
-// The CRM project-set validator has already checked exact identities, one app,
+// The CRM project-set validator has already checked exact member identities,
 // two fixed environments per member, private chats and a shared group. This only
 // derives the private mapping; no second identity configuration is introduced.
 func reminderRoutes(cfg *config.Config, projects map[string]bool) ([]reminders.Route, error) {
@@ -62,21 +66,22 @@ func reminderRoutes(cfg *config.Config, projects map[string]bool) ([]reminders.R
 	counts := map[string]int{}
 	for _, p := range cfg.Projects {
 		if projects[p.Name] {
-			chat, _ := p.Platforms[0].Options["allow_chat"].(string)
-			counts[chat]++
+			counts[fixedChatKey(p.Platforms[0].Options)]++
 		}
 	}
-	private := map[string]string{}
+	private := map[string]reminders.Route{}
 	for _, p := range cfg.Projects {
 		if projects[p.Name] {
 			o := p.Platforms[0].Options
 			chat, _ := o["allow_chat"].(string)
 			user, _ := o["allow_from"].(string)
-			if counts[chat] == 1 {
-				if private[user] != "" {
+			member := routeMember(o)
+			if counts[fixedChatKey(o)] == 1 {
+				if private[member].Project != "" {
 					return nil, errors.New("ambiguous private route")
 				}
-				private[user] = chat
+				app, _ := o["app_id"].(string)
+				private[member] = reminders.Route{User: user, Chat: chat, Project: p.Name, AppID: app}
 			}
 		}
 	}
@@ -89,10 +94,17 @@ func reminderRoutes(cfg *config.Config, projects map[string]bool) ([]reminders.R
 			o := p.Platforms[0].Options
 			chat, _ := o["allow_chat"].(string)
 			user, _ := o["allow_from"].(string)
-			if private[user] == "" {
+			target := private[routeMember(o)]
+			if target.Project == "" {
 				return nil, errors.New("missing private route")
 			}
-			result = append(result, reminders.Route{User: user, Chat: chat, Project: p.Name, PrivateChat: private[user]})
+			member, _ := o["member_id"].(string)
+			app, _ := o["app_id"].(string)
+			route := reminders.Route{User: user, Chat: chat, Project: p.Name, PrivateChat: target.Chat, Member: member, AppID: app}
+			if member != "" {
+				route.PrivateProject, route.PrivateUser, route.PrivateAppID = target.Project, target.User, target.AppID
+			}
+			result = append(result, route)
 		}
 	}
 	if len(result) != len(projects) {

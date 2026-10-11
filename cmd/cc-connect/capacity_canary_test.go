@@ -400,7 +400,7 @@ func capacityEngines(t *testing.T, m capacityManifest, source *config.Config, ev
 			if err = host.SetWorkDir(opts["work_dir"].(string), p.RunAsUser); err != nil {
 				t.Fatal(err)
 			}
-			enabled, err := host.ConfigureConnections(context.Background(), "capacity-app")
+			enabled, err := host.ConfigureConnections(context.Background(), crmfollowup.ConnectionRoute{AppID: "capacity-app"})
 			if err != nil || !enabled {
 				t.Fatal("real connection guard missing", err)
 			}

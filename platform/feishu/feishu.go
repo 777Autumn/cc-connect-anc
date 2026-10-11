@@ -135,6 +135,10 @@ type Platform struct {
 	allowFrom                  string
 	allowChat                  string
 	strictRoutes               bool // Set by the host for fixed multi-project routing.
+	memberID                   string
+	sourceTenantKey            string
+	legacyPrivateChat          string
+	legacyPrivateRedirect      string
 	fileWorkEnabled            bool // Host opt-in, protected by mu.
 	fileWorkImages             bool // New format opt-in, protected by mu.
 	fileReplyAuthorized        func(core.Message, string) error
@@ -330,6 +334,18 @@ func newPlatform(name, domain string, opts map[string]any) (core.Platform, error
 	core.CheckAllowFrom(name, allowFrom)
 	allowChat, _ := opts["allow_chat"].(string)
 	strictRoutes, _ := opts["cc_strict_routes"].(bool)
+	memberID, _ := opts["member_id"].(string)
+	sourceTenantKey, _ := opts["source_tenant_key"].(string)
+	legacyPrivateChat, _ := opts["legacy_private_chat"].(string)
+	legacyPrivateRedirect, _ := opts["legacy_private_redirect"].(string)
+	for _, key := range []string{"member_id", "source_tenant_key", "legacy_private_chat", "legacy_private_redirect"} {
+		if _, exists := opts[key]; exists && (!strictRoutes || memberID == "" || sourceTenantKey == "") {
+			return nil, errors.New("personal Feishu routes require protected member and tenant identities")
+		}
+	}
+	if (legacyPrivateChat == "") != (strings.TrimSpace(legacyPrivateRedirect) == "") {
+		return nil, errors.New("legacy private redirect requires a fixed chat and message")
+	}
 	if strictRoutes {
 		domain = strings.TrimRight(strings.ToLower(domain), "/")
 	}
@@ -430,6 +446,10 @@ func newPlatform(name, domain string, opts map[string]any) (core.Platform, error
 		allowFrom:                  allowFrom,
 		allowChat:                  allowChat,
 		strictRoutes:               strictRoutes,
+		memberID:                   memberID,
+		sourceTenantKey:            sourceTenantKey,
+		legacyPrivateChat:          legacyPrivateChat,
+		legacyPrivateRedirect:      legacyPrivateRedirect,
 		groupOnly:                  groupOnly,
 		groupReplyAll:              groupReplyAll,
 		respondToAtEveryoneAndHere: respondToAtEveryoneAndHere,
@@ -712,6 +732,9 @@ func (p *Platform) webhookHandler(w http.ResponseWriter, r *http.Request) {
 //   - cmd:/xxx   — legacy: dispatch as a user command (sends a new message)
 func (p *Platform) onCardAction(event *callback.CardActionTriggerEvent) (*callback.CardActionTriggerResponse, error) {
 	if event == nil || event.Event == nil || event.Event.Action == nil {
+		return nil, nil
+	}
+	if !p.acceptSource(event.EventV2Base) || (p.memberID != "" && (event.Event.Operator == nil || stringValue(event.Event.Operator.TenantKey) != p.sourceTenantKey)) {
 		return nil, nil
 	}
 
@@ -1545,6 +1568,9 @@ func (p *Platform) onMessageRecalled(_ context.Context, event *larkim.P2MessageR
 	if event == nil || event.Event == nil {
 		return nil
 	}
+	if !p.acceptSource(event.EventV2Base) {
+		return nil
+	}
 
 	messageID := stringValue(event.Event.MessageId)
 	chatID := stringValue(event.Event.ChatId)
@@ -1586,6 +1612,9 @@ func (p *Platform) onMessage(ctx context.Context, event *larkim.P2MessageReceive
 	}
 	msg := event.Event.Message
 	sender := event.Event.Sender
+	if !p.acceptSource(event.EventV2Base) || (p.memberID != "" && (sender.SenderId == nil || stringValue(sender.SenderId.OpenId) == "" || stringValue(sender.TenantKey) != p.sourceTenantKey || stringValue(sender.SenderType) != "user")) {
+		return nil
+	}
 
 	msgType := ""
 	if msg.MessageType != nil {
@@ -1597,8 +1626,15 @@ func (p *Platform) onMessage(ctx context.Context, event *larkim.P2MessageReceive
 		chatID = *msg.ChatId
 	}
 	userID := userIDFromEvent(sender.SenderId)
-	if !p.acceptFixedRoute(userID, chatID) {
+	legacyPrivate := p.acceptLegacyPrivate(userID, chatID) && stringValue(msg.ChatType) == "p2p"
+	if !legacyPrivate && !p.acceptFixedRoute(userID, chatID) {
 		return nil
+	}
+	if p.memberID != "" && !legacyPrivate {
+		chatType := stringValue(msg.ChatType)
+		if (p.legacyPrivateChat == "" && chatType != "p2p") || (p.legacyPrivateChat != "" && chatType != "group" && chatType != "topic_group") {
+			return nil
+		}
 	}
 	// userName and chatName are resolved in dispatchMessage to avoid blocking
 	// the SDK dispatcher goroutine with synchronous HTTP calls.
@@ -1606,6 +1642,9 @@ func (p *Platform) onMessage(ctx context.Context, event *larkim.P2MessageReceive
 	messageID := ""
 	if msg.MessageId != nil {
 		messageID = *msg.MessageId
+	}
+	if p.memberID != "" && messageID == "" {
+		return nil
 	}
 
 	if p.isMessageRecalled(messageID) {
@@ -1630,6 +1669,10 @@ func (p *Platform) onMessage(ctx context.Context, event *larkim.P2MessageReceive
 		}
 	}
 
+	if legacyPrivate {
+		content, _ := json.Marshal(map[string]string{"text": p.legacyPrivateRedirect})
+		return p.createMessage(ctx, chatID, larkim.MsgTypeText, string(content), "legacy private redirect")
+	}
 	chatType := ""
 	if msg.ChatType != nil {
 		chatType = *msg.ChatType
