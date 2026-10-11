@@ -217,10 +217,12 @@ func TestPendingActionsHostEnvelopeAndFailClosedResults(t *testing.T) {
 	directory := t.TempDir()
 	source := filepath.Join(directory, "host.go")
 	host := filepath.Join(directory, "host")
-	goTool := filepath.Join(runtime.GOROOT(), "bin", "go")
+	goTool, err := exec.LookPath("go")
+	if err != nil {
+		t.Fatalf("locate Go fixture compiler: %v", err)
+	}
 	if runtime.GOOS == "windows" {
 		host += ".exe"
-		goTool += ".exe"
 	}
 	program := `package main
 import ("io"; "os")
