@@ -271,7 +271,7 @@ func (e *Engine) prepareHandoffStart(msg *Message) MsgKey {
 	}
 	encoded, _ := json.Marshal(banquetID)
 	version, _ := json.Marshal(result["version"])
-	msg.Content = fmt.Sprintf("[Host: the recipient clicked Organize handoff. Read the current approved handoff for banquet_id %s, expected version %s, using the existing handoff tool. Read its imported materials, summarize confirmed facts and missing items. Do not accept or return the handoff until this person explicitly requests and approves the existing action. Never load the author's conversation. If the publication or version changed, stop and ask the person to reopen the current handoff.]", encoded, version)
+	msg.Content = fmt.Sprintf("[Host: the recipient clicked Organize handoff. First read the installed team-crm Skill and its referenced banquet tool protocol. Use the documented crm-tool handoff CLI with banquet_id %s to read the current approved handoff, expected version %s. The CLI need not appear as a named model/MCP tool; an empty tool search does not establish that it is unavailable. After the authorized handoff read imports materials, refresh work-context and read the returned files. Empty work-context before that read does not establish that the publication has no materials. Summarize confirmed facts and missing items. Do not accept or return the handoff until this person explicitly requests and approves the existing action. Never load the author's conversation. If the publication or version changed, stop and ask the person to reopen the current handoff.]", encoded, version)
 	return ""
 }
 

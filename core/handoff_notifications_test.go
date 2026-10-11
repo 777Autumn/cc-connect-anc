@@ -118,6 +118,10 @@ func TestHandoffStartIgnoresCompletedExpiredAndOtherSessionQuestions(t *testing.
 			if got := e.prepareHandoffStart(msg); got != "" {
 				t.Fatalf("unrelated/completed approval blocked start: %q", got)
 			}
+			// A fresh recipient has no earlier CRM tool discovery to reuse.
+			if !strings.Contains(msg.Content, "team-crm") || !strings.Contains(msg.Content, "crm-tool handoff") {
+				t.Fatal("fresh handoff omitted the installed CLI protocol", msg.Content)
+			}
 		})
 	}
 }
