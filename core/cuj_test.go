@@ -30,6 +30,7 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -786,6 +787,88 @@ func TestCUJ_B3_NewThenSwitchKeepsFileWork(t *testing.T) {
 				t.Fatal("continuation lost user-visible prior history")
 			}
 		})
+	}
+}
+
+type banquetCUJAgent struct{ actionToolJourneyAgent }
+
+func (a *banquetCUJAgent) ForFileWork(string) (Agent, error) { return a, nil }
+
+// CRM/file hosts are external boundaries here. Real CRM authorization and file
+// ledger persistence have separate paired/host tests; this CUJ checks routing.
+type banquetCUJFiles struct {
+	fileHostStub
+	imported bool
+}
+
+func (h *banquetCUJFiles) Tool(_ context.Context, command string, input json.RawMessage, p ActionPrincipal, work string) (map[string]any, error) {
+	if p.UserID != "owner" || work != "fixture-work" {
+		return nil, ErrFileWorkNotFound
+	}
+	if command == "host-case-import" {
+		var request map[string]string
+		if json.Unmarshal(input, &request) != nil || request["purpose"] != "revision" || request["publication_id"] != "bh_chg_cuj_0" {
+			return nil, ErrFileWorkNotFound
+		}
+		h.imported = true
+	} else if command != "work-context" {
+		return nil, ErrFileWorkNotFound
+	}
+	result := FileWorkContext{Enabled: true, WorkID: work}
+	if h.imported {
+		result.Inputs = []FileWorkInput{{Name: "reference.docx", SHA256: strings.Repeat("a", 64), Source: &FileWorkSource{PublicationID: "bh_chg_cuj_0", Purpose: "revision", ReferenceOnly: true, PublicationBasisID: "chg_cuj"}}}
+	}
+	return publicationResult(result), nil
+}
+
+func TestCUJ_BANQUET1_ContextRefusesCurrentAndRetainsRevisionReference(t *testing.T) {
+	p := &filePlatformStub{stubPlatformEngine: stubPlatformEngine{n: "fixture"}}
+	a := &banquetCUJAgent{}
+	h := &actionToolHostStub{}
+	files := &banquetCUJFiles{}
+	e := NewEngine("fixture-project", a, []Platform{p}, filepath.Join(t.TempDir(), "sessions.json"), LangEnglish)
+	e.SetActionHost(h)
+	if err := e.SetFileWorkHost(files, func(id string) (string, int, error) { return filepath.Join(t.TempDir(), id), 0, nil }); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = e.Stop() })
+	a.tool = func(prompt string) string {
+		h.mu.Lock()
+		token := h.envTokens[len(h.envTokens)-1]
+		h.mu.Unlock()
+		command, input := "banquet-context", `{"banquet_id":"recFixture"}`
+		h.toolResult = map[string]any{"status": "found", "estimated_tables": 23, "materials_read": false, "publication_basis": map[string]any{"status": "stale"}}
+		switch {
+		case strings.Contains(prompt, "Use current"):
+			command = "handoff"
+			h.toolResult = map[string]any{"status": "blocked", "code": "publication_basis_stale"}
+		case strings.Contains(prompt, "Read revision"):
+			command, input = "handoff", `{"banquet_id":"recFixture","purpose":"revision"}`
+			h.toolResult = map[string]any{"status": "found", "handoff": map[string]any{"files": []any{map[string]any{"publication_id": "bh_chg_cuj_0", "name": "reference.docx", "sha256": strings.Repeat("a", 64), "purpose": "revision", "reference_only": true, "publication_basis_id": "chg_cuj"}}}}
+		case strings.Contains(prompt, "Inspect reference"):
+			command, input = "work-context", `{}`
+		}
+		return actionToolRequest(e.ActionToolHandler(), "POST", "/tool", token, `{"command":"`+command+`","input":`+input+`}`).Body.String()
+	}
+	env := &cujEnv{t: t, engine: e, plat: &p.stubPlatformEngine}
+	const key = "fixture:chat:owner"
+	for i, step := range []struct{ message, want string }{
+		{"Query banquet context", `"materials_read":false`},
+		{"Use current banquet materials", "publication_basis_stale"},
+		{"Read revision reference", `"materials_imported":true`},
+		{"Inspect reference in this work", `"reference_only":true`},
+		{"Use current materials again", "publication_basis_stale"},
+		{"Inspect reference after refusal", `"reference_only":true`},
+	} {
+		p.clearSent()
+		e.ReceiveMessage(p, &Message{Platform: "fixture", SessionKey: key, UserID: "owner", ChannelID: "chat", MessageID: fmt.Sprintf("banquet-step-%d", i), Content: step.message, ControlledFileWork: true, FileWorkPrivate: true})
+		env.waitFor(step.message, 3*time.Second, func() bool { return env.sentContains(step.want) && !e.sessions.GetOrCreateActive(key).Busy() })
+		if i == 0 && (!env.sentContains(`"estimated_tables":23`) || !env.sentContains(`"stale"`)) {
+			t.Fatal("context hid current banquet or stale basis", p.getSent())
+		}
+		if (i == 3 || i == 5) && (!env.sentContains(`"purpose":"revision"`) || !env.sentContains(`"publication_basis_id":"chg_cuj"`)) {
+			t.Fatal("follow-up hid the reference restriction", p.getSent())
+		}
 	}
 }
 

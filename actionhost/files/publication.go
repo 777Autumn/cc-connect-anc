@@ -69,6 +69,16 @@ func (h *Host) importCasePublication(ctx context.Context, p core.ActionPrincipal
 		if err != nil {
 			return err
 		}
+		// Another accepted turn owns its pending import until activation/recovery.
+		for message, pending := range w.PendingInputs {
+			if message != p.MessageID {
+				for _, input := range pending {
+					if input.Source != nil && input.Source.PublicationID == publicationID {
+						return ErrScope
+					}
+				}
+			}
+		}
 		for _, input := range append(append([]Input(nil), w.Inputs...), w.PendingInputs[p.MessageID]...) {
 			if input.Source != nil && input.Source.PublicationID == publicationID {
 				if input.Source.WorkID != source.ID || input.Source.DeliveryID != artifact.DeliveryID || input.Source.Version != artifact.Version || input.Source.MessageReceipt != artifact.MessageReceipt || input.SHA256 != artifact.SHA256 || input.Name != artifact.Name || !samePublicationBasis(input.Source, grant) {

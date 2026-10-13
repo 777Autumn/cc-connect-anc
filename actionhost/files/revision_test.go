@@ -177,3 +177,47 @@ func TestRevisionSchemaReadsLegacyPublicationAndUpgradesOnlyAfterAuthorization(t
 		t.Fatal(err)
 	}
 }
+
+func TestQueuedRevisionCannotBecomeCurrentOnLaterMessage(t *testing.T) {
+	f, target, work, grant, _, _ := publicationFixture(t)
+	grant.Purpose, grant.ReferenceOnly, grant.PublicationBasisID = "revision", true, "chg_fixture"
+	calls := 0
+	f.host.SetPublicationAccess(func(_ context.Context, _ core.ActionPrincipal, _, _, purpose string) (core.CasePublishedSource, error) {
+		calls++
+		if calls == 2 {
+			return core.CasePublishedSource{}, ErrScope
+		}
+		result := grant
+		if purpose == "current" {
+			result.Purpose, result.ReferenceOnly = "current", false
+		}
+		return result, nil
+	})
+	ctx := context.Background()
+	revision := json.RawMessage(`{"publication_id":"bh_chg_fixture_0","purpose":"revision"}`)
+	if _, err := f.host.Tool(ctx, "host-case-import", revision, target.Principal, work.WorkID); err == nil {
+		t.Fatal("expected failed activation leaving a durable pending revision")
+	}
+	original := target.Principal
+	target.Principal.MessageID = "later-message"
+	if _, err := f.host.Bind(ctx, target); err != nil {
+		t.Fatal(err)
+	}
+	for _, request := range []string{`{"publication_id":"bh_chg_fixture_0"}`, `{"publication_id":"bh_chg_fixture_0","purpose":"current"}`, string(revision)} {
+		if result, err := f.host.Tool(ctx, "host-case-import", json.RawMessage(request), target.Principal, work.WorkID); err == nil {
+			t.Fatalf("later message bypassed another turn's pending revision: %#v", result)
+		}
+	}
+	if _, err := f.host.ActivateInputs(ctx, original, work.WorkID); err != nil {
+		t.Fatal("original queued revision could not activate", err)
+	}
+	result, err := f.host.Tool(ctx, "host-case-import", revision, target.Principal, work.WorkID)
+	if err != nil {
+		t.Fatal("later revision could not reuse the activated reference", err)
+	}
+	raw, _ := json.Marshal(result)
+	var visible WorkContext
+	if json.Unmarshal(raw, &visible) != nil || len(visible.Inputs) != 1 || !visible.Inputs[0].Source.ReferenceOnly || visible.Inputs[0].Source.PublicationBasisID != grant.PublicationBasisID {
+		t.Fatal("original reference restriction lost", result)
+	}
+}
