@@ -72,6 +72,15 @@ after resolving the cause, submit only unsent files using their final saved hash
 Retain accepted and uncertain deliveries. Timeouts, invalid responses and host
 post-send errors remain uncertain, without these local-preflight fields or retries.
 
+The authenticated `handoff` tool retains the 30-second connection guard and has
+a separate 150-second processing budget for the CRM read and at most four file
+imports, including fresh authorization at import and activation. Its HTTP write
+deadline is 190 seconds on both local transports; the paired CRM client waits
+185 seconds. Other tools keep their existing deadlines. Waiting for the project
+tool lock precedes these budgets, so these are not end-to-end queue guarantees.
+Request cancellation and service shutdown still interrupt imports; a failed later
+file does not undo an earlier import. Reconcile the work context before retrying.
+
 Example configuration (all paths are fictional; do not apply to a live host):
 
 ```toml

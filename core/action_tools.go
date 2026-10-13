@@ -78,6 +78,16 @@ func ActionToolsHandler(engines ...*Engine) http.Handler {
 				return
 			}
 		}
+		if command == "handoff" {
+			// A handoff imports up to four files, each freshly authorized at
+			// import and activation. Cover the 30s guard + 150s processing
+			// stages and response writes on both Unix and TCP listeners.
+			// Project-lock waiting precedes these budgets, as for other tools.
+			if err := http.NewResponseController(w).SetWriteDeadline(time.Now().Add(190 * time.Second)); err != nil {
+				writeActionToolResult(w, http.StatusServiceUnavailable, map[string]any{"status": "unavailable", "code": "response_deadline_unavailable"})
+				return
+			}
+		}
 		connectionCtx, connectionCancel := context.WithTimeout(r.Context(), 30*time.Second)
 		connectionErr := e.guardConnectionWork(connectionCtx, command, principal, token, connectionWorkID, input)
 		connectionCancel()
@@ -99,7 +109,11 @@ func ActionToolsHandler(engines ...*Engine) http.Handler {
 			writeActionToolResult(w, http.StatusServiceUnavailable, map[string]any{"status": "unavailable", "code": "tool_host_disabled"})
 			return
 		}
-		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		toolTimeout := 30 * time.Second
+		if command == "handoff" {
+			toolTimeout = 150 * time.Second
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), toolTimeout)
 		defer cancel()
 		stop := context.AfterFunc(e.ctx, cancel)
 		defer stop()

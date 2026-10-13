@@ -49,9 +49,14 @@ func actionToolRequest(handler http.Handler, method, path, token, body string) *
 		r.Header.Set("Authorization", "Bearer "+token)
 	}
 	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, r)
+	handler.ServeHTTP(actionToolRecorder{w}, r)
 	return w
 }
+
+// A recorder has no connection deadline; socket tests exercise the real one.
+type actionToolRecorder struct{ *httptest.ResponseRecorder }
+
+func (actionToolRecorder) SetWriteDeadline(time.Time) error { return nil }
 
 func TestKnowledgeStatusUsesAuthenticatedSessionWithoutPublishing(t *testing.T) {
 	e, h, p, _ := actionToolFixture(t)

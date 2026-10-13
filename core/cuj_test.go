@@ -872,6 +872,53 @@ func TestCUJ_BANQUET1_ContextRefusesCurrentAndRetainsRevisionReference(t *testin
 	}
 }
 
+func TestCUJ_BANQUET2_SlowHandoffKeepsBothMaterialsForFollowup(t *testing.T) {
+	p := &filePlatformStub{stubPlatformEngine: stubPlatformEngine{n: "fixture"}}
+	a := &banquetCUJAgent{}
+	h := &actionToolHostStub{toolResult: handoffTimeoutResult(2)}
+	files := &slowHandoffFiles{delay: 150 * time.Millisecond}
+	e := NewEngine("fixture-project", a, []Platform{p}, filepath.Join(t.TempDir(), "sessions.json"), LangEnglish)
+	e.SetActionHost(h)
+	if err := e.SetFileWorkHost(files, func(id string) (string, int, error) { return filepath.Join(t.TempDir(), id), 0, nil }); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = e.Stop() })
+	// A short real socket deadline keeps this CUJ fast. The socket regression
+	// separately exceeds all production pre-fix deadlines with a 41s import.
+	_, client, url := actionToolSocket(t, "tcp", e.ActionToolHandler(), 50*time.Millisecond)
+	a.tool = func(prompt string) string {
+		h.mu.Lock()
+		token := h.envTokens[len(h.envTokens)-1]
+		h.mu.Unlock()
+		command := "handoff"
+		if strings.Contains(prompt, "Inspect both") {
+			command = "work-context"
+		} else if strings.Contains(prompt, "Query context") {
+			command = "banquet-context"
+			h.toolResult = map[string]any{"status": "found", "materials_read": false}
+		}
+		_, body, err := socketTool(context.Background(), client, url, token, command)
+		if err != nil {
+			return fmt.Sprintf("tool transport failed: %v", err)
+		}
+		return body
+	}
+	env := &cujEnv{t: t, engine: e, plat: &p.stubPlatformEngine}
+	const key = "fixture:chat:owner"
+	for i, step := range []struct{ message, want string }{
+		{"Read both published materials", `"materials_imported":true`},
+		{"Inspect both materials for the revision", "material-1.pdf"},
+		{"Query context after the handoff", `"materials_read":false`},
+	} {
+		p.clearSent()
+		e.ReceiveMessage(p, &Message{Platform: "fixture", SessionKey: key, UserID: "owner", ChannelID: "chat", MessageID: fmt.Sprintf("slow-handoff-%d", i), Content: step.message, ControlledFileWork: true, FileWorkPrivate: true})
+		env.waitFor(step.message, 3*time.Second, func() bool { return env.sentContains(step.want) && !e.sessions.GetOrCreateActive(key).Busy() })
+		if i < 2 && (!env.sentContains("material-0.pdf") || !env.sentContains("material-1.pdf")) {
+			t.Fatal("user could not see both imported materials", p.getSent())
+		}
+	}
+}
+
 // ===========================================================================
 // CUJ-C4 · /cancel stops current turn AND creates a fresh session
 //
