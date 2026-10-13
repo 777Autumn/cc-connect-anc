@@ -450,7 +450,7 @@ func (a *fileWorkCUJAgent) ForFileWork(string) (Agent, error) { return a, nil }
 
 func TestFileOldReplyRefreshesProjectWithoutChangingChatScope(t *testing.T) {
 	for _, enabled := range []bool{false, true} {
-		for _, mode := range []string{"new", "reply", "group-reply", "group-no-share", "selected-upload", "recovery"} {
+		for _, mode := range []string{"new", "readonly", "reply", "group-reply", "group-no-share", "selected-upload", "recovery"} {
 			t.Run(fmt.Sprintf("enabled=%v/%s", enabled, mode), func(t *testing.T) {
 				p := &filePlatformStub{stubPlatformEngine: stubPlatformEngine{n: "fixture"}}
 				a := &fileWorkCUJAgent{}
@@ -478,6 +478,10 @@ func TestFileOldReplyRefreshesProjectWithoutChangingChatScope(t *testing.T) {
 					if mode == "group-no-share" {
 						original = "这份加一桌，别同步项目记录。"
 					}
+					msg.Content = original
+				}
+				if mode == "readonly" {
+					original = "只查当前交接版本、接手人、状态、桌数和通知结果，不要新建审批卡。"
 					msg.Content = original
 				}
 				isReply := mode == "reply" || mode == "group-reply" || mode == "group-no-share"
@@ -538,6 +542,9 @@ func TestFileOldReplyRefreshesProjectWithoutChangingChatScope(t *testing.T) {
 				}
 				if !strings.Contains(sessions[0].getSentPrompts()[0], "complete instructions as tool-returned content") || !strings.Contains(msg.fileTurn.Content, "continue reading any omitted sections") {
 					t.Fatal("Skill loading guidance was lost before dispatch or persistence")
+				}
+				if !strings.Contains(prompt, "including read-only queries") || !strings.Contains(prompt, "one file per tool result") || !strings.Contains(prompt, "before running domain tools") {
+					t.Fatal("read-only dispatch lacks complete separate protocol loading")
 				}
 				if mode == "recovery" && (!strings.Contains(msg.Content, "Host recovery:") || msg.fileSession.hasUnfinishedFileTurns()) {
 					t.Fatal("Skill guidance blocked explicit recovery")

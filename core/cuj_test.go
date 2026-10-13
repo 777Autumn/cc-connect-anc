@@ -1917,7 +1917,7 @@ func TestCUJ_A5_FileGuidanceReachesLiveFollowupAndQueuedSupplement(t *testing.T)
 			as.mu.Unlock()
 			send("revision", "Revise that draft")
 			env.waitFor("live followup started", 3*time.Second, func() bool { return len(as.getSentPrompts()) == 2 })
-			send("supplement", "Also include the new note")
+			send("supplement", "只读核对当前交接状态和桌数，不要写入或新建审批卡")
 			env.waitFor("supplement reply", 3*time.Second, func() bool { return len(as.getSentPrompts()) == 3 && !session.Busy() })
 			if strings.Count(strings.Join(p.getSent(), "\n"), "ok") != 3 {
 				t.Fatalf("user lost a reply: %v", p.getSent())
@@ -1925,6 +1925,9 @@ func TestCUJ_A5_FileGuidanceReachesLiveFollowupAndQueuedSupplement(t *testing.T)
 			for _, prompt := range as.getSentPrompts() {
 				if strings.Contains(prompt, "reread the current installed file and domain Skills") != fileWork {
 					t.Fatal("file guidance missing from a turn or leaked into ordinary chat")
+				}
+				if fileWork && (!strings.Contains(prompt, "including read-only queries") || !strings.Contains(prompt, "one file per tool result") || !strings.Contains(prompt, "before running domain tools")) {
+					t.Fatal("read-only followup can bypass complete separate protocol loading")
 				}
 			}
 			if fileWork && (len(session.fileTurns()) != 1 || session.fileTurns()[0].Status != "completed") {
