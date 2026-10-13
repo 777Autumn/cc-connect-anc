@@ -127,8 +127,10 @@ func socketTool(ctx context.Context, client *http.Client, url, token, command st
 	if err != nil {
 		return 0, "", err
 	}
-	defer response.Body.Close()
 	body, err := io.ReadAll(response.Body)
+	if closeErr := response.Body.Close(); err == nil {
+		err = closeErr
+	}
 	return response.StatusCode, string(body), err
 }
 
