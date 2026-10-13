@@ -86,3 +86,81 @@ func TestBanquetHandoffImportRequiresActualMatchingInputAndKeepsWorkIsolated(t *
 		}
 	}
 }
+
+type handoffAccessStub struct {
+	actionToolHostStub
+	purpose string
+	grant   CasePublishedSource
+}
+
+func (h *handoffAccessStub) HandoffAccess(_ context.Context, _ ActionPrincipal, _, publication, purpose string) (map[string]any, error) {
+	h.purpose = purpose
+	return map[string]any{"status": "authorized", "publication_id": publication, "source": h.grant}, nil
+}
+
+func TestHandoffRevisionAuthorizationKeepsHostBasisAndRefusesMissingMarkers(t *testing.T) {
+	e, _, _, state := actionToolFixture(t)
+	defer e.cancel()
+	host := &handoffAccessStub{grant: CasePublishedSource{Purpose: "revision", ReferenceOnly: true, PublicationBasisID: "chg_fixture"}}
+	e.SetActionHost(host)
+	for _, mode := range []string{"valid", "no-basis", "not-reference", "current", "forged-purpose"} {
+		host.grant = CasePublishedSource{Purpose: "revision", ReferenceOnly: true, PublicationBasisID: "chg_fixture"}
+		purpose := "revision"
+		switch mode {
+		case "no-basis":
+			host.grant.PublicationBasisID = ""
+		case "not-reference":
+			host.grant.ReferenceOnly = false
+		case "current":
+			host.grant.Purpose = "current"
+		case "forged-purpose":
+			purpose = "forged"
+		}
+		grant, err := e.AuthorizeCasePublication(context.Background(), state.currentPrincipal, "new-work", "bh_chg_fixture_0", purpose)
+		if (err == nil) != (mode == "valid") {
+			t.Fatal(mode, grant, err)
+		}
+		if err == nil && (host.purpose != "revision" || !grant.ReferenceOnly || grant.PublicationBasisID != "chg_fixture") {
+			t.Fatal("host revision purpose or basis lost")
+		}
+	}
+}
+
+type revisionImportStub struct {
+	fileHostStub
+	purpose string
+}
+
+func (h *revisionImportStub) Tool(_ context.Context, _ string, input json.RawMessage, _ ActionPrincipal, _ string) (map[string]any, error) {
+	var request map[string]string
+	if err := json.Unmarshal(input, &request); err != nil {
+		return nil, err
+	}
+	h.purpose = request["purpose"]
+	return h.toolResult, nil
+}
+
+func TestHandoffRevisionImportForwardsPurposeAndRequiresPreservedRestriction(t *testing.T) {
+	e, _, _, state := actionToolFixture(t)
+	defer e.cancel()
+	state.fileWorkID = "revision-work"
+	for _, mode := range []string{"valid", "no-basis", "not-reference", "current"} {
+		source := &FileWorkSource{PublicationID: "bh_chg_fixture_0", Purpose: "revision", ReferenceOnly: true, PublicationBasisID: "chg_fixture"}
+		switch mode {
+		case "no-basis":
+			source.PublicationBasisID = ""
+		case "not-reference":
+			source.ReferenceOnly = false
+		case "current":
+			source.Purpose = "current"
+		}
+		work := FileWorkContext{Enabled: true, WorkID: state.fileWorkID, Inputs: []FileWorkInput{{Name: "handoff.docx", SHA256: strings.Repeat("a", 64), Source: source}}}
+		host := &revisionImportStub{fileHostStub: fileHostStub{toolResult: publicationResult(work)}}
+		e.fileWorkHost = host
+		result := map[string]any{"handoff": map[string]any{"files": []any{map[string]any{"publication_id": "bh_chg_fixture_0", "name": "handoff.docx", "sha256": strings.Repeat("a", 64), "purpose": "revision", "reference_only": true, "publication_basis_id": "chg_fixture"}}}}
+		err := e.importHandoffFiles(context.Background(), state.actionToken, state.currentPrincipal, result)
+		if (err == nil) != (mode == "valid") || host.purpose != "revision" {
+			t.Fatal(mode, err, host.purpose)
+		}
+	}
+}

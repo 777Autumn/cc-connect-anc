@@ -43,6 +43,24 @@ Known input/format/scope/version refusals return `blocked` with a safe code;
 post-send journal failures remain uncertain and must not invite resubmission.
 An API acceptance does not prove an employee received or opened the file.
 
+Banquet materials use CRM authorization on both publication import and pending
+input activation. `handoff` defaults to `purpose: "current"`; `revision` is an
+explicit reference request for the currently authorized original submitter in
+their own private chat. The CRM decides whether the latest trusted publication
+is stale and returns `purpose`, `reference_only` and `publication_basis_id`.
+These host-owned fields survive the file ledger, restart, duplicate import and
+`work-context`. A recorded revision reference cannot be converted to current by
+omitting the purpose. It is input for a new, independently read-back delivery and
+the existing approval flow, not current handoff evidence.
+
+Publication imports now upgrade file state to schema 5 without reducing a later
+schema. Schemas 1–4 remain readable; old publication entries gain basis metadata
+only after fresh authorization. Old binaries reject schema 5, so rollback must
+retain a compatible file host or disable affected handoffs; never downgrade the
+ledger or restore historical authorization. Existing downloaded bytes cannot be
+revoked. CRM checks exact known publication hashes to refuse unchanged stale
+files; a changed hash alone does not establish correct document content.
+
 Client-side preparation failures retain `status: blocked`,
 `code: file_access_not_prepared` and exit code 2, adding `stage: local_preflight`
 and `request_state: not_sent`. Their safe `reason` is `output_changed` for a byte

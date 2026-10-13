@@ -252,5 +252,5 @@ func writeActionToolResult(w http.ResponseWriter, status int, result map[string]
 }
 
 func isBanquetCommand(command string) bool {
-	return command == "banquet" || command == "banquets" || command == "stage-banquet-create" || command == "stage-banquet-update" || command == "stage-banquet-followup" || command == "handoff" || command == "stage-handoff-submit" || command == "stage-handoff-accept" || command == "stage-handoff-return"
+	return command == "banquet-context" || command == "banquet" || command == "banquets" || command == "stage-banquet-create" || command == "stage-banquet-update" || command == "stage-banquet-followup" || command == "handoff" || command == "stage-handoff-submit" || command == "stage-handoff-accept" || command == "stage-handoff-return"
 }

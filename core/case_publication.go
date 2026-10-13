@@ -23,17 +23,20 @@ type CasePublicationFile struct {
 // CasePublishedSource travels only between authenticated hosts. It is never a
 // model-supplied GroupRealm, filesystem path, or newly sent message receipt.
 type CasePublishedSource struct {
-	Platform       string `json:"platform"`
-	UserID         string `json:"user_id"`
-	ChatID         string `json:"chat_id"`
-	Project        string `json:"project"`
-	SessionKey     string `json:"session_key"`
-	WorkID         string `json:"work_id"`
-	DeliveryID     string `json:"delivery_id"`
-	Name           string `json:"name"`
-	SHA256         string `json:"sha256"`
-	Version        int    `json:"version"`
-	MessageReceipt string `json:"message_receipt"`
+	Purpose            string `json:"purpose,omitempty"`
+	ReferenceOnly      bool   `json:"reference_only,omitempty"`
+	PublicationBasisID string `json:"publication_basis_id,omitempty"`
+	Platform           string `json:"platform"`
+	UserID             string `json:"user_id"`
+	ChatID             string `json:"chat_id"`
+	Project            string `json:"project"`
+	SessionKey         string `json:"session_key"`
+	WorkID             string `json:"work_id"`
+	DeliveryID         string `json:"delivery_id"`
+	Name               string `json:"name"`
+	SHA256             string `json:"sha256"`
+	Version            int    `json:"version"`
+	MessageReceipt     string `json:"message_receipt"`
 }
 
 func (e *Engine) selectedCaseFiles(ctx context.Context, p ActionPrincipal, workID string, input json.RawMessage) ([]CasePublicationFile, error) {
@@ -124,9 +127,15 @@ func (e *Engine) casePublicationContext(ctx context.Context, p ActionPrincipal, 
 
 // AuthorizeCasePublication rechecks current project membership and the target
 // work binding. Legacy group receipts keep their separate authorization path.
-func (e *Engine) AuthorizeCasePublication(ctx context.Context, p ActionPrincipal, workID, publicationID string) (CasePublishedSource, error) {
+func (e *Engine) AuthorizeCasePublication(ctx context.Context, p ActionPrincipal, workID, publicationID, purpose string) (CasePublishedSource, error) {
+	if purpose != "current" && purpose != "revision" {
+		return CasePublishedSource{}, ErrFileWorkNotFound
+	}
 	if strings.HasPrefix(publicationID, "bh_") {
-		return e.authorizeHandoffPublication(ctx, p, workID, publicationID)
+		return e.authorizeHandoffPublication(ctx, p, workID, publicationID, purpose)
+	}
+	if purpose != "current" {
+		return CasePublishedSource{}, ErrFileWorkNotFound
 	}
 	e.actionMu.RLock()
 	host := actionHostForCommand(e.actionHost, "case-read")

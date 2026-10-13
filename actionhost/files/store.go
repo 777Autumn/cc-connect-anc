@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/chenhg5/cc-connect/core"
@@ -145,8 +146,12 @@ func (s *Store) change(ctx context.Context, fn func(*state) error) error {
 		s.failed = true
 		return ErrUnavailable
 	}
+	originalSchema := st.Schema
 	if err = fn(&st); err != nil {
 		return err
+	}
+	if st.Schema < originalSchema {
+		return ErrUnavailable
 	}
 	updated, err := json.Marshal(st)
 	if err == nil && !bytes.Equal(data, updated) {
@@ -170,7 +175,7 @@ func (s *Store) storageError(ctx context.Context) error {
 }
 
 func validState(st state) bool {
-	if (st.Schema != 1 && st.Schema != 2 && st.Schema != 3 && st.Schema != 4) || st.Works == nil {
+	if st.Schema < 1 || st.Schema > 5 || st.Works == nil {
 		return false
 	}
 	sessions, roots := map[string]bool{}, map[string]bool{}
@@ -213,6 +218,14 @@ func validState(st state) bool {
 				published := i.Source.PublicationID != "" && st.Schema >= 4 && validPublicationID(i.Source.PublicationID)
 				if i.Source.PublicationID != "" && !published {
 					return false
+				}
+				if i.Source.Purpose != "" || i.Source.ReferenceOnly || i.Source.PublicationBasisID != "" {
+					if st.Schema < 5 || !published || (i.Source.Purpose != "current" && i.Source.Purpose != "revision") || i.Source.ReferenceOnly != (i.Source.Purpose == "revision") {
+						return false
+					}
+					if i.Source.Purpose == "revision" && (!strings.HasPrefix(i.Source.PublicationID, "bh_") || !validPublicationID(i.Source.PublicationBasisID)) {
+						return false
+					}
 				}
 				if !sameGroup && !privateImport && !published {
 					return false

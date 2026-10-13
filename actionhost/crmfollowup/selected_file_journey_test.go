@@ -72,8 +72,8 @@ func TestCUJ_CASEIPC_SelectedPrivateFilePublicationAndRealImport(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = host.Close() })
 	engines := map[string]*core.Engine{}
-	host.SetPublicationAccess(func(ctx context.Context, p core.ActionPrincipal, workID, publicationID string) (core.CasePublishedSource, error) {
-		return engines[p.UserID].AuthorizeCasePublication(ctx, p, workID, publicationID)
+	host.SetPublicationAccess(func(ctx context.Context, p core.ActionPrincipal, workID, publicationID, purpose string) (core.CasePublishedSource, error) {
+		return engines[p.UserID].AuthorizeCasePublication(ctx, p, workID, publicationID, purpose)
 	})
 	type actor struct {
 		turn      func(string, string, map[string]any) map[string]any
@@ -287,7 +287,7 @@ func TestCUJ_CASEIPC_SelectedPrivateFilePublicationAndRealImport(t *testing.T) {
 	}
 	source, sourcePresent := persisted.Works[work.WorkID]
 	destination, destinationPresent := persisted.Works[partnerWork.WorkID]
-	if !sourcePresent || !destinationPresent || persisted.Schema != 4 || source.GroupRealm != "" || source.ProjectImportRealm != "" || destination.GroupRealm != "" || destination.ProjectImportRealm != "" || len(destination.Inputs) != 1 {
+	if !sourcePresent || !destinationPresent || persisted.Schema != 5 || source.GroupRealm != "" || source.ProjectImportRealm != "" || destination.GroupRealm != "" || destination.ProjectImportRealm != "" || len(destination.Inputs) != 1 {
 		t.Fatal("publication changed the private work realms or lost its persisted input")
 	}
 	for _, original := range []core.FileWorkArtifact{selectedFile, privateFile} {

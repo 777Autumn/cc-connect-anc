@@ -55,7 +55,7 @@ func TestPublishedPrivateFileImportsSnapshotWithoutInventingGroupOrResending(t *
 	if _, err := f.host.Tool(ctx, "host-case-import", input, target.Principal, work.WorkID); err == nil {
 		t.Fatal("publication without authorized CRM accepted")
 	}
-	f.host.SetPublicationAccess(func(_ context.Context, p core.ActionPrincipal, id, pub string) (core.CasePublishedSource, error) {
+	f.host.SetPublicationAccess(func(_ context.Context, p core.ActionPrincipal, id, pub, purpose string) (core.CasePublishedSource, error) {
 		if p != target.Principal || id != work.WorkID || pub != "pub_selected" {
 			return core.CasePublishedSource{}, ErrScope
 		}
@@ -94,7 +94,7 @@ func TestPublishedPrivateFileImportsSnapshotWithoutInventingGroupOrResending(t *
 	}
 	if err := f.store.change(ctx, func(st *state) error {
 		source, destination := st.Works[grant.WorkID], st.Works[work.WorkID]
-		if source.GroupRealm != "" || destination.GroupRealm != "" || destination.ProjectImportRealm != "" || st.Schema != 4 || !validState(*st) {
+		if source.GroupRealm != "" || destination.GroupRealm != "" || destination.ProjectImportRealm != "" || st.Schema != 5 || !validState(*st) {
 			t.Fatal("invented realm or invalid provenance")
 		}
 		provenance := destination.Inputs[0].Source
@@ -105,7 +105,7 @@ func TestPublishedPrivateFileImportsSnapshotWithoutInventingGroupOrResending(t *
 		if validState(*st) {
 			t.Fatal("old schema silently erases publication provenance")
 		}
-		st.Schema = 4
+		st.Schema = 5
 		return nil
 	}); err != nil {
 		t.Fatal(err)
@@ -148,7 +148,7 @@ func TestPublicationImportRechecksSourceAndMembershipBeforeBytes(t *testing.T) {
 		case "receipt":
 			bad.MessageReceipt = "other"
 		}
-		f.host.SetPublicationAccess(func(context.Context, core.ActionPrincipal, string, string) (core.CasePublishedSource, error) {
+		f.host.SetPublicationAccess(func(context.Context, core.ActionPrincipal, string, string, string) (core.CasePublishedSource, error) {
 			return bad, nil
 		})
 		if _, err := f.host.Tool(ctx, "host-case-import", input, target.Principal, work.WorkID); err == nil {
@@ -156,7 +156,7 @@ func TestPublicationImportRechecksSourceAndMembershipBeforeBytes(t *testing.T) {
 		}
 	}
 	calls := 0
-	f.host.SetPublicationAccess(func(context.Context, core.ActionPrincipal, string, string) (core.CasePublishedSource, error) {
+	f.host.SetPublicationAccess(func(context.Context, core.ActionPrincipal, string, string, string) (core.CasePublishedSource, error) {
 		calls++
 		if calls > 1 {
 			return core.CasePublishedSource{}, ErrScope
@@ -215,7 +215,7 @@ func TestPublicationThenLegacyImportNeverDowngradesSchema(t *testing.T) {
 				}
 				return group.Principal.ChatID, realm, nil
 			})
-			f.host.SetPublicationAccess(func(_ context.Context, p core.ActionPrincipal, id, publication string) (core.CasePublishedSource, error) {
+			f.host.SetPublicationAccess(func(_ context.Context, p core.ActionPrincipal, id, publication, purpose string) (core.CasePublishedSource, error) {
 				if p != target.Principal || id != work.WorkID || publication != "pub_selected" {
 					return core.CasePublishedSource{}, ErrScope
 				}
@@ -253,7 +253,7 @@ func TestPublicationThenLegacyImportNeverDowngradesSchema(t *testing.T) {
 				t.Fatal("work read after mixed imports", err)
 			}
 			checkState := func(st *state) error {
-				if st.Schema != 4 || !validState(*st) || len(st.Works[work.WorkID].Inputs) != 2 || st.Works[grant.WorkID].GroupRealm != "" {
+				if st.Schema != 5 || !validState(*st) || len(st.Works[work.WorkID].Inputs) != 2 || st.Works[grant.WorkID].GroupRealm != "" {
 					t.Fatal("publication provenance downgraded")
 				}
 				return nil
