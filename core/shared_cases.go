@@ -170,12 +170,15 @@ func (e *Engine) importCaseArtifacts(ctx context.Context, token string, p Action
 	}
 	var record struct {
 		Artifacts []struct {
-			Receipt       string `json:"message_receipt"`
-			PublicationID string `json:"publication_id"`
-			Kind          string `json:"kind"`
-			Name          string `json:"name"`
-			SHA256        string `json:"sha256"`
-			Stale         bool   `json:"stale"`
+			Receipt            string `json:"message_receipt"`
+			PublicationID      string `json:"publication_id"`
+			Kind               string `json:"kind"`
+			Name               string `json:"name"`
+			SHA256             string `json:"sha256"`
+			Stale              bool   `json:"stale"`
+			Purpose            string `json:"purpose"`
+			ReferenceOnly      bool   `json:"reference_only"`
+			PublicationBasisID string `json:"publication_basis_id"`
 		} `json:"artifacts"`
 	}
 	if json.Unmarshal(data, &record) != nil {
@@ -200,6 +203,9 @@ func (e *Engine) importCaseArtifacts(ctx context.Context, token string, p Action
 		request := map[string]string{"receipt": artifact.Receipt}
 		if artifact.Kind == "published_file" && artifact.PublicationID != "" && artifact.Receipt == "" {
 			request = map[string]string{"publication_id": artifact.PublicationID}
+			if artifact.Purpose != "" {
+				request["purpose"] = artifact.Purpose
+			}
 		} else if artifact.Receipt == "" || artifact.PublicationID != "" {
 			result["file_import"] = map[string]any{"status": "unavailable", "code": "invalid_case_file_reference"}
 			return
@@ -219,7 +225,7 @@ func (e *Engine) importCaseArtifacts(ctx context.Context, token string, p Action
 					continue
 				}
 				if artifact.PublicationID != "" {
-					available = available || (file.Source.PublicationID == artifact.PublicationID && file.SHA256 == artifact.SHA256 && file.Name == artifact.Name)
+					available = available || (file.Source.PublicationID == artifact.PublicationID && file.SHA256 == artifact.SHA256 && file.Name == artifact.Name && file.Source.ReferenceOnly == artifact.ReferenceOnly && file.Source.PublicationBasisID == artifact.PublicationBasisID && (artifact.Purpose == "" || file.Source.Purpose == artifact.Purpose))
 				} else {
 					available = available || file.Source.MessageReceipt == artifact.Receipt
 				}

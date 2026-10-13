@@ -91,17 +91,17 @@ func (e *Engine) banquetSubmissionContext(ctx context.Context, principal ActionP
 
 // Reuse the existing file importer and immutable snapshots. Its authorization
 // comes from the current recipient and Feishu version, never a mock project.
-func (e *Engine) authorizeHandoffPublication(ctx context.Context, p ActionPrincipal, workID, publicationID string) (CasePublishedSource, error) {
+func (e *Engine) authorizeHandoffPublication(ctx context.Context, p ActionPrincipal, workID, publicationID, purpose string) (CasePublishedSource, error) {
 	e.actionMu.RLock()
 	host := actionHostForCommand(e.actionHost, "handoff")
 	e.actionMu.RUnlock()
 	tools, ok := host.(interface {
-		HandoffAccess(context.Context, ActionPrincipal, string, string) (map[string]any, error)
+		HandoffAccess(context.Context, ActionPrincipal, string, string, string) (map[string]any, error)
 	})
 	if !ok || workID == "" || !strings.HasPrefix(publicationID, "bh_") {
 		return CasePublishedSource{}, ErrFileWorkNotFound
 	}
-	result, err := tools.HandoffAccess(ctx, p, workID, publicationID)
+	result, err := tools.HandoffAccess(ctx, p, workID, publicationID, purpose)
 	if err != nil {
 		return CasePublishedSource{}, err
 	}
@@ -112,6 +112,9 @@ func (e *Engine) authorizeHandoffPublication(ctx context.Context, p ActionPrinci
 	var source CasePublishedSource
 	if err != nil || json.Unmarshal(raw, &source) != nil {
 		return source, ErrFileWorkNotFound
+	}
+	if source.Purpose != purpose || source.ReferenceOnly != (purpose == "revision") || source.PublicationBasisID == "" {
+		return CasePublishedSource{}, ErrFileWorkNotFound
 	}
 	return source, nil
 }
@@ -129,7 +132,8 @@ func (e *Engine) importHandoffFiles(ctx context.Context, token string, p ActionP
 		if !strings.HasPrefix(id, "bh_") {
 			return ErrFileWorkNotFound
 		}
-		artifacts = append(artifacts, map[string]any{"kind": "published_file", "publication_id": id, "name": file["name"], "sha256": file["sha256"]})
+		artifacts = append(artifacts, map[string]any{"kind": "published_file", "publication_id": id, "name": file["name"], "sha256": file["sha256"],
+			"purpose": file["purpose"], "reference_only": file["reference_only"], "publication_basis_id": file["publication_basis_id"]})
 	}
 	imported := map[string]any{"case": map[string]any{"artifacts": artifacts}}
 	e.importCaseArtifacts(ctx, token, p, imported)

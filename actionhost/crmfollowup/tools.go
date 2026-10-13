@@ -14,7 +14,7 @@ import (
 func (a *Adapter) Tool(ctx context.Context, command string, input json.RawMessage, principal core.ActionPrincipal, token string, lang core.Language) (map[string]any, *core.ActionHostResult, error) {
 	stages := command == "stage" || command == "stage-customer-create" || command == "stage-customer-update" || command == "stage-banquet-create" || command == "stage-banquet-update" || command == "stage-banquet-followup" || command == "stage-handoff-submit" || command == "stage-handoff-accept" || command == "stage-handoff-return"
 	caseTool := command == "case-list" || command == "case-read" || command == "case-update" || command == "case-member-add" || command == "case-publish" || command == "case-artifact" || command == "case-access" || command == "case-result"
-	if !a.toolsEnabled || token == "" || (!caseTool && !stages && command != "open" && command != "customer" && command != "customers" && command != "banquet" && command != "banquets" && command != "handoff" && command != "result" && command != "assignee") {
+	if !a.toolsEnabled || token == "" || (!caseTool && !stages && command != "open" && command != "customer" && command != "customers" && command != "banquet-context" && command != "banquet" && command != "banquets" && command != "handoff" && command != "result" && command != "assignee") {
 		return map[string]any{"status": "blocked", "code": "unsupported_tool_or_session"}, nil, nil
 	}
 	payload := map[string]any{"command": command, "request": input, "principal": principal}
@@ -51,8 +51,8 @@ func (a *Adapter) Tool(ctx context.Context, command string, input json.RawMessag
 }
 
 // HandoffAccess is a host-only file authorization call, not a model command.
-func (a *Adapter) HandoffAccess(ctx context.Context, principal core.ActionPrincipal, workID, publicationID string) (map[string]any, error) {
-	return a.call(ctx, "host-handoff-access", map[string]any{"principal": principal, "work_id": workID, "publication_id": publicationID}, "")
+func (a *Adapter) HandoffAccess(ctx context.Context, principal core.ActionPrincipal, workID, publicationID, purpose string) (map[string]any, error) {
+	return a.call(ctx, "host-handoff-access", map[string]any{"principal": principal, "work_id": workID, "publication_id": publicationID, "purpose": purpose}, "")
 }
 
 // ConfigurePlanBinding runs only at host startup. No model field selects a route.
