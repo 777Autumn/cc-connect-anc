@@ -12,10 +12,12 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/chenhg5/cc-connect/core"
 
-	_ "modernc.org/sqlite"
+	"modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 var (
@@ -83,7 +85,9 @@ func Open(path string) (*Store, error) {
 	db.SetMaxOpenConns(1)
 	s := &Store{db: db, path: path, file: info}
 	if _, err = db.Exec(`PRAGMA busy_timeout=5000; PRAGMA synchronous=FULL;`); err == nil {
-		err = s.change(context.Background(), func(st *state) error {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		err = s.change(ctx, func(st *state) error {
 			for _, w := range st.Works {
 				for _, d := range w.Deliveries {
 					if d.Status == "submitted" {
@@ -120,9 +124,8 @@ func databaseFile(path string) (os.FileInfo, error) {
 	return info, nil
 }
 
-// ponytail: one SQLite document serializes this small tester cohort; split rows
-// only when measured contention matters. Bounded local file I/O, never network,
-// may run inside a transaction so version claiming and snapshot creation agree.
+// shortcut: one document serializes this small tester cohort, including import
+// authorization; split transactions when measured queue latency requires it.
 func (s *Store) change(ctx context.Context, fn func(*state) error) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -136,10 +139,31 @@ func (s *Store) change(ctx context.Context, fn func(*state) error) error {
 		return s.storageError(ctx)
 	}
 	defer func() { _ = conn.Close() }()
-	if _, err = conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
-		return s.storageError(ctx)
+	for {
+		_, err = conn.ExecContext(ctx, "BEGIN IMMEDIATE")
+		if err == nil {
+			break
+		}
+		var busy *sqlite.Error
+		if !errors.As(err, &busy) || busy.Code()&0xff != sqlite3.SQLITE_BUSY {
+			return s.storageError(ctx)
+		}
+		// No callback ran: wait for another project's transaction, never replay
+		// business work or retry an uncertain commit. SQLite itself waits up to 5s.
+		timer := time.NewTimer(50 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
 	}
 	defer func() { _, _ = conn.ExecContext(context.Background(), "ROLLBACK") }()
+	info, err = databaseFile(s.path)
+	if err != nil || !os.SameFile(s.file, info) {
+		s.failed = true
+		return ErrUnavailable
+	}
 	var data []byte
 	var st state
 	if err = conn.QueryRowContext(ctx, "SELECT payload FROM file_state WHERE id=1").Scan(&data); err != nil || json.Unmarshal(data, &st) != nil || !validState(st) {
