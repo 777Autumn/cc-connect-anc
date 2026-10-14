@@ -65,6 +65,74 @@ func TestValidationLedgerCancellation(t *testing.T) {
 	}
 }
 
+type readResult struct {
+	Operation            string        `json:"operation"`
+	TotalMS              float64       `json:"total_ms"`
+	Phases               ledgerTimings `json:"phases_ms"`
+	Error                string        `json:"error,omitempty"`
+	CancellationReturnMS *float64      `json:"cancel_to_return_ms,omitempty"`
+	CancellationOutcome  string        `json:"cancellation_outcome,omitempty"`
+}
+
+func measureLedgerReads(t *testing.T, ctx context.Context, reader *Host, readerFixture fixture, deliveryID, topology string, cancelWait bool, startWait chan struct{}) []readResult {
+	results := make(chan readResult, 3)
+	var ready sync.WaitGroup
+	ready.Add(3)
+	for _, operation := range []string{"message_lookup", "work_context", "file_status"} {
+		go func(operation string) {
+			phases := ledgerTimings{}
+			readCtx := context.WithValue(ctx, ledgerTimingKey{}, phases)
+			var cancel context.CancelFunc
+			var cancelAt time.Time
+			if cancelWait {
+				cancelAt = time.Now().Add(100 * time.Millisecond)
+				readCtx, cancel = context.WithDeadline(readCtx, cancelAt)
+				defer cancel()
+			}
+			ready.Done()
+			<-startWait
+			start := time.Now()
+			var err error
+			switch operation {
+			case "message_lookup":
+				var ref WorkRef
+				ref, err = reader.FindByMessage(readCtx, readerFixture.binding.Principal, readerFixture.binding.Principal.MessageID)
+				if err == nil && ref.WorkID != readerFixture.context.WorkID {
+					err = fmt.Errorf("wrong work")
+				}
+			case "work_context":
+				_, err = reader.Tool(readCtx, "work-context", json.RawMessage(`{}`), readerFixture.binding.Principal, readerFixture.context.WorkID)
+			case "file_status":
+				raw, _ := json.Marshal(map[string]string{"work_id": readerFixture.context.WorkID, "delivery_id": deliveryID})
+				_, err = reader.Tool(readCtx, "file-status", raw, readerFixture.binding.Principal, readerFixture.context.WorkID)
+			}
+			row := readResult{Operation: operation, TotalMS: float64(time.Since(start)) / float64(time.Millisecond), Phases: phases}
+			if err != nil {
+				row.Error = err.Error()
+			}
+			if !cancelAt.IsZero() {
+				elapsed := float64(time.Since(cancelAt)) / float64(time.Millisecond)
+				if errors.Is(err, context.DeadlineExceeded) {
+					row.CancellationReturnMS = &elapsed
+					row.CancellationOutcome = "deadline_observed"
+				} else if topology != "independent_sqlite" || err != nil || elapsed >= 0 {
+					t.Error("cancellation outcome", err)
+				} else {
+					row.CancellationOutcome = "completed_before_deadline"
+				}
+			}
+			results <- row
+		}(operation)
+	}
+	ready.Wait()
+	close(startWait)
+	rows := []readResult{}
+	for range 3 {
+		rows = append(rows, <-results)
+	}
+	return rows
+}
+
 func runLedgerExperiment(t *testing.T, topology string, stage int, delay time.Duration, cancelWait bool, repeat int) {
 	f, target, work, grant, _, sends := publicationFixture(t)
 	reader, readerStore, readerFixture, deliveryID := f.host, f.store, f, grant.DeliveryID
@@ -127,69 +195,7 @@ func runLedgerExperiment(t *testing.T, topology string, stage int, delay time.Du
 	case <-ctx.Done():
 		t.Fatal("authorization not entered")
 	}
-	type readResult struct {
-		Operation            string        `json:"operation"`
-		TotalMS              float64       `json:"total_ms"`
-		Phases               ledgerTimings `json:"phases_ms"`
-		Error                string        `json:"error,omitempty"`
-		CancellationReturnMS *float64      `json:"cancel_to_return_ms,omitempty"`
-		CancellationOutcome  string        `json:"cancellation_outcome,omitempty"`
-	}
-	results := make(chan readResult, 3)
-	var ready sync.WaitGroup
-	ready.Add(3)
-	for _, operation := range []string{"message_lookup", "work_context", "file_status"} {
-		go func(operation string) {
-			phases := ledgerTimings{}
-			readCtx := context.WithValue(ctx, ledgerTimingKey{}, phases)
-			var cancel context.CancelFunc
-			var cancelAt time.Time
-			if cancelWait {
-				cancelAt = time.Now().Add(100 * time.Millisecond)
-				readCtx, cancel = context.WithDeadline(readCtx, cancelAt)
-				defer cancel()
-			}
-			ready.Done()
-			<-startWait
-			start := time.Now()
-			var err error
-			switch operation {
-			case "message_lookup":
-				var ref WorkRef
-				ref, err = reader.FindByMessage(readCtx, readerFixture.binding.Principal, readerFixture.binding.Principal.MessageID)
-				if err == nil && ref.WorkID != readerFixture.context.WorkID {
-					err = fmt.Errorf("wrong work")
-				}
-			case "work_context":
-				_, err = reader.Tool(readCtx, "work-context", json.RawMessage(`{}`), readerFixture.binding.Principal, readerFixture.context.WorkID)
-			case "file_status":
-				raw, _ := json.Marshal(map[string]string{"work_id": readerFixture.context.WorkID, "delivery_id": deliveryID})
-				_, err = reader.Tool(readCtx, "file-status", raw, readerFixture.binding.Principal, readerFixture.context.WorkID)
-			}
-			row := readResult{Operation: operation, TotalMS: float64(time.Since(start)) / float64(time.Millisecond), Phases: phases}
-			if err != nil {
-				row.Error = err.Error()
-			}
-			if !cancelAt.IsZero() {
-				elapsed := float64(time.Since(cancelAt)) / float64(time.Millisecond)
-				if errors.Is(err, context.DeadlineExceeded) {
-					row.CancellationReturnMS = &elapsed
-					row.CancellationOutcome = "deadline_observed"
-				} else if topology != "independent_sqlite" || err != nil || elapsed >= 0 {
-					t.Error("cancellation outcome", err)
-				} else {
-					row.CancellationOutcome = "completed_before_deadline"
-				}
-			}
-			results <- row
-		}(operation)
-	}
-	ready.Wait()
-	close(startWait)
-	rows := []readResult{}
-	for range 3 {
-		rows = append(rows, <-results)
-	}
+	rows := measureLedgerReads(t, ctx, reader, readerFixture, deliveryID, topology, cancelWait, startWait)
 	importErr := <-done
 	ref, reuseErr := reader.FindByMessage(context.Background(), readerFixture.binding.Principal, readerFixture.binding.Principal.MessageID)
 	reused := reuseErr == nil && ref.WorkID == readerFixture.context.WorkID && !readerStore.failed
