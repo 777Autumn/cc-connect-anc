@@ -1,5 +1,11 @@
 # Isolated file ledger measurements, 2026-10-14
 
+This document and its result JSON preserve the pre-repair baseline. The current
+implementation moves authorization outside transactions and uses a cancellable
+Store gate plus a 50-ms SQLite busy wait. See [the repair boundary](DOCUMENT_INGRESS_REPAIR.md).
+Run the harness at the baseline SHA to reproduce these historical timings; at a
+new SHA it measures the new implementation and records that source separately.
+
 The real file Host and SQLite Store at source `f28d9f479d55b70e08bdfc4ba36caa49e46ec7a9`
 serialize other users' reads while publication authorization waits. On the isolated
 Mac, a 30-second authorization wait produced 30.010–30.013-second reads through

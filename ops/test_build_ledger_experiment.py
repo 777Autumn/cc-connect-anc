@@ -14,7 +14,7 @@ class OverlayTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             instrument(original.replace('"BEGIN IMMEDIATE"', '"BEGIN"'))
         with self.assertRaises(ValueError):
-            instrument(original + '\ts.mu.Lock()\n')
+            instrument(original + '\tselect {\n\tcase s.mu <- struct{}{}:\n')
 
 if __name__ == '__main__':
     unittest.main()

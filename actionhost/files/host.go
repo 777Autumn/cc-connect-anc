@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 
@@ -177,13 +178,17 @@ func (h *Host) Bind(ctx context.Context, b Binding) (WorkContext, error) {
 		return result, err
 	}
 	_ = outputs.Close()
+	boundID, sourceGrant, bindingGrant, err := h.authorizeBindingSource(ctx, b)
+	if err != nil {
+		return result, err
+	}
 	err = h.store.change(ctx, func(st *state) error {
 		var source *core.FileWorkSource
 		if b.SourceReceipt != "" {
 			if !b.Group {
 				return ErrScope
 			}
-			w, d, err := h.groupArtifact(ctx, st, b.Principal, b.SourceReceipt)
+			w, d, err := h.groupArtifact(st, b.Principal, b.SourceReceipt, sourceGrant)
 			if err != nil {
 				return err
 			}
@@ -224,10 +229,16 @@ func (h *Host) Bind(ctx context.Context, b Binding) (WorkContext, error) {
 				}
 			}
 			w = &work{ID: uuid.NewString(), SessionID: b.SessionID, Root: b.WorkRoot, RootIdentity: identity(rootInfo), InputIdentity: identity(inputInfo), OutputIdentity: identity(outputInfo), Principal: b.Principal, Route: append(json.RawMessage{}, b.Route...), OwnerUID: b.OwnerUID, Inputs: []Input{}, Deliveries: map[string]*delivery{}, Messages: map[string]bool{}}
+			if boundID != "" {
+				w.ID = boundID
+			}
 			w.GroupRealm = realm
 		}
 		if b.SourceReceipt != "" {
-			if _, _, err := h.sharedArtifact(ctx, st, b.Principal, b.SourceReceipt, w.ID, false); err != nil {
+			if w.ID != boundID {
+				return ErrScope
+			}
+			if _, _, err := h.sharedArtifact(st, b.Principal, b.SourceReceipt, w.ID, false, bindingGrant); err != nil {
 				return err
 			}
 		}
@@ -286,14 +297,24 @@ func (h *Host) ActivateInputs(ctx context.Context, p core.ActionPrincipal, workI
 	if !validPrincipal(p) {
 		return result, ErrInvalid
 	}
-	err := h.store.change(ctx, func(st *state) error {
+	authorization, result, err := h.authorizePendingInputs(ctx, p, workID)
+	pending := authorization.pending
+	if err != nil || len(pending) == 0 {
+		return result, err
+	}
+	before, err := json.Marshal(pending)
+	if err != nil {
+		return WorkContext{}, err
+	}
+	err = h.store.change(ctx, func(st *state) error {
 		w := st.Works[workID]
 		if w == nil || scope(w.Principal) != scope(p) || !w.Messages[p.MessageID] {
 			return ErrScope
 		}
-		if len(w.PendingInputs[p.MessageID]) == 0 {
-			result = workContext(w)
-			return nil
+		current, err := json.Marshal(w.PendingInputs[p.MessageID])
+		alreadyActive := len(w.PendingInputs[p.MessageID]) == 0
+		if err != nil || (!alreadyActive && !bytes.Equal(before, current)) {
+			return ErrScope
 		}
 		r, err := protectedRoot(w.Root)
 		if err != nil {
@@ -312,7 +333,7 @@ func (h *Host) ActivateInputs(ctx context.Context, p core.ActionPrincipal, workI
 		if identity(info) != w.InputIdentity {
 			return ErrScope
 		}
-		for _, input := range w.PendingInputs[p.MessageID] {
+		for _, input := range pending {
 			name := filepath.Base(input.Path)
 			snapshot := "input_" + name
 			if input.Source != nil {
@@ -321,7 +342,7 @@ func (h *Host) ActivateInputs(ctx context.Context, p core.ActionPrincipal, workI
 					return ErrScope
 				}
 				if input.Source.PublicationID != "" {
-					authorized, artifact, grant, err := h.publishedArtifact(ctx, st, p, w.ID, input.Source.PublicationID, publicationPurpose(input.Source.Purpose))
+					authorized, artifact, grant, err := publishedArtifact(st, p, input.Source.PublicationID, publicationPurpose(input.Source.Purpose), authorization.publications[input.ID])
 					if err != nil {
 						return err
 					}
@@ -333,7 +354,7 @@ func (h *Host) ActivateInputs(ctx context.Context, p core.ActionPrincipal, workI
 				} else if source.Principal.ChatID != p.ChatID {
 					// A queued/recovered private import must still have a live
 					// membership and same-project binding before publishing bytes.
-					authorized, _, err := h.sharedArtifact(ctx, st, p, input.Source.MessageReceipt, w.ID, true)
+					authorized, _, err := h.sharedArtifact(st, p, input.Source.MessageReceipt, w.ID, true, authorization.projects[input.ID])
 					if err != nil {
 						return err
 					}
@@ -347,41 +368,24 @@ func (h *Host) ActivateInputs(ctx context.Context, p core.ActionPrincipal, workI
 				}
 				snapshot = delivery.Snapshot
 			}
-			f, err := h.snapshots.Open(snapshot)
-			if err != nil {
-				return err
-			}
-			data, err := io.ReadAll(io.LimitReader(f, MaxFileBytes+1))
-			_ = f.Close()
-			if err != nil || len(data) > MaxFileBytes || hash(data) != input.SHA256 {
-				return ErrInvalid
-			}
-			if input.Source != nil {
-				if err := h.validateFile(ctx, input.Name, data); err != nil {
-					return err
+			if alreadyActive {
+				matched := false
+				for _, active := range w.Inputs {
+					if reflect.DeepEqual(active, input) {
+						matched = true
+						break
+					}
 				}
-			}
-			if info, statErr := inputs.Lstat(name); statErr == nil {
-				// A crash may occur after the durable copy but before the ledger
-				// commit. Reconcile identical host-owned files without rewriting.
-				if !info.Mode().IsRegular() || info.Mode().Perm() != 0440 || checkOwner(info, os.Geteuid(), true) != nil {
+				if !matched {
 					return ErrScope
 				}
-				f, err := inputs.Open(name)
-				if err != nil {
-					return err
-				}
-				existing, err := io.ReadAll(io.LimitReader(f, MaxFileBytes+1))
-				_ = f.Close()
-				if err != nil || hash(existing) != input.SHA256 {
-					return ErrInvalid
-				}
-			} else if !errors.Is(statErr, os.ErrNotExist) {
-				return statErr
-			} else if err := writeNew(inputs, name, data, 0440); err != nil {
+			}
+			if err := h.copyInputSnapshot(ctx, inputs, input, snapshot); err != nil {
 				return err
 			}
-			w.Inputs = append(w.Inputs, input)
+			if !alreadyActive {
+				w.Inputs = append(w.Inputs, input)
+			}
 		}
 		delete(w.PendingInputs, p.MessageID)
 		result = workContext(w)
@@ -412,56 +416,83 @@ func (h *Host) FindByMessage(ctx context.Context, p core.ActionPrincipal, messag
 			}
 		}
 		if result.WorkID == "" {
-			if _, _, err := h.groupArtifact(ctx, st, p, messageID); err != nil {
+			if _, err := sharedWork(st, p, messageID); err != nil {
 				return err
 			}
-			result.Import = true
 		}
 		return nil
 	})
+	if err == nil && result.WorkID == "" {
+		grant, authErr := h.authorizeProject(ctx, p, "", messageID, false)
+		if authErr != nil {
+			return WorkRef{}, authErr
+		}
+		err = h.store.change(ctx, func(st *state) error {
+			if _, _, err := h.groupArtifact(st, p, messageID, grant); err != nil {
+				return err
+			}
+			result.Import = true
+			return nil
+		})
+	}
 	return result, err
 }
 
 // Only a confirmed file receipt in the configured Bot/group can cross actor
 // boundaries. Original requests and text replies do not identify one artifact.
-func (h *Host) groupArtifact(ctx context.Context, st *state, p core.ActionPrincipal, receipt string) (*work, *delivery, error) {
-	w, d, err := h.sharedArtifact(ctx, st, p, receipt, "", false)
+func (h *Host) groupArtifact(st *state, p core.ActionPrincipal, receipt string, grant projectGrant) (*work, *delivery, error) {
+	w, d, err := h.sharedArtifact(st, p, receipt, "", false, grant)
 	if err == nil && scope(w.Principal) == scope(p) {
 		return nil, nil, ErrScope
 	}
 	return w, d, err
 }
 
-func (h *Host) sharedArtifact(ctx context.Context, st *state, p core.ActionPrincipal, receipt, workID string, requireBinding bool) (*work, *delivery, error) {
+func sharedWork(st *state, p core.ActionPrincipal, receipt string) (*work, error) {
 	var selected *work
 	for _, w := range st.Works {
 		if w.Messages[receipt] {
 			if selected != nil {
-				return nil, nil, ErrScope
+				return nil, ErrScope
 			}
 			selected = w
 		}
 	}
 	if selected == nil {
-		return nil, nil, core.ErrFileWorkNotFound
+		return nil, core.ErrFileWorkNotFound
 	}
 	if selected.Principal.Platform != p.Platform {
-		return nil, nil, ErrScope
+		return nil, ErrScope
 	}
-	chat, realm := p.ChatID, h.groupRealm
+	return selected, nil
+}
+
+type projectGrant struct{ chat, realm string }
+
+func (h *Host) authorizeProject(ctx context.Context, p core.ActionPrincipal, workID, receipt string, requireBinding bool) (projectGrant, error) {
 	if h.projectAccess != nil {
-		authorizedChat, authorizedRealm, err := h.projectAccess(ctx, p, workID, receipt, requireBinding)
+		chat, realm, err := h.projectAccess(ctx, p, workID, receipt, requireBinding)
 		if err != nil {
 			if errors.Is(err, core.ErrFileWorkNotFound) || errors.Is(err, ErrScope) {
-				return nil, nil, ErrScope
+				return projectGrant{}, ErrScope
 			}
-			return nil, nil, fmt.Errorf("%w: project authorization: %w", ErrUnavailable, err)
+			return projectGrant{}, fmt.Errorf("%w: project authorization: %w", ErrUnavailable, err)
 		}
-		if authorizedChat != "" || authorizedRealm != "" {
-			chat, realm = authorizedChat, authorizedRealm
-			if selected.Principal.ChatID != p.ChatID && (!requireBinding || workID == "") {
-				return nil, nil, ErrScope
-			}
+		return projectGrant{chat, realm}, nil
+	}
+	return projectGrant{}, nil
+}
+
+func (h *Host) sharedArtifact(st *state, p core.ActionPrincipal, receipt, workID string, requireBinding bool, grant projectGrant) (*work, *delivery, error) {
+	selected, err := sharedWork(st, p, receipt)
+	if err != nil {
+		return nil, nil, err
+	}
+	chat, realm := p.ChatID, h.groupRealm
+	if grant.chat != "" || grant.realm != "" {
+		chat, realm = grant.chat, grant.realm
+		if selected.Principal.ChatID != p.ChatID && (!requireBinding || workID == "") {
+			return nil, nil, ErrScope
 		}
 	}
 	if !validHash(realm) || selected.GroupRealm != realm || selected.Principal.ChatID != chat {

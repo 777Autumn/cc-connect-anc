@@ -10,7 +10,7 @@ REPO = Path(__file__).resolve().parents[1]
 
 def instrument(source):
     changes = [
-        ('\ts.mu.Lock()\n', '\tvalidationMutexStart := time.Now()\n\ts.mu.Lock()\n\tvalidationObserve(ctx, "mutex", validationMutexStart)\n'),
+        ('\tselect {\n\tcase s.mu <- struct{}{}:\n', '\tvalidationMutexStart := time.Now()\n\tselect {\n\tcase s.mu <- struct{}{}:\n\t\tvalidationObserve(ctx, "mutex", validationMutexStart)\n'),
         ('\tconn, err := s.db.Conn(ctx)\n', '\tvalidationConnectionStart := time.Now()\n\tconn, err := s.db.Conn(ctx)\n\tvalidationObserve(ctx, "connection_pool", validationConnectionStart)\n'),
         ('\t\t_, err = conn.ExecContext(ctx, "BEGIN IMMEDIATE")\n', '\t\tvalidationDatabaseStart := time.Now()\n\t\t_, err = conn.ExecContext(ctx, "BEGIN IMMEDIATE")\n\t\tvalidationObserve(ctx, "sqlite_begin", validationDatabaseStart)\n'),
     ]
@@ -49,6 +49,7 @@ def main():
               'package_sources_sha256': {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted((REPO / 'actionhost/files').glob('*.go'))},
               'go_version': subprocess.check_output([args.go, 'version'], env=env).decode().strip(),
               'returncode': run.returncode, 'target': 'darwin/arm64',
+              'sqlite_busy_timeout_ms': 50,
               'measurement_note': 'sqlite_begin includes SQL execution plus DB lock waiting; connection_pool and mutex measured separately; 50ms retry backoff remains in total.'}
     if run.returncode == 0:
         record['binary_sha256'] = hashlib.sha256(binary.read_bytes()).hexdigest()

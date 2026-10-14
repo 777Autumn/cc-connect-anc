@@ -379,6 +379,7 @@ type Message struct {
 	// verified by the transport. Its parent is material, not an existing work.
 	FileWorkNewInput bool
 	fileTurn         *FileTurn
+	fileOnlyUpload   bool // Original attachment-only intake; host guidance later adds text.
 	fileSession      *Session
 	handoffStart     *handoffStartRequest // Host-only, created by a verified notice callback.
 	caseSources      []CaseSource

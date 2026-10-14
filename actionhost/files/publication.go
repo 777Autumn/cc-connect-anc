@@ -16,17 +16,21 @@ func validPublicationID(id string) bool {
 // This separate branch deliberately cannot authorize a private receipt via a
 // fabricated GroupRealm. The CRM resolves the opaque publication for this
 // current member/work; the local ledger then checks every source field.
-func (h *Host) publishedArtifact(ctx context.Context, st *state, p core.ActionPrincipal, workID, publicationID, purpose string) (*work, *delivery, core.CasePublishedSource, error) {
+func (h *Host) authorizePublication(ctx context.Context, p core.ActionPrincipal, workID, publicationID, purpose string) (core.CasePublishedSource, error) {
 	if h.publicationAccess == nil || !validPublicationID(publicationID) || (purpose != "current" && purpose != "revision") || (purpose == "revision" && !strings.HasPrefix(publicationID, "bh_")) {
-		return nil, nil, core.CasePublishedSource{}, ErrScope
+		return core.CasePublishedSource{}, ErrScope
 	}
 	grant, err := h.publicationAccess(ctx, p, workID, publicationID, purpose)
 	if err != nil {
 		if errors.Is(err, core.ErrFileWorkNotFound) || errors.Is(err, ErrScope) {
-			return nil, nil, grant, ErrScope
+			return grant, ErrScope
 		}
-		return nil, nil, grant, errors.Join(ErrUnavailable, err)
+		return grant, errors.Join(ErrUnavailable, err)
 	}
+	return grant, nil
+}
+
+func publishedArtifact(st *state, p core.ActionPrincipal, publicationID, purpose string, grant core.CasePublishedSource) (*work, *delivery, core.CasePublishedSource, error) {
 	if strings.HasPrefix(publicationID, "bh_") && (grant.Purpose != purpose || !validPublicationID(grant.PublicationBasisID)) {
 		return nil, nil, grant, ErrScope
 	}
@@ -57,6 +61,8 @@ func samePublicationBasis(source *core.FileWorkSource, grant core.CasePublishedS
 }
 
 func (h *Host) importCasePublication(ctx context.Context, p core.ActionPrincipal, workID, publicationID, purpose string) (map[string]any, error) {
+	// Establish the destination before asking the external authority; recheck it
+	// with the returned grant under the transaction before changing any inputs.
 	err := h.store.change(ctx, func(st *state) error {
 		w, err := owned(st, p, workID)
 		if err != nil {
@@ -65,7 +71,24 @@ func (h *Host) importCasePublication(ctx context.Context, p core.ActionPrincipal
 		if !w.Messages[p.MessageID] {
 			return ErrScope
 		}
-		source, artifact, grant, err := h.publishedArtifact(ctx, st, p, workID, publicationID, purpose)
+		return nil
+	})
+	if err != nil {
+		return fileRefusal(err)
+	}
+	grant, err := h.authorizePublication(ctx, p, workID, publicationID, purpose)
+	if err != nil {
+		return fileRefusal(err)
+	}
+	err = h.store.change(ctx, func(st *state) error {
+		w, err := owned(st, p, workID)
+		if err != nil {
+			return err
+		}
+		if !w.Messages[p.MessageID] {
+			return ErrScope
+		}
+		source, artifact, grant, err := publishedArtifact(st, p, publicationID, purpose, grant)
 		if err != nil {
 			return err
 		}
