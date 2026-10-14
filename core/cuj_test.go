@@ -1997,6 +1997,17 @@ func TestCUJ_A5_OutOfOrderSelectedAttachmentsArePreservedAndDrainedOnce(t *testi
 	model.events <- Event{Type: EventResult, Content: "first done", Done: true}
 	session := e.sessions.GetOrCreateActive("fixture:chat:user")
 	env.waitFor("all selected attachments drain", 3*time.Second, func() bool { return !session.Busy() && len(model.getSentPrompts()) == 3 })
+	for i, name := range []string{"first", "newer", "late-scan"} {
+		prompt := model.getSentPrompts()[i]
+		if !strings.Contains(prompt, name+".pdf") {
+			t.Fatalf("selected attachment turn has no source identity: %q", prompt)
+		}
+		for _, other := range []string{"first", "newer", "late-scan"} {
+			if other != name && strings.Contains(prompt, other+".pdf") {
+				t.Fatalf("attachment turn exposes another turn's pending source: %q", prompt)
+			}
+		}
+	}
 	visible := strings.Join(p.getSent(), "\n")
 	if strings.Count(visible, "first done") != 1 || strings.Count(visible, "ok") != 2 {
 		t.Fatalf("user lost an attachment reply or received a duplicate: %v", p.getSent())
