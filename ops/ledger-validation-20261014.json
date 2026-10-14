@@ -1,0 +1,6337 @@
+{
+  "matrix_runs": 54,
+  "matrix_read_samples": 162,
+  "groups": [
+    {
+      "topology": "independent_sqlite",
+      "authorization_stage": 1,
+      "delay_ms": 0,
+      "operation": "file_status",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 75,
+          "total_ms": 0.749708,
+          "phases_ms": {
+            "connection_pool": 0.001917,
+            "mutex": 0.369833,
+            "sqlite_begin": 0.038291
+          },
+          "importer_authorization_wait_ms": 0.004,
+          "import_total_ms": 6.407792
+        },
+        {
+          "repeat": 2,
+          "source_line": 77,
+          "total_ms": 0.860416,
+          "phases_ms": {
+            "connection_pool": 0.0005,
+            "mutex": 0.585208,
+            "sqlite_begin": 0.029708
+          },
+          "importer_authorization_wait_ms": 0.00475,
+          "import_total_ms": 6.058792
+        },
+        {
+          "repeat": 3,
+          "source_line": 79,
+          "total_ms": 0.684208,
+          "phases_ms": {
+            "connection_pool": 0.000916,
+            "mutex": 0.448125,
+            "sqlite_begin": 0.026
+          },
+          "importer_authorization_wait_ms": 0.002709,
+          "import_total_ms": 5.900209
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            0.749708,
+            0.860416,
+            0.684208
+          ],
+          "median": 0.749708,
+          "max": 0.860416
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            0.004,
+            0.00475,
+            0.002709
+          ],
+          "median": 0.004,
+          "max": 0.00475
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            6.407792,
+            6.058792,
+            5.900209
+          ],
+          "median": 6.058792,
+          "max": 6.407792
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            0.369833,
+            0.585208,
+            0.448125
+          ],
+          "median": 0.448125,
+          "max": 0.585208
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.001917,
+            0.0005,
+            0.000916
+          ],
+          "median": 0.000916,
+          "max": 0.001917
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.038291,
+            0.029708,
+            0.026
+          ],
+          "median": 0.029708,
+          "max": 0.038291
+        }
+      }
+    },
+    {
+      "topology": "independent_sqlite",
+      "authorization_stage": 1,
+      "delay_ms": 0,
+      "operation": "message_lookup",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 75,
+          "total_ms": 1.046041,
+          "phases_ms": {
+            "connection_pool": 0.000583,
+            "mutex": 0.736083,
+            "sqlite_begin": 0.034
+          },
+          "importer_authorization_wait_ms": 0.004,
+          "import_total_ms": 6.407792
+        },
+        {
+          "repeat": 2,
+          "source_line": 77,
+          "total_ms": 0.608333,
+          "phases_ms": {
+            "connection_pool": 0.000917,
+            "mutex": 0.320166,
+            "sqlite_begin": 0.035875
+          },
+          "importer_authorization_wait_ms": 0.00475,
+          "import_total_ms": 6.058792
+        },
+        {
+          "repeat": 3,
+          "source_line": 79,
+          "total_ms": 0.25,
+          "phases_ms": {
+            "connection_pool": 0.00125,
+            "mutex": 0.00025,
+            "sqlite_begin": 0.042208
+          },
+          "importer_authorization_wait_ms": 0.002709,
+          "import_total_ms": 5.900209
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            1.046041,
+            0.608333,
+            0.25
+          ],
+          "median": 0.608333,
+          "max": 1.046041
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            0.004,
+            0.00475,
+            0.002709
+          ],
+          "median": 0.004,
+          "max": 0.00475
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            6.407792,
+            6.058792,
+            5.900209
+          ],
+          "median": 6.058792,
+          "max": 6.407792
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            0.736083,
+            0.320166,
+            0.00025
+          ],
+          "median": 0.320166,
+          "max": 0.736083
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.000583,
+            0.000917,
+            0.00125
+          ],
+          "median": 0.000917,
+          "max": 0.00125
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.034,
+            0.035875,
+            0.042208
+          ],
+          "median": 0.035875,
+          "max": 0.042208
+        }
+      }
+    },
+    {
+      "topology": "independent_sqlite",
+      "authorization_stage": 1,
+      "delay_ms": 0,
+      "operation": "work_context",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 75,
+          "total_ms": 0.391708,
+          "phases_ms": {
+            "connection_pool": 0.001583,
+            "mutex": 0.000292,
+            "sqlite_begin": 0.06475
+          },
+          "importer_authorization_wait_ms": 0.004,
+          "import_total_ms": 6.407792
+        },
+        {
+          "repeat": 2,
+          "source_line": 77,
+          "total_ms": 0.333041,
+          "phases_ms": {
+            "connection_pool": 0.001042,
+            "mutex": 0.000167,
+            "sqlite_begin": 0.04725
+          },
+          "importer_authorization_wait_ms": 0.00475,
+          "import_total_ms": 6.058792
+        },
+        {
+          "repeat": 3,
+          "source_line": 79,
+          "total_ms": 0.469041,
+          "phases_ms": {
+            "connection_pool": 0.000667,
+            "mutex": 0.242667,
+            "sqlite_begin": 0.02375
+          },
+          "importer_authorization_wait_ms": 0.002709,
+          "import_total_ms": 5.900209
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            0.391708,
+            0.333041,
+            0.469041
+          ],
+          "median": 0.391708,
+          "max": 0.469041
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            0.004,
+            0.00475,
+            0.002709
+          ],
+          "median": 0.004,
+          "max": 0.00475
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            6.407792,
+            6.058792,
+            5.900209
+          ],
+          "median": 6.058792,
+          "max": 6.407792
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            0.000292,
+            0.000167,
+            0.242667
+          ],
+          "median": 0.000292,
+          "max": 0.242667
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.001583,
+            0.001042,
+            0.000667
+          ],
+          "median": 0.001042,
+          "max": 0.001583
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.06475,
+            0.04725,
+            0.02375
+          ],
+          "median": 0.04725,
+          "max": 0.06475
+        }
+      }
+    },
+    {
+      "topology": "independent_sqlite",
+      "authorization_stage": 1,
+      "delay_ms": 5500,
+      "operation": "file_status",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 81,
+          "total_ms": 0.725625,
+          "phases_ms": {
+            "connection_pool": 0.00075,
+            "mutex": 0.469208,
+            "sqlite_begin": 0.028333
+          },
+          "importer_authorization_wait_ms": 5502.058041,
+          "import_total_ms": 5511.921083
+        },
+        {
+          "repeat": 2,
+          "source_line": 83,
+          "total_ms": 0.90775,
+          "phases_ms": {
+            "connection_pool": 0.0005,
+            "mutex": 0.638917,
+            "sqlite_begin": 0.028375
+          },
+          "importer_authorization_wait_ms": 5502.067459,
+          "import_total_ms": 5511.037833
+        },
+        {
+          "repeat": 3,
+          "source_line": 85,
+          "total_ms": 1.296166,
+          "phases_ms": {
+            "connection_pool": 0.001333,
+            "mutex": 0.622833,
+            "sqlite_begin": 0.078
+          },
+          "importer_authorization_wait_ms": 5502.111959,
+          "import_total_ms": 5511.639583
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            0.725625,
+            0.90775,
+            1.296166
+          ],
+          "median": 0.90775,
+          "max": 1.296166
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            5502.058041,
+            5502.067459,
+            5502.111959
+          ],
+          "median": 5502.067459,
+          "max": 5502.111959
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            5511.921083,
+            5511.037833,
+            5511.639583
+          ],
+          "median": 5511.639583,
+          "max": 5511.921083
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            0.469208,
+            0.638917,
+            0.622833
+          ],
+          "median": 0.622833,
+          "max": 0.638917
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.00075,
+            0.0005,
+            0.001333
+          ],
+          "median": 0.00075,
+          "max": 0.001333
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.028333,
+            0.028375,
+            0.078
+          ],
+          "median": 0.028375,
+          "max": 0.078
+        }
+      }
+    },
+    {
+      "topology": "independent_sqlite",
+      "authorization_stage": 1,
+      "delay_ms": 5500,
+      "operation": "message_lookup",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 81,
+          "total_ms": 0.253209,
+          "phases_ms": {
+            "connection_pool": 0.001,
+            "mutex": 0.000125,
+            "sqlite_begin": 0.039333
+          },
+          "importer_authorization_wait_ms": 5502.058041,
+          "import_total_ms": 5511.921083
+        },
+        {
+          "repeat": 2,
+          "source_line": 83,
+          "total_ms": 0.648625,
+          "phases_ms": {
+            "connection_pool": 0.001084,
+            "mutex": 0.343042,
+            "sqlite_begin": 0.046625
+          },
+          "importer_authorization_wait_ms": 5502.067459,
+          "import_total_ms": 5511.037833
+        },
+        {
+          "repeat": 3,
+          "source_line": 85,
+          "total_ms": 0.66925,
+          "phases_ms": {
+            "connection_pool": 0.006959,
+            "mutex": 0.000333,
+            "sqlite_begin": 0.121584
+          },
+          "importer_authorization_wait_ms": 5502.111959,
+          "import_total_ms": 5511.639583
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            0.253209,
+            0.648625,
+            0.66925
+          ],
+          "median": 0.648625,
+          "max": 0.66925
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            5502.058041,
+            5502.067459,
+            5502.111959
+          ],
+          "median": 5502.067459,
+          "max": 5502.111959
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            5511.921083,
+            5511.037833,
+            5511.639583
+          ],
+          "median": 5511.639583,
+          "max": 5511.921083
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            0.000125,
+            0.343042,
+            0.000333
+          ],
+          "median": 0.000333,
+          "max": 0.343042
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.001,
+            0.001084,
+            0.006959
+          ],
+          "median": 0.001084,
+          "max": 0.006959
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.039333,
+            0.046625,
+            0.121584
+          ],
+          "median": 0.046625,
+          "max": 0.121584
+        }
+      }
+    },
+    {
+      "topology": "independent_sqlite",
+      "authorization_stage": 1,
+      "delay_ms": 5500,
+      "operation": "work_context",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 81,
+          "total_ms": 0.483375,
+          "phases_ms": {
+            "connection_pool": 0.000375,
+            "mutex": 0.24875,
+            "sqlite_begin": 0.027167
+          },
+          "importer_authorization_wait_ms": 5502.058041,
+          "import_total_ms": 5511.921083
+        },
+        {
+          "repeat": 2,
+          "source_line": 83,
+          "total_ms": 0.347666,
+          "phases_ms": {
+            "connection_pool": 0.001875,
+            "mutex": 0.000291,
+            "sqlite_begin": 0.0545
+          },
+          "importer_authorization_wait_ms": 5502.067459,
+          "import_total_ms": 5511.037833
+        },
+        {
+          "repeat": 3,
+          "source_line": 85,
+          "total_ms": 1.826125,
+          "phases_ms": {
+            "connection_pool": 0.00125,
+            "mutex": 1.25425,
+            "sqlite_begin": 0.057042
+          },
+          "importer_authorization_wait_ms": 5502.111959,
+          "import_total_ms": 5511.639583
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            0.483375,
+            0.347666,
+            1.826125
+          ],
+          "median": 0.483375,
+          "max": 1.826125
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            5502.058041,
+            5502.067459,
+            5502.111959
+          ],
+          "median": 5502.067459,
+          "max": 5502.111959
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            5511.921083,
+            5511.037833,
+            5511.639583
+          ],
+          "median": 5511.639583,
+          "max": 5511.921083
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            0.24875,
+            0.000291,
+            1.25425
+          ],
+          "median": 0.24875,
+          "max": 1.25425
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.000375,
+            0.001875,
+            0.00125
+          ],
+          "median": 0.00125,
+          "max": 0.001875
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.027167,
+            0.0545,
+            0.057042
+          ],
+          "median": 0.0545,
+          "max": 0.057042
+        }
+      }
+    },
+    {
+      "topology": "independent_sqlite",
+      "authorization_stage": 1,
+      "delay_ms": 30000,
+      "operation": "file_status",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 87,
+          "total_ms": 0.865708,
+          "phases_ms": {
+            "connection_pool": 0.000667,
+            "mutex": 0.560167,
+            "sqlite_begin": 0.0345
+          },
+          "importer_authorization_wait_ms": 30002.068834,
+          "import_total_ms": 30013.986125
+        },
+        {
+          "repeat": 2,
+          "source_line": 89,
+          "total_ms": 0.879958,
+          "phases_ms": {
+            "connection_pool": 0.000917,
+            "mutex": 0.6135,
+            "sqlite_begin": 0.028083
+          },
+          "importer_authorization_wait_ms": 30002.067417,
+          "import_total_ms": 30012.073125
+        },
+        {
+          "repeat": 3,
+          "source_line": 91,
+          "total_ms": 0.659417,
+          "phases_ms": {
+            "connection_pool": 0.000542,
+            "mutex": 0.343125,
+            "sqlite_begin": 0.035959
+          },
+          "importer_authorization_wait_ms": 30002.067917,
+          "import_total_ms": 30012.846916
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            0.865708,
+            0.879958,
+            0.659417
+          ],
+          "median": 0.865708,
+          "max": 0.879958
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            30002.068834,
+            30002.067417,
+            30002.067917
+          ],
+          "median": 30002.067917,
+          "max": 30002.068834
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            30013.986125,
+            30012.073125,
+            30012.846916
+          ],
+          "median": 30012.846916,
+          "max": 30013.986125
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            0.560167,
+            0.6135,
+            0.343125
+          ],
+          "median": 0.560167,
+          "max": 0.6135
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.000667,
+            0.000917,
+            0.000542
+          ],
+          "median": 0.000667,
+          "max": 0.000917
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.0345,
+            0.028083,
+            0.035959
+          ],
+          "median": 0.0345,
+          "max": 0.035959
+        }
+      }
+    },
+    {
+      "topology": "independent_sqlite",
+      "authorization_stage": 1,
+      "delay_ms": 30000,
+      "operation": "message_lookup",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 87,
+          "total_ms": 0.313125,
+          "phases_ms": {
+            "connection_pool": 0.0025,
+            "mutex": 0.00025,
+            "sqlite_begin": 0.049958
+          },
+          "importer_authorization_wait_ms": 30002.068834,
+          "import_total_ms": 30013.986125
+        },
+        {
+          "repeat": 2,
+          "source_line": 89,
+          "total_ms": 0.621125,
+          "phases_ms": {
+            "connection_pool": 0.001958,
+            "mutex": 0.338584,
+            "sqlite_begin": 0.035375
+          },
+          "importer_authorization_wait_ms": 30002.067417,
+          "import_total_ms": 30012.073125
+        },
+        {
+          "repeat": 3,
+          "source_line": 91,
+          "total_ms": 0.351833,
+          "phases_ms": {
+            "connection_pool": 0.003042,
+            "mutex": 0.00025,
+            "sqlite_begin": 0.055125
+          },
+          "importer_authorization_wait_ms": 30002.067917,
+          "import_total_ms": 30012.846916
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            0.313125,
+            0.621125,
+            0.351833
+          ],
+          "median": 0.351833,
+          "max": 0.621125
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            30002.068834,
+            30002.067417,
+            30002.067917
+          ],
+          "median": 30002.067917,
+          "max": 30002.068834
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            30013.986125,
+            30012.073125,
+            30012.846916
+          ],
+          "median": 30012.846916,
+          "max": 30013.986125
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            0.00025,
+            0.338584,
+            0.00025
+          ],
+          "median": 0.00025,
+          "max": 0.338584
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.0025,
+            0.001958,
+            0.003042
+          ],
+          "median": 0.0025,
+          "max": 0.003042
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.049958,
+            0.035375,
+            0.055125
+          ],
+          "median": 0.049958,
+          "max": 0.055125
+        }
+      }
+    },
+    {
+      "topology": "independent_sqlite",
+      "authorization_stage": 1,
+      "delay_ms": 30000,
+      "operation": "work_context",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 87,
+          "total_ms": 0.577916,
+          "phases_ms": {
+            "connection_pool": 0.0005,
+            "mutex": 0.305917,
+            "sqlite_begin": 0.029667
+          },
+          "importer_authorization_wait_ms": 30002.068834,
+          "import_total_ms": 30013.986125
+        },
+        {
+          "repeat": 2,
+          "source_line": 89,
+          "total_ms": 0.355667,
+          "phases_ms": {
+            "connection_pool": 0.002166,
+            "mutex": 0.000292,
+            "sqlite_begin": 0.053833
+          },
+          "importer_authorization_wait_ms": 30002.067417,
+          "import_total_ms": 30012.073125
+        },
+        {
+          "repeat": 3,
+          "source_line": 91,
+          "total_ms": 0.951875,
+          "phases_ms": {
+            "connection_pool": 0.00075,
+            "mutex": 0.648208,
+            "sqlite_begin": 0.034708
+          },
+          "importer_authorization_wait_ms": 30002.067917,
+          "import_total_ms": 30012.846916
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            0.577916,
+            0.355667,
+            0.951875
+          ],
+          "median": 0.577916,
+          "max": 0.951875
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            30002.068834,
+            30002.067417,
+            30002.067917
+          ],
+          "median": 30002.067917,
+          "max": 30002.068834
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            30013.986125,
+            30012.073125,
+            30012.846916
+          ],
+          "median": 30012.846916,
+          "max": 30013.986125
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            0.305917,
+            0.000292,
+            0.648208
+          ],
+          "median": 0.305917,
+          "max": 0.648208
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.0005,
+            0.002166,
+            0.00075
+          ],
+          "median": 0.00075,
+          "max": 0.002166
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.029667,
+            0.053833,
+            0.034708
+          ],
+          "median": 0.034708,
+          "max": 0.053833
+        }
+      }
+    },
+    {
+      "topology": "independent_sqlite",
+      "authorization_stage": 2,
+      "delay_ms": 0,
+      "operation": "file_status",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 93,
+          "total_ms": 0.902958,
+          "phases_ms": {
+            "connection_pool": 0.000584,
+            "mutex": 0.624333,
+            "sqlite_begin": 0.027625
+          },
+          "importer_authorization_wait_ms": 0.003,
+          "import_total_ms": 6.285541
+        },
+        {
+          "repeat": 2,
+          "source_line": 95,
+          "total_ms": 0.569208,
+          "phases_ms": {
+            "connection_pool": 0.001167,
+            "mutex": 0.296417,
+            "sqlite_begin": 0.035959
+          },
+          "importer_authorization_wait_ms": 0.004125,
+          "import_total_ms": 4.746959
+        },
+        {
+          "repeat": 3,
+          "source_line": 97,
+          "total_ms": 0.945959,
+          "phases_ms": {
+            "connection_pool": 0.00125,
+            "mutex": 0.583958,
+            "sqlite_begin": 0.046916
+          },
+          "importer_authorization_wait_ms": 0.002833,
+          "import_total_ms": 6.438
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            0.902958,
+            0.569208,
+            0.945959
+          ],
+          "median": 0.902958,
+          "max": 0.945959
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            0.003,
+            0.004125,
+            0.002833
+          ],
+          "median": 0.003,
+          "max": 0.004125
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            6.285541,
+            4.746959,
+            6.438
+          ],
+          "median": 6.285541,
+          "max": 6.438
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            0.624333,
+            0.296417,
+            0.583958
+          ],
+          "median": 0.583958,
+          "max": 0.624333
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.000584,
+            0.001167,
+            0.00125
+          ],
+          "median": 0.001167,
+          "max": 0.00125
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.027625,
+            0.035959,
+            0.046916
+          ],
+          "median": 0.035959,
+          "max": 0.046916
+        }
+      }
+    },
+    {
+      "topology": "independent_sqlite",
+      "authorization_stage": 2,
+      "delay_ms": 0,
+      "operation": "message_lookup",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 93,
+          "total_ms": 0.647875,
+          "phases_ms": {
+            "connection_pool": 0.001,
+            "mutex": 0.311458,
+            "sqlite_begin": 0.040625
+          },
+          "importer_authorization_wait_ms": 0.003,
+          "import_total_ms": 6.285541
+        },
+        {
+          "repeat": 2,
+          "source_line": 95,
+          "total_ms": 0.796375,
+          "phases_ms": {
+            "connection_pool": 0.000625,
+            "mutex": 0.5575,
+            "sqlite_begin": 0.032417
+          },
+          "importer_authorization_wait_ms": 0.004125,
+          "import_total_ms": 4.746959
+        },
+        {
+          "repeat": 3,
+          "source_line": 97,
+          "total_ms": 0.268666,
+          "phases_ms": {
+            "connection_pool": 0.000958,
+            "mutex": 0.000208,
+            "sqlite_begin": 0.038291
+          },
+          "importer_authorization_wait_ms": 0.002833,
+          "import_total_ms": 6.438
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            0.647875,
+            0.796375,
+            0.268666
+          ],
+          "median": 0.647875,
+          "max": 0.796375
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            0.003,
+            0.004125,
+            0.002833
+          ],
+          "median": 0.003,
+          "max": 0.004125
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            6.285541,
+            4.746959,
+            6.438
+          ],
+          "median": 6.285541,
+          "max": 6.438
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            0.311458,
+            0.5575,
+            0.000208
+          ],
+          "median": 0.311458,
+          "max": 0.5575
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.001,
+            0.000625,
+            0.000958
+          ],
+          "median": 0.000958,
+          "max": 0.001
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.040625,
+            0.032417,
+            0.038291
+          ],
+          "median": 0.038291,
+          "max": 0.040625
+        }
+      }
+    },
+    {
+      "topology": "independent_sqlite",
+      "authorization_stage": 2,
+      "delay_ms": 0,
+      "operation": "work_context",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 93,
+          "total_ms": 0.328333,
+          "phases_ms": {
+            "connection_pool": 0.001291,
+            "mutex": 0.000209,
+            "sqlite_begin": 0.045833
+          },
+          "importer_authorization_wait_ms": 0.003,
+          "import_total_ms": 6.285541
+        },
+        {
+          "repeat": 2,
+          "source_line": 95,
+          "total_ms": 0.325458,
+          "phases_ms": {
+            "connection_pool": 0.00125,
+            "mutex": 0.00025,
+            "sqlite_begin": 0.049167
+          },
+          "importer_authorization_wait_ms": 0.004125,
+          "import_total_ms": 4.746959
+        },
+        {
+          "repeat": 3,
+          "source_line": 97,
+          "total_ms": 0.601083,
+          "phases_ms": {
+            "connection_pool": 0.000875,
+            "mutex": 0.254667,
+            "sqlite_begin": 0.044
+          },
+          "importer_authorization_wait_ms": 0.002833,
+          "import_total_ms": 6.438
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            0.328333,
+            0.325458,
+            0.601083
+          ],
+          "median": 0.328333,
+          "max": 0.601083
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            0.003,
+            0.004125,
+            0.002833
+          ],
+          "median": 0.003,
+          "max": 0.004125
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            6.285541,
+            4.746959,
+            6.438
+          ],
+          "median": 6.285541,
+          "max": 6.438
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            0.000209,
+            0.00025,
+            0.254667
+          ],
+          "median": 0.00025,
+          "max": 0.254667
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.001291,
+            0.00125,
+            0.000875
+          ],
+          "median": 0.00125,
+          "max": 0.001291
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.045833,
+            0.049167,
+            0.044
+          ],
+          "median": 0.045833,
+          "max": 0.049167
+        }
+      }
+    },
+    {
+      "topology": "independent_sqlite",
+      "authorization_stage": 2,
+      "delay_ms": 5500,
+      "operation": "file_status",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 99,
+          "total_ms": 0.459916,
+          "phases_ms": {
+            "connection_pool": 0.000875,
+            "mutex": 0.210292,
+            "sqlite_begin": 0.021583
+          },
+          "importer_authorization_wait_ms": 5502.0665,
+          "import_total_ms": 5511.177083
+        },
+        {
+          "repeat": 2,
+          "source_line": 101,
+          "total_ms": 0.872458,
+          "phases_ms": {
+            "connection_pool": 0.000792,
+            "mutex": 0.586167,
+            "sqlite_begin": 0.031458
+          },
+          "importer_authorization_wait_ms": 5502.073375,
+          "import_total_ms": 5511.418292
+        },
+        {
+          "repeat": 3,
+          "source_line": 103,
+          "total_ms": 0.7545,
+          "phases_ms": {
+            "connection_pool": 0.000625,
+            "mutex": 0.528833,
+            "sqlite_begin": 0.025042
+          },
+          "importer_authorization_wait_ms": 5502.080083,
+          "import_total_ms": 5511.179375
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            0.459916,
+            0.872458,
+            0.7545
+          ],
+          "median": 0.7545,
+          "max": 0.872458
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            5502.0665,
+            5502.073375,
+            5502.080083
+          ],
+          "median": 5502.073375,
+          "max": 5502.080083
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            5511.177083,
+            5511.418292,
+            5511.179375
+          ],
+          "median": 5511.179375,
+          "max": 5511.418292
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            0.210292,
+            0.586167,
+            0.528833
+          ],
+          "median": 0.528833,
+          "max": 0.586167
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.000875,
+            0.000792,
+            0.000625
+          ],
+          "median": 0.000792,
+          "max": 0.000875
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.021583,
+            0.031458,
+            0.025042
+          ],
+          "median": 0.025042,
+          "max": 0.031458
+        }
+      }
+    },
+    {
+      "topology": "independent_sqlite",
+      "authorization_stage": 2,
+      "delay_ms": 5500,
+      "operation": "message_lookup",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 99,
+          "total_ms": 0.2145,
+          "phases_ms": {
+            "connection_pool": 0.001125,
+            "mutex": 0.00025,
+            "sqlite_begin": 0.02325
+          },
+          "importer_authorization_wait_ms": 5502.0665,
+          "import_total_ms": 5511.177083
+        },
+        {
+          "repeat": 2,
+          "source_line": 101,
+          "total_ms": 0.334,
+          "phases_ms": {
+            "connection_pool": 0.001834,
+            "mutex": 0.000292,
+            "sqlite_begin": 0.057
+          },
+          "importer_authorization_wait_ms": 5502.073375,
+          "import_total_ms": 5511.418292
+        },
+        {
+          "repeat": 3,
+          "source_line": 103,
+          "total_ms": 0.535958,
+          "phases_ms": {
+            "connection_pool": 0.000875,
+            "mutex": 0.310208,
+            "sqlite_begin": 0.031792
+          },
+          "importer_authorization_wait_ms": 5502.080083,
+          "import_total_ms": 5511.179375
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            0.2145,
+            0.334,
+            0.535958
+          ],
+          "median": 0.334,
+          "max": 0.535958
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            5502.0665,
+            5502.073375,
+            5502.080083
+          ],
+          "median": 5502.073375,
+          "max": 5502.080083
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            5511.177083,
+            5511.418292,
+            5511.179375
+          ],
+          "median": 5511.179375,
+          "max": 5511.418292
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            0.00025,
+            0.000292,
+            0.310208
+          ],
+          "median": 0.000292,
+          "max": 0.310208
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.001125,
+            0.001834,
+            0.000875
+          ],
+          "median": 0.001125,
+          "max": 0.001834
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.02325,
+            0.057,
+            0.031792
+          ],
+          "median": 0.031792,
+          "max": 0.057
+        }
+      }
+    },
+    {
+      "topology": "independent_sqlite",
+      "authorization_stage": 2,
+      "delay_ms": 5500,
+      "operation": "work_context",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 99,
+          "total_ms": 0.661709,
+          "phases_ms": {
+            "connection_pool": 0.0005,
+            "mutex": 0.443125,
+            "sqlite_begin": 0.022208
+          },
+          "importer_authorization_wait_ms": 5502.0665,
+          "import_total_ms": 5511.177083
+        },
+        {
+          "repeat": 2,
+          "source_line": 101,
+          "total_ms": 0.603375,
+          "phases_ms": {
+            "connection_pool": 0.0005,
+            "mutex": 0.328542,
+            "sqlite_begin": 0.032584
+          },
+          "importer_authorization_wait_ms": 5502.073375,
+          "import_total_ms": 5511.418292
+        },
+        {
+          "repeat": 3,
+          "source_line": 103,
+          "total_ms": 0.32375,
+          "phases_ms": {
+            "connection_pool": 0.001292,
+            "mutex": 0.000167,
+            "sqlite_begin": 0.046167
+          },
+          "importer_authorization_wait_ms": 5502.080083,
+          "import_total_ms": 5511.179375
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            0.661709,
+            0.603375,
+            0.32375
+          ],
+          "median": 0.603375,
+          "max": 0.661709
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            5502.0665,
+            5502.073375,
+            5502.080083
+          ],
+          "median": 5502.073375,
+          "max": 5502.080083
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            5511.177083,
+            5511.418292,
+            5511.179375
+          ],
+          "median": 5511.179375,
+          "max": 5511.418292
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            0.443125,
+            0.328542,
+            0.000167
+          ],
+          "median": 0.328542,
+          "max": 0.443125
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.0005,
+            0.0005,
+            0.001292
+          ],
+          "median": 0.0005,
+          "max": 0.001292
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.022208,
+            0.032584,
+            0.046167
+          ],
+          "median": 0.032584,
+          "max": 0.046167
+        }
+      }
+    },
+    {
+      "topology": "independent_sqlite",
+      "authorization_stage": 2,
+      "delay_ms": 30000,
+      "operation": "file_status",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 105,
+          "total_ms": 0.662042,
+          "phases_ms": {
+            "connection_pool": 0.000542,
+            "mutex": 0.360541,
+            "sqlite_begin": 0.030333
+          },
+          "importer_authorization_wait_ms": 30002.06775,
+          "import_total_ms": 30011.092583
+        },
+        {
+          "repeat": 2,
+          "source_line": 107,
+          "total_ms": 0.894958,
+          "phases_ms": {
+            "connection_pool": 0.000541,
+            "mutex": 0.6235,
+            "sqlite_begin": 0.04575
+          },
+          "importer_authorization_wait_ms": 30002.076166,
+          "import_total_ms": 30011.371792
+        },
+        {
+          "repeat": 3,
+          "source_line": 109,
+          "total_ms": 0.806458,
+          "phases_ms": {
+            "connection_pool": 0.001209,
+            "mutex": 0.575291,
+            "sqlite_begin": 0.025208
+          },
+          "importer_authorization_wait_ms": 30002.077166,
+          "import_total_ms": 30010.442458
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            0.662042,
+            0.894958,
+            0.806458
+          ],
+          "median": 0.806458,
+          "max": 0.894958
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            30002.06775,
+            30002.076166,
+            30002.077166
+          ],
+          "median": 30002.076166,
+          "max": 30002.077166
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            30011.092583,
+            30011.371792,
+            30010.442458
+          ],
+          "median": 30011.092583,
+          "max": 30011.371792
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            0.360541,
+            0.6235,
+            0.575291
+          ],
+          "median": 0.575291,
+          "max": 0.6235
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.000542,
+            0.000541,
+            0.001209
+          ],
+          "median": 0.000542,
+          "max": 0.001209
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.030333,
+            0.04575,
+            0.025208
+          ],
+          "median": 0.030333,
+          "max": 0.04575
+        }
+      }
+    },
+    {
+      "topology": "independent_sqlite",
+      "authorization_stage": 2,
+      "delay_ms": 30000,
+      "operation": "message_lookup",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 105,
+          "total_ms": 0.369333,
+          "phases_ms": {
+            "connection_pool": 0.002417,
+            "mutex": 0.00025,
+            "sqlite_begin": 0.056958
+          },
+          "importer_authorization_wait_ms": 30002.06775,
+          "import_total_ms": 30011.092583
+        },
+        {
+          "repeat": 2,
+          "source_line": 107,
+          "total_ms": 0.32175,
+          "phases_ms": {
+            "connection_pool": 0.00125,
+            "mutex": 0.000334,
+            "sqlite_begin": 0.054417
+          },
+          "importer_authorization_wait_ms": 30002.076166,
+          "import_total_ms": 30011.371792
+        },
+        {
+          "repeat": 3,
+          "source_line": 109,
+          "total_ms": 0.58975,
+          "phases_ms": {
+            "connection_pool": 0.001459,
+            "mutex": 0.33275,
+            "sqlite_begin": 0.034667
+          },
+          "importer_authorization_wait_ms": 30002.077166,
+          "import_total_ms": 30010.442458
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            0.369333,
+            0.32175,
+            0.58975
+          ],
+          "median": 0.369333,
+          "max": 0.58975
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            30002.06775,
+            30002.076166,
+            30002.077166
+          ],
+          "median": 30002.076166,
+          "max": 30002.077166
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            30011.092583,
+            30011.371792,
+            30010.442458
+          ],
+          "median": 30011.092583,
+          "max": 30011.371792
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            0.00025,
+            0.000334,
+            0.33275
+          ],
+          "median": 0.000334,
+          "max": 0.33275
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.002417,
+            0.00125,
+            0.001459
+          ],
+          "median": 0.001459,
+          "max": 0.002417
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.056958,
+            0.054417,
+            0.034667
+          ],
+          "median": 0.054417,
+          "max": 0.056958
+        }
+      }
+    },
+    {
+      "topology": "independent_sqlite",
+      "authorization_stage": 2,
+      "delay_ms": 30000,
+      "operation": "work_context",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 105,
+          "total_ms": 0.922333,
+          "phases_ms": {
+            "connection_pool": 0.002459,
+            "mutex": 0.647375,
+            "sqlite_begin": 0.031083
+          },
+          "importer_authorization_wait_ms": 30002.06775,
+          "import_total_ms": 30011.092583
+        },
+        {
+          "repeat": 2,
+          "source_line": 107,
+          "total_ms": 0.642958,
+          "phases_ms": {
+            "connection_pool": 0.001417,
+            "mutex": 0.324,
+            "sqlite_begin": 0.026709
+          },
+          "importer_authorization_wait_ms": 30002.076166,
+          "import_total_ms": 30011.371792
+        },
+        {
+          "repeat": 3,
+          "source_line": 109,
+          "total_ms": 0.338583,
+          "phases_ms": {
+            "connection_pool": 0.001417,
+            "mutex": 0.000167,
+            "sqlite_begin": 0.05075
+          },
+          "importer_authorization_wait_ms": 30002.077166,
+          "import_total_ms": 30010.442458
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            0.922333,
+            0.642958,
+            0.338583
+          ],
+          "median": 0.642958,
+          "max": 0.922333
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            30002.06775,
+            30002.076166,
+            30002.077166
+          ],
+          "median": 30002.076166,
+          "max": 30002.077166
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            30011.092583,
+            30011.371792,
+            30010.442458
+          ],
+          "median": 30011.092583,
+          "max": 30011.371792
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            0.647375,
+            0.324,
+            0.000167
+          ],
+          "median": 0.324,
+          "max": 0.647375
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.002459,
+            0.001417,
+            0.001417
+          ],
+          "median": 0.001417,
+          "max": 0.002459
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.031083,
+            0.026709,
+            0.05075
+          ],
+          "median": 0.031083,
+          "max": 0.05075
+        }
+      }
+    },
+    {
+      "topology": "same_store",
+      "authorization_stage": 1,
+      "delay_ms": 0,
+      "operation": "file_status",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 3,
+          "total_ms": 7.211125,
+          "phases_ms": {
+            "connection_pool": 0.001542,
+            "mutex": 6.806458,
+            "sqlite_begin": 0.045958
+          },
+          "importer_authorization_wait_ms": 0.003875,
+          "import_total_ms": 6.535
+        },
+        {
+          "repeat": 2,
+          "source_line": 5,
+          "total_ms": 6.900584,
+          "phases_ms": {
+            "connection_pool": 0.000458,
+            "mutex": 6.636041,
+            "sqlite_begin": 0.02325
+          },
+          "importer_authorization_wait_ms": 0.002542,
+          "import_total_ms": 6.272458
+        },
+        {
+          "repeat": 3,
+          "source_line": 7,
+          "total_ms": 4.898625,
+          "phases_ms": {
+            "connection_pool": 0.000458,
+            "mutex": 4.647417,
+            "sqlite_begin": 0.02875
+          },
+          "importer_authorization_wait_ms": 0.001042,
+          "import_total_ms": 4.356583
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            7.211125,
+            6.900584,
+            4.898625
+          ],
+          "median": 6.900584,
+          "max": 7.211125
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            0.003875,
+            0.002542,
+            0.001042
+          ],
+          "median": 0.002542,
+          "max": 0.003875
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            6.535,
+            6.272458,
+            4.356583
+          ],
+          "median": 6.272458,
+          "max": 6.535
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            6.806458,
+            6.636041,
+            4.647417
+          ],
+          "median": 6.636041,
+          "max": 6.806458
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.001542,
+            0.000458,
+            0.000458
+          ],
+          "median": 0.000458,
+          "max": 0.001542
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.045958,
+            0.02325,
+            0.02875
+          ],
+          "median": 0.02875,
+          "max": 0.045958
+        }
+      }
+    },
+    {
+      "topology": "same_store",
+      "authorization_stage": 1,
+      "delay_ms": 0,
+      "operation": "message_lookup",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 3,
+          "total_ms": 6.810375,
+          "phases_ms": {
+            "connection_pool": 0.000667,
+            "mutex": 6.552333,
+            "sqlite_begin": 0.034791
+          },
+          "importer_authorization_wait_ms": 0.003875,
+          "import_total_ms": 6.535
+        },
+        {
+          "repeat": 2,
+          "source_line": 5,
+          "total_ms": 6.644917,
+          "phases_ms": {
+            "connection_pool": 0.000959,
+            "mutex": 6.348166,
+            "sqlite_begin": 0.028958
+          },
+          "importer_authorization_wait_ms": 0.002542,
+          "import_total_ms": 6.272458
+        },
+        {
+          "repeat": 3,
+          "source_line": 7,
+          "total_ms": 4.406708,
+          "phases_ms": {
+            "connection_pool": 0.000708,
+            "mutex": 4.142458,
+            "sqlite_begin": 0.034084
+          },
+          "importer_authorization_wait_ms": 0.001042,
+          "import_total_ms": 4.356583
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            6.810375,
+            6.644917,
+            4.406708
+          ],
+          "median": 6.644917,
+          "max": 6.810375
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            0.003875,
+            0.002542,
+            0.001042
+          ],
+          "median": 0.002542,
+          "max": 0.003875
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            6.535,
+            6.272458,
+            4.356583
+          ],
+          "median": 6.272458,
+          "max": 6.535
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            6.552333,
+            6.348166,
+            4.142458
+          ],
+          "median": 6.348166,
+          "max": 6.552333
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.000667,
+            0.000959,
+            0.000708
+          ],
+          "median": 0.000708,
+          "max": 0.000959
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.034791,
+            0.028958,
+            0.034084
+          ],
+          "median": 0.034084,
+          "max": 0.034791
+        }
+      }
+    },
+    {
+      "topology": "same_store",
+      "authorization_stage": 1,
+      "delay_ms": 0,
+      "operation": "work_context",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 3,
+          "total_ms": 6.565416,
+          "phases_ms": {
+            "connection_pool": 0.001708,
+            "mutex": 6.116291,
+            "sqlite_begin": 0.050792
+          },
+          "importer_authorization_wait_ms": 0.003875,
+          "import_total_ms": 6.535
+        },
+        {
+          "repeat": 2,
+          "source_line": 5,
+          "total_ms": 6.35375,
+          "phases_ms": {
+            "connection_pool": 0.001417,
+            "mutex": 6.018459,
+            "sqlite_begin": 0.043917
+          },
+          "importer_authorization_wait_ms": 0.002542,
+          "import_total_ms": 6.272458
+        },
+        {
+          "repeat": 3,
+          "source_line": 7,
+          "total_ms": 4.6555,
+          "phases_ms": {
+            "connection_pool": 0.000458,
+            "mutex": 4.400958,
+            "sqlite_begin": 0.024791
+          },
+          "importer_authorization_wait_ms": 0.001042,
+          "import_total_ms": 4.356583
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            6.565416,
+            6.35375,
+            4.6555
+          ],
+          "median": 6.35375,
+          "max": 6.565416
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            0.003875,
+            0.002542,
+            0.001042
+          ],
+          "median": 0.002542,
+          "max": 0.003875
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            6.535,
+            6.272458,
+            4.356583
+          ],
+          "median": 6.272458,
+          "max": 6.535
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            6.116291,
+            6.018459,
+            4.400958
+          ],
+          "median": 6.018459,
+          "max": 6.116291
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.001708,
+            0.001417,
+            0.000458
+          ],
+          "median": 0.001417,
+          "max": 0.001708
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.050792,
+            0.043917,
+            0.024791
+          ],
+          "median": 0.043917,
+          "max": 0.050792
+        }
+      }
+    },
+    {
+      "topology": "same_store",
+      "authorization_stage": 1,
+      "delay_ms": 5500,
+      "operation": "file_status",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 9,
+          "total_ms": 5511.886208,
+          "phases_ms": {
+            "connection_pool": 0.001584,
+            "mutex": 5511.274333,
+            "sqlite_begin": 0.066
+          },
+          "importer_authorization_wait_ms": 5502.056917,
+          "import_total_ms": 5510.871041
+        },
+        {
+          "repeat": 2,
+          "source_line": 11,
+          "total_ms": 5510.464166,
+          "phases_ms": {
+            "connection_pool": 0.003583,
+            "mutex": 5509.876209,
+            "sqlite_begin": 0.062458
+          },
+          "importer_authorization_wait_ms": 5502.071125,
+          "import_total_ms": 5509.790417
+        },
+        {
+          "repeat": 3,
+          "source_line": 13,
+          "total_ms": 5515.441542,
+          "phases_ms": {
+            "connection_pool": 0.001084,
+            "mutex": 5514.893,
+            "sqlite_begin": 0.055958
+          },
+          "importer_authorization_wait_ms": 5502.062833,
+          "import_total_ms": 5514.292125
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            5511.886208,
+            5510.464166,
+            5515.441542
+          ],
+          "median": 5511.886208,
+          "max": 5515.441542
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            5502.056917,
+            5502.071125,
+            5502.062833
+          ],
+          "median": 5502.062833,
+          "max": 5502.071125
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            5510.871041,
+            5509.790417,
+            5514.292125
+          ],
+          "median": 5510.871041,
+          "max": 5514.292125
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            5511.274333,
+            5509.876209,
+            5514.893
+          ],
+          "median": 5511.274333,
+          "max": 5514.893
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.001584,
+            0.003583,
+            0.001084
+          ],
+          "median": 0.001584,
+          "max": 0.003583
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.066,
+            0.062458,
+            0.055958
+          ],
+          "median": 0.062458,
+          "max": 0.066
+        }
+      }
+    },
+    {
+      "topology": "same_store",
+      "authorization_stage": 1,
+      "delay_ms": 5500,
+      "operation": "message_lookup",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 9,
+          "total_ms": 5512.35875,
+          "phases_ms": {
+            "connection_pool": 0.000958,
+            "mutex": 5511.84925,
+            "sqlite_begin": 0.064792
+          },
+          "importer_authorization_wait_ms": 5502.056917,
+          "import_total_ms": 5510.871041
+        },
+        {
+          "repeat": 2,
+          "source_line": 11,
+          "total_ms": 5509.897583,
+          "phases_ms": {
+            "connection_pool": 0.001875,
+            "mutex": 5509.2605,
+            "sqlite_begin": 0.123833
+          },
+          "importer_authorization_wait_ms": 5502.071125,
+          "import_total_ms": 5509.790417
+        },
+        {
+          "repeat": 3,
+          "source_line": 13,
+          "total_ms": 5514.920125,
+          "phases_ms": {
+            "connection_pool": 0.001042,
+            "mutex": 5514.397708,
+            "sqlite_begin": 0.061625
+          },
+          "importer_authorization_wait_ms": 5502.062833,
+          "import_total_ms": 5514.292125
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            5512.35875,
+            5509.897583,
+            5514.920125
+          ],
+          "median": 5512.35875,
+          "max": 5514.920125
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            5502.056917,
+            5502.071125,
+            5502.062833
+          ],
+          "median": 5502.062833,
+          "max": 5502.071125
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            5510.871041,
+            5509.790417,
+            5514.292125
+          ],
+          "median": 5510.871041,
+          "max": 5514.292125
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            5511.84925,
+            5509.2605,
+            5514.397708
+          ],
+          "median": 5511.84925,
+          "max": 5514.397708
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.000958,
+            0.001875,
+            0.001042
+          ],
+          "median": 0.001042,
+          "max": 0.001875
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.064792,
+            0.123833,
+            0.061625
+          ],
+          "median": 0.064792,
+          "max": 0.123833
+        }
+      }
+    },
+    {
+      "topology": "same_store",
+      "authorization_stage": 1,
+      "delay_ms": 5500,
+      "operation": "work_context",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 9,
+          "total_ms": 5511.315208,
+          "phases_ms": {
+            "connection_pool": 0.003375,
+            "mutex": 5510.583292,
+            "sqlite_begin": 0.115
+          },
+          "importer_authorization_wait_ms": 5502.056917,
+          "import_total_ms": 5510.871041
+        },
+        {
+          "repeat": 2,
+          "source_line": 11,
+          "total_ms": 5510.950792,
+          "phases_ms": {
+            "connection_pool": 0.000917,
+            "mutex": 5510.414875,
+            "sqlite_begin": 0.068459
+          },
+          "importer_authorization_wait_ms": 5502.071125,
+          "import_total_ms": 5509.790417
+        },
+        {
+          "repeat": 3,
+          "source_line": 13,
+          "total_ms": 5514.4415,
+          "phases_ms": {
+            "connection_pool": 0.002625,
+            "mutex": 5513.772458,
+            "sqlite_begin": 0.096458
+          },
+          "importer_authorization_wait_ms": 5502.062833,
+          "import_total_ms": 5514.292125
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            5511.315208,
+            5510.950792,
+            5514.4415
+          ],
+          "median": 5511.315208,
+          "max": 5514.4415
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            5502.056917,
+            5502.071125,
+            5502.062833
+          ],
+          "median": 5502.062833,
+          "max": 5502.071125
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            5510.871041,
+            5509.790417,
+            5514.292125
+          ],
+          "median": 5510.871041,
+          "max": 5514.292125
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            5510.583292,
+            5510.414875,
+            5513.772458
+          ],
+          "median": 5510.583292,
+          "max": 5513.772458
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.003375,
+            0.000917,
+            0.002625
+          ],
+          "median": 0.002625,
+          "max": 0.003375
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.115,
+            0.068459,
+            0.096458
+          ],
+          "median": 0.096458,
+          "max": 0.115
+        }
+      }
+    },
+    {
+      "topology": "same_store",
+      "authorization_stage": 1,
+      "delay_ms": 30000,
+      "operation": "file_status",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 15,
+          "total_ms": 30011.038708,
+          "phases_ms": {
+            "connection_pool": 0.001083,
+            "mutex": 30010.4475,
+            "sqlite_begin": 0.061584
+          },
+          "importer_authorization_wait_ms": 30001.384333,
+          "import_total_ms": 30010.2455
+        },
+        {
+          "repeat": 2,
+          "source_line": 17,
+          "total_ms": 30013.348541,
+          "phases_ms": {
+            "connection_pool": 0.001167,
+            "mutex": 30012.747333,
+            "sqlite_begin": 0.073041
+          },
+          "importer_authorization_wait_ms": 30002.066709,
+          "import_total_ms": 30012.141958
+        },
+        {
+          "repeat": 3,
+          "source_line": 19,
+          "total_ms": 30012.240667,
+          "phases_ms": {
+            "connection_pool": 0.000875,
+            "mutex": 30011.719209,
+            "sqlite_begin": 0.052833
+          },
+          "importer_authorization_wait_ms": 30002.073334,
+          "import_total_ms": 30011.078792
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            30011.038708,
+            30013.348541,
+            30012.240667
+          ],
+          "median": 30012.240667,
+          "max": 30013.348541
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            30001.384333,
+            30002.066709,
+            30002.073334
+          ],
+          "median": 30002.066709,
+          "max": 30002.073334
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            30010.2455,
+            30012.141958,
+            30011.078792
+          ],
+          "median": 30011.078792,
+          "max": 30012.141958
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            30010.4475,
+            30012.747333,
+            30011.719209
+          ],
+          "median": 30011.719209,
+          "max": 30012.747333
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.001083,
+            0.001167,
+            0.000875
+          ],
+          "median": 0.001083,
+          "max": 0.001167
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.061584,
+            0.073041,
+            0.052833
+          ],
+          "median": 0.061584,
+          "max": 0.073041
+        }
+      }
+    },
+    {
+      "topology": "same_store",
+      "authorization_stage": 1,
+      "delay_ms": 30000,
+      "operation": "message_lookup",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 15,
+          "total_ms": 30010.467042,
+          "phases_ms": {
+            "connection_pool": 0.00275,
+            "mutex": 30009.765959,
+            "sqlite_begin": 0.117958
+          },
+          "importer_authorization_wait_ms": 30001.384333,
+          "import_total_ms": 30010.2455
+        },
+        {
+          "repeat": 2,
+          "source_line": 17,
+          "total_ms": 30012.248459,
+          "phases_ms": {
+            "connection_pool": 0.002208,
+            "mutex": 30011.587167,
+            "sqlite_begin": 0.108791
+          },
+          "importer_authorization_wait_ms": 30002.066709,
+          "import_total_ms": 30012.141958
+        },
+        {
+          "repeat": 3,
+          "source_line": 19,
+          "total_ms": 30011.257917,
+          "phases_ms": {
+            "connection_pool": 0.002791,
+            "mutex": 30010.582208,
+            "sqlite_begin": 0.1075
+          },
+          "importer_authorization_wait_ms": 30002.073334,
+          "import_total_ms": 30011.078792
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            30010.467042,
+            30012.248459,
+            30011.257917
+          ],
+          "median": 30011.257917,
+          "max": 30012.248459
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            30001.384333,
+            30002.066709,
+            30002.073334
+          ],
+          "median": 30002.066709,
+          "max": 30002.073334
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            30010.2455,
+            30012.141958,
+            30011.078792
+          ],
+          "median": 30011.078792,
+          "max": 30012.141958
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            30009.765959,
+            30011.587167,
+            30010.582208
+          ],
+          "median": 30010.582208,
+          "max": 30011.587167
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.00275,
+            0.002208,
+            0.002791
+          ],
+          "median": 0.00275,
+          "max": 0.002791
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.117958,
+            0.108791,
+            0.1075
+          ],
+          "median": 0.108791,
+          "max": 0.117958
+        }
+      }
+    },
+    {
+      "topology": "same_store",
+      "authorization_stage": 1,
+      "delay_ms": 30000,
+      "operation": "work_context",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 15,
+          "total_ms": 30011.499792,
+          "phases_ms": {
+            "connection_pool": 0.001083,
+            "mutex": 30010.9805,
+            "sqlite_begin": 0.053083
+          },
+          "importer_authorization_wait_ms": 30001.384333,
+          "import_total_ms": 30010.2455
+        },
+        {
+          "repeat": 2,
+          "source_line": 17,
+          "total_ms": 30012.80375,
+          "phases_ms": {
+            "connection_pool": 0.001208,
+            "mutex": 30012.230292,
+            "sqlite_begin": 0.063084
+          },
+          "importer_authorization_wait_ms": 30002.066709,
+          "import_total_ms": 30012.141958
+        },
+        {
+          "repeat": 3,
+          "source_line": 19,
+          "total_ms": 30011.793375,
+          "phases_ms": {
+            "connection_pool": 0.001041,
+            "mutex": 30011.240125,
+            "sqlite_begin": 0.059959
+          },
+          "importer_authorization_wait_ms": 30002.073334,
+          "import_total_ms": 30011.078792
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            30011.499792,
+            30012.80375,
+            30011.793375
+          ],
+          "median": 30011.793375,
+          "max": 30012.80375
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            30001.384333,
+            30002.066709,
+            30002.073334
+          ],
+          "median": 30002.066709,
+          "max": 30002.073334
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            30010.2455,
+            30012.141958,
+            30011.078792
+          ],
+          "median": 30011.078792,
+          "max": 30012.141958
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            30010.9805,
+            30012.230292,
+            30011.240125
+          ],
+          "median": 30011.240125,
+          "max": 30012.230292
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.001083,
+            0.001208,
+            0.001041
+          ],
+          "median": 0.001083,
+          "max": 0.001208
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.053083,
+            0.063084,
+            0.059959
+          ],
+          "median": 0.059959,
+          "max": 0.063084
+        }
+      }
+    },
+    {
+      "topology": "same_store",
+      "authorization_stage": 2,
+      "delay_ms": 0,
+      "operation": "file_status",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 21,
+          "total_ms": 5.75825,
+          "phases_ms": {
+            "connection_pool": 0.001166,
+            "mutex": 5.384791,
+            "sqlite_begin": 0.044291
+          },
+          "importer_authorization_wait_ms": 0.0065,
+          "import_total_ms": 6.142833
+        },
+        {
+          "repeat": 2,
+          "source_line": 23,
+          "total_ms": 4.822,
+          "phases_ms": {
+            "connection_pool": 0.000375,
+            "mutex": 4.580625,
+            "sqlite_begin": 0.024208
+          },
+          "importer_authorization_wait_ms": 0.0065,
+          "import_total_ms": 5.391583
+        },
+        {
+          "repeat": 3,
+          "source_line": 25,
+          "total_ms": 5.560625,
+          "phases_ms": {
+            "connection_pool": 0.000583,
+            "mutex": 5.323708,
+            "sqlite_begin": 0.027
+          },
+          "importer_authorization_wait_ms": 0.004584,
+          "import_total_ms": 5.894
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            5.75825,
+            4.822,
+            5.560625
+          ],
+          "median": 5.560625,
+          "max": 5.75825
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            0.0065,
+            0.0065,
+            0.004584
+          ],
+          "median": 0.0065,
+          "max": 0.0065
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            6.142833,
+            5.391583,
+            5.894
+          ],
+          "median": 5.894,
+          "max": 6.142833
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            5.384791,
+            4.580625,
+            5.323708
+          ],
+          "median": 5.323708,
+          "max": 5.384791
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.001166,
+            0.000375,
+            0.000583
+          ],
+          "median": 0.000583,
+          "max": 0.001166
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.044291,
+            0.024208,
+            0.027
+          ],
+          "median": 0.027,
+          "max": 0.044291
+        }
+      }
+    },
+    {
+      "topology": "same_store",
+      "authorization_stage": 2,
+      "delay_ms": 0,
+      "operation": "message_lookup",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 21,
+          "total_ms": 5.0615,
+          "phases_ms": {
+            "connection_pool": 0.001625,
+            "mutex": 4.66175,
+            "sqlite_begin": 0.064
+          },
+          "importer_authorization_wait_ms": 0.0065,
+          "import_total_ms": 6.142833
+        },
+        {
+          "repeat": 2,
+          "source_line": 23,
+          "total_ms": 4.587916,
+          "phases_ms": {
+            "connection_pool": 0.000416,
+            "mutex": 4.33975,
+            "sqlite_begin": 0.031042
+          },
+          "importer_authorization_wait_ms": 0.0065,
+          "import_total_ms": 5.391583
+        },
+        {
+          "repeat": 3,
+          "source_line": 25,
+          "total_ms": 5.083041,
+          "phases_ms": {
+            "connection_pool": 0.001083,
+            "mutex": 4.771833,
+            "sqlite_begin": 0.046583
+          },
+          "importer_authorization_wait_ms": 0.004584,
+          "import_total_ms": 5.894
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            5.0615,
+            4.587916,
+            5.083041
+          ],
+          "median": 5.0615,
+          "max": 5.083041
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            0.0065,
+            0.0065,
+            0.004584
+          ],
+          "median": 0.0065,
+          "max": 0.0065
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            6.142833,
+            5.391583,
+            5.894
+          ],
+          "median": 5.894,
+          "max": 6.142833
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            4.66175,
+            4.33975,
+            4.771833
+          ],
+          "median": 4.66175,
+          "max": 4.771833
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.001625,
+            0.000416,
+            0.001083
+          ],
+          "median": 0.001083,
+          "max": 0.001625
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.064,
+            0.031042,
+            0.046583
+          ],
+          "median": 0.046583,
+          "max": 0.064
+        }
+      }
+    },
+    {
+      "topology": "same_store",
+      "authorization_stage": 2,
+      "delay_ms": 0,
+      "operation": "work_context",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 21,
+          "total_ms": 5.404667,
+          "phases_ms": {
+            "connection_pool": 0.000625,
+            "mutex": 5.062458,
+            "sqlite_begin": 0.035333
+          },
+          "importer_authorization_wait_ms": 0.0065,
+          "import_total_ms": 6.142833
+        },
+        {
+          "repeat": 2,
+          "source_line": 23,
+          "total_ms": 4.345,
+          "phases_ms": {
+            "connection_pool": 0.001041,
+            "mutex": 4.013916,
+            "sqlite_begin": 0.047167
+          },
+          "importer_authorization_wait_ms": 0.0065,
+          "import_total_ms": 5.391583
+        },
+        {
+          "repeat": 3,
+          "source_line": 25,
+          "total_ms": 5.333833,
+          "phases_ms": {
+            "connection_pool": 0.000583,
+            "mutex": 5.079542,
+            "sqlite_begin": 0.021417
+          },
+          "importer_authorization_wait_ms": 0.004584,
+          "import_total_ms": 5.894
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            5.404667,
+            4.345,
+            5.333833
+          ],
+          "median": 5.333833,
+          "max": 5.404667
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            0.0065,
+            0.0065,
+            0.004584
+          ],
+          "median": 0.0065,
+          "max": 0.0065
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            6.142833,
+            5.391583,
+            5.894
+          ],
+          "median": 5.894,
+          "max": 6.142833
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            5.062458,
+            4.013916,
+            5.079542
+          ],
+          "median": 5.062458,
+          "max": 5.079542
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.000625,
+            0.001041,
+            0.000583
+          ],
+          "median": 0.000625,
+          "max": 0.001041
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.035333,
+            0.047167,
+            0.021417
+          ],
+          "median": 0.035333,
+          "max": 0.047167
+        }
+      }
+    },
+    {
+      "topology": "same_store",
+      "authorization_stage": 2,
+      "delay_ms": 5500,
+      "operation": "file_status",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 27,
+          "total_ms": 5511.329292,
+          "phases_ms": {
+            "connection_pool": 0.002208,
+            "mutex": 5510.617709,
+            "sqlite_begin": 0.092958
+          },
+          "importer_authorization_wait_ms": 5502.068125,
+          "import_total_ms": 5510.817792
+        },
+        {
+          "repeat": 2,
+          "source_line": 29,
+          "total_ms": 5512.2795,
+          "phases_ms": {
+            "connection_pool": 0.001209,
+            "mutex": 5511.716334,
+            "sqlite_begin": 0.065
+          },
+          "importer_authorization_wait_ms": 5502.094875,
+          "import_total_ms": 5511.439041
+        },
+        {
+          "repeat": 3,
+          "source_line": 31,
+          "total_ms": 5512.068875,
+          "phases_ms": {
+            "connection_pool": 0.001792,
+            "mutex": 5511.398167,
+            "sqlite_begin": 0.080042
+          },
+          "importer_authorization_wait_ms": 5502.078333,
+          "import_total_ms": 5511.63275
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            5511.329292,
+            5512.2795,
+            5512.068875
+          ],
+          "median": 5512.068875,
+          "max": 5512.2795
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            5502.068125,
+            5502.094875,
+            5502.078333
+          ],
+          "median": 5502.078333,
+          "max": 5502.094875
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            5510.817792,
+            5511.439041,
+            5511.63275
+          ],
+          "median": 5511.439041,
+          "max": 5511.63275
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            5510.617709,
+            5511.716334,
+            5511.398167
+          ],
+          "median": 5511.398167,
+          "max": 5511.716334
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.002208,
+            0.001209,
+            0.001792
+          ],
+          "median": 0.001792,
+          "max": 0.002208
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.092958,
+            0.065,
+            0.080042
+          ],
+          "median": 0.080042,
+          "max": 0.092958
+        }
+      }
+    },
+    {
+      "topology": "same_store",
+      "authorization_stage": 2,
+      "delay_ms": 5500,
+      "operation": "message_lookup",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 27,
+          "total_ms": 5510.626417,
+          "phases_ms": {
+            "connection_pool": 0.005875,
+            "mutex": 5509.761333,
+            "sqlite_begin": 0.1455
+          },
+          "importer_authorization_wait_ms": 5502.068125,
+          "import_total_ms": 5510.817792
+        },
+        {
+          "repeat": 2,
+          "source_line": 29,
+          "total_ms": 5511.718666,
+          "phases_ms": {
+            "connection_pool": 0.002792,
+            "mutex": 5511.031292,
+            "sqlite_begin": 0.091083
+          },
+          "importer_authorization_wait_ms": 5502.094875,
+          "import_total_ms": 5511.439041
+        },
+        {
+          "repeat": 3,
+          "source_line": 31,
+          "total_ms": 5510.845,
+          "phases_ms": {
+            "connection_pool": 0.004875,
+            "mutex": 5509.996208,
+            "sqlite_begin": 0.142667
+          },
+          "importer_authorization_wait_ms": 5502.078333,
+          "import_total_ms": 5511.63275
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            5510.626417,
+            5511.718666,
+            5510.845
+          ],
+          "median": 5510.845,
+          "max": 5511.718666
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            5502.068125,
+            5502.094875,
+            5502.078333
+          ],
+          "median": 5502.078333,
+          "max": 5502.094875
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            5510.817792,
+            5511.439041,
+            5511.63275
+          ],
+          "median": 5511.439041,
+          "max": 5511.63275
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            5509.761333,
+            5511.031292,
+            5509.996208
+          ],
+          "median": 5509.996208,
+          "max": 5511.031292
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.005875,
+            0.002792,
+            0.004875
+          ],
+          "median": 0.004875,
+          "max": 0.005875
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.1455,
+            0.091083,
+            0.142667
+          ],
+          "median": 0.142667,
+          "max": 0.1455
+        }
+      }
+    },
+    {
+      "topology": "same_store",
+      "authorization_stage": 2,
+      "delay_ms": 5500,
+      "operation": "work_context",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 27,
+          "total_ms": 5511.883875,
+          "phases_ms": {
+            "connection_pool": 0.002292,
+            "mutex": 5511.315916,
+            "sqlite_begin": 0.061625
+          },
+          "importer_authorization_wait_ms": 5502.068125,
+          "import_total_ms": 5510.817792
+        },
+        {
+          "repeat": 2,
+          "source_line": 29,
+          "total_ms": 5511.057,
+          "phases_ms": {
+            "connection_pool": 0.004583,
+            "mutex": 5510.183875,
+            "sqlite_begin": 0.131416
+          },
+          "importer_authorization_wait_ms": 5502.094875,
+          "import_total_ms": 5511.439041
+        },
+        {
+          "repeat": 3,
+          "source_line": 31,
+          "total_ms": 5511.436083,
+          "phases_ms": {
+            "connection_pool": 0.001417,
+            "mutex": 5510.845292,
+            "sqlite_begin": 0.067875
+          },
+          "importer_authorization_wait_ms": 5502.078333,
+          "import_total_ms": 5511.63275
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            5511.883875,
+            5511.057,
+            5511.436083
+          ],
+          "median": 5511.436083,
+          "max": 5511.883875
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            5502.068125,
+            5502.094875,
+            5502.078333
+          ],
+          "median": 5502.078333,
+          "max": 5502.094875
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            5510.817792,
+            5511.439041,
+            5511.63275
+          ],
+          "median": 5511.439041,
+          "max": 5511.63275
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            5511.315916,
+            5510.183875,
+            5510.845292
+          ],
+          "median": 5510.845292,
+          "max": 5511.315916
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.002292,
+            0.004583,
+            0.001417
+          ],
+          "median": 0.002292,
+          "max": 0.004583
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.061625,
+            0.131416,
+            0.067875
+          ],
+          "median": 0.067875,
+          "max": 0.131416
+        }
+      }
+    },
+    {
+      "topology": "same_store",
+      "authorization_stage": 2,
+      "delay_ms": 30000,
+      "operation": "file_status",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 33,
+          "total_ms": 30012.054083,
+          "phases_ms": {
+            "connection_pool": 0.00125,
+            "mutex": 30011.483042,
+            "sqlite_begin": 0.059083
+          },
+          "importer_authorization_wait_ms": 30002.078542,
+          "import_total_ms": 30011.354833
+        },
+        {
+          "repeat": 2,
+          "source_line": 35,
+          "total_ms": 30011.450083,
+          "phases_ms": {
+            "connection_pool": 0.001542,
+            "mutex": 30010.824542,
+            "sqlite_begin": 0.074833
+          },
+          "importer_authorization_wait_ms": 30001.320833,
+          "import_total_ms": 30010.660167
+        },
+        {
+          "repeat": 3,
+          "source_line": 37,
+          "total_ms": 30011.840083,
+          "phases_ms": {
+            "connection_pool": 0.001125,
+            "mutex": 30011.284708,
+            "sqlite_begin": 0.071542
+          },
+          "importer_authorization_wait_ms": 30002.06925,
+          "import_total_ms": 30011.201834
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            30012.054083,
+            30011.450083,
+            30011.840083
+          ],
+          "median": 30011.840083,
+          "max": 30012.054083
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            30002.078542,
+            30001.320833,
+            30002.06925
+          ],
+          "median": 30002.06925,
+          "max": 30002.078542
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            30011.354833,
+            30010.660167,
+            30011.201834
+          ],
+          "median": 30011.201834,
+          "max": 30011.354833
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            30011.483042,
+            30010.824542,
+            30011.284708
+          ],
+          "median": 30011.284708,
+          "max": 30011.483042
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.00125,
+            0.001542,
+            0.001125
+          ],
+          "median": 0.00125,
+          "max": 0.001542
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.059083,
+            0.074833,
+            0.071542
+          ],
+          "median": 0.071542,
+          "max": 0.074833
+        }
+      }
+    },
+    {
+      "topology": "same_store",
+      "authorization_stage": 2,
+      "delay_ms": 30000,
+      "operation": "message_lookup",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 33,
+          "total_ms": 30011.4895,
+          "phases_ms": {
+            "connection_pool": 0.003584,
+            "mutex": 30010.89,
+            "sqlite_begin": 0.077709
+          },
+          "importer_authorization_wait_ms": 30002.078542,
+          "import_total_ms": 30011.354833
+        },
+        {
+          "repeat": 2,
+          "source_line": 35,
+          "total_ms": 30010.190958,
+          "phases_ms": {
+            "connection_pool": 0.005292,
+            "mutex": 30009.325375,
+            "sqlite_begin": 0.157458
+          },
+          "importer_authorization_wait_ms": 30001.320833,
+          "import_total_ms": 30010.660167
+        },
+        {
+          "repeat": 3,
+          "source_line": 37,
+          "total_ms": 30011.282166,
+          "phases_ms": {
+            "connection_pool": 0.002167,
+            "mutex": 30010.668458,
+            "sqlite_begin": 0.055167
+          },
+          "importer_authorization_wait_ms": 30002.06925,
+          "import_total_ms": 30011.201834
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            30011.4895,
+            30010.190958,
+            30011.282166
+          ],
+          "median": 30011.282166,
+          "max": 30011.4895
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            30002.078542,
+            30001.320833,
+            30002.06925
+          ],
+          "median": 30002.06925,
+          "max": 30002.078542
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            30011.354833,
+            30010.660167,
+            30011.201834
+          ],
+          "median": 30011.201834,
+          "max": 30011.354833
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            30010.89,
+            30009.325375,
+            30010.668458
+          ],
+          "median": 30010.668458,
+          "max": 30010.89
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.003584,
+            0.005292,
+            0.002167
+          ],
+          "median": 0.003584,
+          "max": 0.005292
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.077709,
+            0.157458,
+            0.055167
+          ],
+          "median": 0.077709,
+          "max": 0.157458
+        }
+      }
+    },
+    {
+      "topology": "same_store",
+      "authorization_stage": 2,
+      "delay_ms": 30000,
+      "operation": "work_context",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 33,
+          "total_ms": 30010.908041,
+          "phases_ms": {
+            "connection_pool": 0.005083,
+            "mutex": 30009.991875,
+            "sqlite_begin": 0.138625
+          },
+          "importer_authorization_wait_ms": 30002.078542,
+          "import_total_ms": 30011.354833
+        },
+        {
+          "repeat": 2,
+          "source_line": 35,
+          "total_ms": 30010.847416,
+          "phases_ms": {
+            "connection_pool": 0.001917,
+            "mutex": 30010.186916,
+            "sqlite_begin": 0.084
+          },
+          "importer_authorization_wait_ms": 30001.320833,
+          "import_total_ms": 30010.660167
+        },
+        {
+          "repeat": 3,
+          "source_line": 37,
+          "total_ms": 30010.685791,
+          "phases_ms": {
+            "connection_pool": 0.006625,
+            "mutex": 30009.840333,
+            "sqlite_begin": 0.077
+          },
+          "importer_authorization_wait_ms": 30002.06925,
+          "import_total_ms": 30011.201834
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            30010.908041,
+            30010.847416,
+            30010.685791
+          ],
+          "median": 30010.847416,
+          "max": 30010.908041
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            30002.078542,
+            30001.320833,
+            30002.06925
+          ],
+          "median": 30002.06925,
+          "max": 30002.078542
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            30011.354833,
+            30010.660167,
+            30011.201834
+          ],
+          "median": 30011.201834,
+          "max": 30011.354833
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            30009.991875,
+            30010.186916,
+            30009.840333
+          ],
+          "median": 30009.991875,
+          "max": 30010.186916
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.005083,
+            0.001917,
+            0.006625
+          ],
+          "median": 0.005083,
+          "max": 0.006625
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.138625,
+            0.084,
+            0.077
+          ],
+          "median": 0.084,
+          "max": 0.138625
+        }
+      }
+    },
+    {
+      "topology": "shared_sqlite",
+      "authorization_stage": 1,
+      "delay_ms": 0,
+      "operation": "file_status",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 39,
+          "total_ms": 10.957834,
+          "phases_ms": {
+            "connection_pool": 0.000959,
+            "mutex": 10.658459,
+            "sqlite_begin": 0.030334
+          },
+          "importer_authorization_wait_ms": 0.003083,
+          "import_total_ms": 4.821625
+        },
+        {
+          "repeat": 2,
+          "source_line": 41,
+          "total_ms": 10.867625,
+          "phases_ms": {
+            "connection_pool": 0.001,
+            "mutex": 10.504167,
+            "sqlite_begin": 0.04175
+          },
+          "importer_authorization_wait_ms": 0.00325,
+          "import_total_ms": 5.170333
+        },
+        {
+          "repeat": 3,
+          "source_line": 43,
+          "total_ms": 10.8475,
+          "phases_ms": {
+            "connection_pool": 0.000792,
+            "mutex": 10.49425,
+            "sqlite_begin": 0.03975
+          },
+          "importer_authorization_wait_ms": 0.002375,
+          "import_total_ms": 6.101083
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            10.957834,
+            10.867625,
+            10.8475
+          ],
+          "median": 10.867625,
+          "max": 10.957834
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            0.003083,
+            0.00325,
+            0.002375
+          ],
+          "median": 0.003083,
+          "max": 0.00325
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            4.821625,
+            5.170333,
+            6.101083
+          ],
+          "median": 5.170333,
+          "max": 6.101083
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            10.658459,
+            10.504167,
+            10.49425
+          ],
+          "median": 10.504167,
+          "max": 10.658459
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.000959,
+            0.001,
+            0.000792
+          ],
+          "median": 0.000959,
+          "max": 0.001
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.030334,
+            0.04175,
+            0.03975
+          ],
+          "median": 0.03975,
+          "max": 0.04175
+        }
+      }
+    },
+    {
+      "topology": "shared_sqlite",
+      "authorization_stage": 1,
+      "delay_ms": 0,
+      "operation": "message_lookup",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 39,
+          "total_ms": 10.6665,
+          "phases_ms": {
+            "connection_pool": 0.000958,
+            "mutex": 10.337958,
+            "sqlite_begin": 0.041166
+          },
+          "importer_authorization_wait_ms": 0.003083,
+          "import_total_ms": 4.821625
+        },
+        {
+          "repeat": 2,
+          "source_line": 41,
+          "total_ms": 11.167959,
+          "phases_ms": {
+            "connection_pool": 0.000708,
+            "mutex": 10.856166,
+            "sqlite_begin": 0.036125
+          },
+          "importer_authorization_wait_ms": 0.00325,
+          "import_total_ms": 5.170333
+        },
+        {
+          "repeat": 3,
+          "source_line": 43,
+          "total_ms": 11.194958,
+          "phases_ms": {
+            "connection_pool": 0.000708,
+            "mutex": 10.835959,
+            "sqlite_begin": 0.041375
+          },
+          "importer_authorization_wait_ms": 0.002375,
+          "import_total_ms": 6.101083
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            10.6665,
+            11.167959,
+            11.194958
+          ],
+          "median": 11.167959,
+          "max": 11.194958
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            0.003083,
+            0.00325,
+            0.002375
+          ],
+          "median": 0.003083,
+          "max": 0.00325
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            4.821625,
+            5.170333,
+            6.101083
+          ],
+          "median": 5.170333,
+          "max": 6.101083
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            10.337958,
+            10.856166,
+            10.835959
+          ],
+          "median": 10.835959,
+          "max": 10.856166
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.000958,
+            0.000708,
+            0.000708
+          ],
+          "median": 0.000708,
+          "max": 0.000958
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.041166,
+            0.036125,
+            0.041375
+          ],
+          "median": 0.041166,
+          "max": 0.041375
+        }
+      }
+    },
+    {
+      "topology": "shared_sqlite",
+      "authorization_stage": 1,
+      "delay_ms": 0,
+      "operation": "work_context",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 39,
+          "total_ms": 10.350833,
+          "phases_ms": {
+            "connection_pool": 0.001833,
+            "mutex": 0.000292,
+            "sqlite_begin": 10.020625
+          },
+          "importer_authorization_wait_ms": 0.003083,
+          "import_total_ms": 4.821625
+        },
+        {
+          "repeat": 2,
+          "source_line": 41,
+          "total_ms": 10.520583,
+          "phases_ms": {
+            "connection_pool": 0.000875,
+            "mutex": 0.000208,
+            "sqlite_begin": 10.189834
+          },
+          "importer_authorization_wait_ms": 0.00325,
+          "import_total_ms": 5.170333
+        },
+        {
+          "repeat": 3,
+          "source_line": 43,
+          "total_ms": 10.50975,
+          "phases_ms": {
+            "connection_pool": 0.001167,
+            "mutex": 0.000208,
+            "sqlite_begin": 10.198125
+          },
+          "importer_authorization_wait_ms": 0.002375,
+          "import_total_ms": 6.101083
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            10.350833,
+            10.520583,
+            10.50975
+          ],
+          "median": 10.50975,
+          "max": 10.520583
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            0.003083,
+            0.00325,
+            0.002375
+          ],
+          "median": 0.003083,
+          "max": 0.00325
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            4.821625,
+            5.170333,
+            6.101083
+          ],
+          "median": 5.170333,
+          "max": 6.101083
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            0.000292,
+            0.000208,
+            0.000208
+          ],
+          "median": 0.000208,
+          "max": 0.000292
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.001833,
+            0.000875,
+            0.001167
+          ],
+          "median": 0.001167,
+          "max": 0.001833
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            10.020625,
+            10.189834,
+            10.198125
+          ],
+          "median": 10.189834,
+          "max": 10.198125
+        }
+      }
+    },
+    {
+      "topology": "shared_sqlite",
+      "authorization_stage": 1,
+      "delay_ms": 5500,
+      "operation": "file_status",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 45,
+          "total_ms": 5519.858917,
+          "phases_ms": {
+            "connection_pool": 0.001125,
+            "mutex": 5519.305833,
+            "sqlite_begin": 0.063917
+          },
+          "importer_authorization_wait_ms": 5502.048291,
+          "import_total_ms": 5510.681292
+        },
+        {
+          "repeat": 2,
+          "source_line": 47,
+          "total_ms": 5612.1705,
+          "phases_ms": {
+            "connection_pool": 0.001292,
+            "mutex": 5611.560792,
+            "sqlite_begin": 0.123084
+          },
+          "importer_authorization_wait_ms": 5502.046209,
+          "import_total_ms": 5511.87425
+        },
+        {
+          "repeat": 3,
+          "source_line": 49,
+          "total_ms": 5511.697583,
+          "phases_ms": {
+            "connection_pool": 0.001834,
+            "mutex": 5511.057583,
+            "sqlite_begin": 0.096125
+          },
+          "importer_authorization_wait_ms": 5502.0345,
+          "import_total_ms": 5510.981
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            5519.858917,
+            5612.1705,
+            5511.697583
+          ],
+          "median": 5519.858917,
+          "max": 5612.1705
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            5502.048291,
+            5502.046209,
+            5502.0345
+          ],
+          "median": 5502.046209,
+          "max": 5502.048291
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            5510.681292,
+            5511.87425,
+            5510.981
+          ],
+          "median": 5510.981,
+          "max": 5511.87425
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            5519.305833,
+            5611.560792,
+            5511.057583
+          ],
+          "median": 5519.305833,
+          "max": 5611.560792
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.001125,
+            0.001292,
+            0.001834
+          ],
+          "median": 0.001292,
+          "max": 0.001834
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.063917,
+            0.123084,
+            0.096125
+          ],
+          "median": 0.096125,
+          "max": 0.123084
+        }
+      }
+    },
+    {
+      "topology": "shared_sqlite",
+      "authorization_stage": 1,
+      "delay_ms": 5500,
+      "operation": "message_lookup",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 45,
+          "total_ms": 5519.316,
+          "phases_ms": {
+            "connection_pool": 0.002959,
+            "mutex": 5518.641042,
+            "sqlite_begin": 0.104875
+          },
+          "importer_authorization_wait_ms": 5502.048291,
+          "import_total_ms": 5510.681292
+        },
+        {
+          "repeat": 2,
+          "source_line": 47,
+          "total_ms": 5611.574958,
+          "phases_ms": {
+            "connection_pool": 0.003708,
+            "mutex": 5610.856375,
+            "sqlite_begin": 0.113
+          },
+          "importer_authorization_wait_ms": 5502.046209,
+          "import_total_ms": 5511.87425
+        },
+        {
+          "repeat": 3,
+          "source_line": 49,
+          "total_ms": 5511.064,
+          "phases_ms": {
+            "connection_pool": 0.001584,
+            "mutex": 0.000292,
+            "sqlite_begin": 5458.488625
+          },
+          "importer_authorization_wait_ms": 5502.0345,
+          "import_total_ms": 5510.981
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            5519.316,
+            5611.574958,
+            5511.064
+          ],
+          "median": 5519.316,
+          "max": 5611.574958
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            5502.048291,
+            5502.046209,
+            5502.0345
+          ],
+          "median": 5502.046209,
+          "max": 5502.048291
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            5510.681292,
+            5511.87425,
+            5510.981
+          ],
+          "median": 5510.981,
+          "max": 5511.87425
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            5518.641042,
+            5610.856375,
+            0.000292
+          ],
+          "median": 5518.641042,
+          "max": 5610.856375
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.002959,
+            0.003708,
+            0.001584
+          ],
+          "median": 0.002959,
+          "max": 0.003708
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.104875,
+            0.113,
+            5458.488625
+          ],
+          "median": 0.113,
+          "max": 5458.488625
+        }
+      }
+    },
+    {
+      "topology": "shared_sqlite",
+      "authorization_stage": 1,
+      "delay_ms": 5500,
+      "operation": "work_context",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 45,
+          "total_ms": 5518.662333,
+          "phases_ms": {
+            "connection_pool": 0.001667,
+            "mutex": 0.000125,
+            "sqlite_begin": 5465.991
+          },
+          "importer_authorization_wait_ms": 5502.048291,
+          "import_total_ms": 5510.681292
+        },
+        {
+          "repeat": 2,
+          "source_line": 47,
+          "total_ms": 5610.87675,
+          "phases_ms": {
+            "connection_pool": 0.000917,
+            "mutex": 0.000209,
+            "sqlite_begin": 5558.009666999999
+          },
+          "importer_authorization_wait_ms": 5502.046209,
+          "import_total_ms": 5511.87425
+        },
+        {
+          "repeat": 3,
+          "source_line": 49,
+          "total_ms": 5512.349834,
+          "phases_ms": {
+            "connection_pool": 0.002083,
+            "mutex": 5511.6825,
+            "sqlite_begin": 0.069541
+          },
+          "importer_authorization_wait_ms": 5502.0345,
+          "import_total_ms": 5510.981
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            5518.662333,
+            5610.87675,
+            5512.349834
+          ],
+          "median": 5518.662333,
+          "max": 5610.87675
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            5502.048291,
+            5502.046209,
+            5502.0345
+          ],
+          "median": 5502.046209,
+          "max": 5502.048291
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            5510.681292,
+            5511.87425,
+            5510.981
+          ],
+          "median": 5510.981,
+          "max": 5511.87425
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            0.000125,
+            0.000209,
+            5511.6825
+          ],
+          "median": 0.000209,
+          "max": 5511.6825
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.001667,
+            0.000917,
+            0.002083
+          ],
+          "median": 0.001667,
+          "max": 0.002083
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            5465.991,
+            5558.009666999999,
+            0.069541
+          ],
+          "median": 5465.991,
+          "max": 5558.009666999999
+        }
+      }
+    },
+    {
+      "topology": "shared_sqlite",
+      "authorization_stage": 1,
+      "delay_ms": 30000,
+      "operation": "file_status",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 51,
+          "total_ms": 30049.898167,
+          "phases_ms": {
+            "connection_pool": 0.002375,
+            "mutex": 30049.177375,
+            "sqlite_begin": 0.08375
+          },
+          "importer_authorization_wait_ms": 30000.689417,
+          "import_total_ms": 30010.221041
+        },
+        {
+          "repeat": 2,
+          "source_line": 53,
+          "total_ms": 30050.842583,
+          "phases_ms": {
+            "connection_pool": 0.0025,
+            "mutex": 30050.162667,
+            "sqlite_begin": 0.058584
+          },
+          "importer_authorization_wait_ms": 30002.044125,
+          "import_total_ms": 30012.835
+        },
+        {
+          "repeat": 3,
+          "source_line": 55,
+          "total_ms": 30064.898375,
+          "phases_ms": {
+            "connection_pool": 0.003167,
+            "mutex": 30064.011041,
+            "sqlite_begin": 0.112166
+          },
+          "importer_authorization_wait_ms": 30002.055625,
+          "import_total_ms": 30011.990792
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            30049.898167,
+            30050.842583,
+            30064.898375
+          ],
+          "median": 30050.842583,
+          "max": 30064.898375
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            30000.689417,
+            30002.044125,
+            30002.055625
+          ],
+          "median": 30002.044125,
+          "max": 30002.055625
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            30010.221041,
+            30012.835,
+            30011.990792
+          ],
+          "median": 30011.990792,
+          "max": 30012.835
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            30049.177375,
+            30050.162667,
+            30064.011041
+          ],
+          "median": 30050.162667,
+          "max": 30064.011041
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.002375,
+            0.0025,
+            0.003167
+          ],
+          "median": 0.0025,
+          "max": 0.003167
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.08375,
+            0.058584,
+            0.112166
+          ],
+          "median": 0.08375,
+          "max": 0.112166
+        }
+      }
+    },
+    {
+      "topology": "shared_sqlite",
+      "authorization_stage": 1,
+      "delay_ms": 30000,
+      "operation": "message_lookup",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 51,
+          "total_ms": 30048.340042,
+          "phases_ms": {
+            "connection_pool": 0.000875,
+            "mutex": 0.000208,
+            "sqlite_begin": 29787.514624
+          },
+          "importer_authorization_wait_ms": 30000.689417,
+          "import_total_ms": 30010.221041
+        },
+        {
+          "repeat": 2,
+          "source_line": 53,
+          "total_ms": 30050.173917,
+          "phases_ms": {
+            "connection_pool": 0.002459,
+            "mutex": 30049.057417,
+            "sqlite_begin": 0.086334
+          },
+          "importer_authorization_wait_ms": 30002.044125,
+          "import_total_ms": 30012.835
+        },
+        {
+          "repeat": 3,
+          "source_line": 55,
+          "total_ms": 30063.118708,
+          "phases_ms": {
+            "connection_pool": 0.001291,
+            "mutex": 0.000125,
+            "sqlite_begin": 29801.937332999998
+          },
+          "importer_authorization_wait_ms": 30002.055625,
+          "import_total_ms": 30011.990792
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            30048.340042,
+            30050.173917,
+            30063.118708
+          ],
+          "median": 30050.173917,
+          "max": 30063.118708
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            30000.689417,
+            30002.044125,
+            30002.055625
+          ],
+          "median": 30002.044125,
+          "max": 30002.055625
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            30010.221041,
+            30012.835,
+            30011.990792
+          ],
+          "median": 30011.990792,
+          "max": 30012.835
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            0.000208,
+            30049.057417,
+            0.000125
+          ],
+          "median": 0.000208,
+          "max": 30049.057417
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.000875,
+            0.002459,
+            0.001291
+          ],
+          "median": 0.001291,
+          "max": 0.002459
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            29787.514624,
+            0.086334,
+            29801.937332999998
+          ],
+          "median": 29787.514624,
+          "max": 29801.937332999998
+        }
+      }
+    },
+    {
+      "topology": "shared_sqlite",
+      "authorization_stage": 1,
+      "delay_ms": 30000,
+      "operation": "work_context",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 51,
+          "total_ms": 30049.201,
+          "phases_ms": {
+            "connection_pool": 0.003958,
+            "mutex": 30048.343292,
+            "sqlite_begin": 0.10275
+          },
+          "importer_authorization_wait_ms": 30000.689417,
+          "import_total_ms": 30010.221041
+        },
+        {
+          "repeat": 2,
+          "source_line": 53,
+          "total_ms": 30049.061375,
+          "phases_ms": {
+            "connection_pool": 0.000958,
+            "mutex": 0.000167,
+            "sqlite_begin": 29787.766624
+          },
+          "importer_authorization_wait_ms": 30002.044125,
+          "import_total_ms": 30012.835
+        },
+        {
+          "repeat": 3,
+          "source_line": 55,
+          "total_ms": 30064.017959,
+          "phases_ms": {
+            "connection_pool": 0.004416,
+            "mutex": 30063.117458,
+            "sqlite_begin": 0.112167
+          },
+          "importer_authorization_wait_ms": 30002.055625,
+          "import_total_ms": 30011.990792
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            30049.201,
+            30049.061375,
+            30064.017959
+          ],
+          "median": 30049.201,
+          "max": 30064.017959
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            30000.689417,
+            30002.044125,
+            30002.055625
+          ],
+          "median": 30002.044125,
+          "max": 30002.055625
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            30010.221041,
+            30012.835,
+            30011.990792
+          ],
+          "median": 30011.990792,
+          "max": 30012.835
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            30048.343292,
+            0.000167,
+            30063.117458
+          ],
+          "median": 30048.343292,
+          "max": 30063.117458
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.003958,
+            0.000958,
+            0.004416
+          ],
+          "median": 0.003958,
+          "max": 0.004416
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.10275,
+            29787.766624,
+            0.112167
+          ],
+          "median": 0.112167,
+          "max": 29787.766624
+        }
+      }
+    },
+    {
+      "topology": "shared_sqlite",
+      "authorization_stage": 2,
+      "delay_ms": 0,
+      "operation": "file_status",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 57,
+          "total_ms": 4.774,
+          "phases_ms": {
+            "connection_pool": 0.000833,
+            "mutex": 4.442084,
+            "sqlite_begin": 0.032792
+          },
+          "importer_authorization_wait_ms": 0.0045,
+          "import_total_ms": 5.153209
+        },
+        {
+          "repeat": 2,
+          "source_line": 59,
+          "total_ms": 11.027792,
+          "phases_ms": {
+            "connection_pool": 0.001042,
+            "mutex": 10.71375,
+            "sqlite_begin": 0.035542
+          },
+          "importer_authorization_wait_ms": 0.004125,
+          "import_total_ms": 5.396166
+        },
+        {
+          "repeat": 3,
+          "source_line": 61,
+          "total_ms": 10.779667,
+          "phases_ms": {
+            "connection_pool": 0.001083,
+            "mutex": 10.444875,
+            "sqlite_begin": 0.035666
+          },
+          "importer_authorization_wait_ms": 0.004375,
+          "import_total_ms": 5.587042
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            4.774,
+            11.027792,
+            10.779667
+          ],
+          "median": 10.779667,
+          "max": 11.027792
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            0.0045,
+            0.004125,
+            0.004375
+          ],
+          "median": 0.004375,
+          "max": 0.0045
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            5.153209,
+            5.396166,
+            5.587042
+          ],
+          "median": 5.396166,
+          "max": 5.587042
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            4.442084,
+            10.71375,
+            10.444875
+          ],
+          "median": 10.444875,
+          "max": 10.71375
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.000833,
+            0.001042,
+            0.001083
+          ],
+          "median": 0.001042,
+          "max": 0.001083
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.032792,
+            0.035542,
+            0.035666
+          ],
+          "median": 0.035542,
+          "max": 0.035666
+        }
+      }
+    },
+    {
+      "topology": "shared_sqlite",
+      "authorization_stage": 2,
+      "delay_ms": 0,
+      "operation": "message_lookup",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 57,
+          "total_ms": 4.467167,
+          "phases_ms": {
+            "connection_pool": 0.001417,
+            "mutex": 4.068,
+            "sqlite_begin": 0.048458
+          },
+          "importer_authorization_wait_ms": 0.0045,
+          "import_total_ms": 5.153209
+        },
+        {
+          "repeat": 2,
+          "source_line": 59,
+          "total_ms": 10.419042,
+          "phases_ms": {
+            "connection_pool": 0.0015,
+            "mutex": 0.000167,
+            "sqlite_begin": 10.02175
+          },
+          "importer_authorization_wait_ms": 0.004125,
+          "import_total_ms": 5.396166
+        },
+        {
+          "repeat": 3,
+          "source_line": 61,
+          "total_ms": 11.02575,
+          "phases_ms": {
+            "connection_pool": 0.0005,
+            "mutex": 10.770583,
+            "sqlite_begin": 0.033541
+          },
+          "importer_authorization_wait_ms": 0.004375,
+          "import_total_ms": 5.587042
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            4.467167,
+            10.419042,
+            11.02575
+          ],
+          "median": 10.419042,
+          "max": 11.02575
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            0.0045,
+            0.004125,
+            0.004375
+          ],
+          "median": 0.004375,
+          "max": 0.0045
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            5.153209,
+            5.396166,
+            5.587042
+          ],
+          "median": 5.396166,
+          "max": 5.587042
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            4.068,
+            0.000167,
+            10.770583
+          ],
+          "median": 4.068,
+          "max": 10.770583
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.001417,
+            0.0015,
+            0.0005
+          ],
+          "median": 0.001417,
+          "max": 0.0015
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.048458,
+            10.02175,
+            0.033541
+          ],
+          "median": 0.048458,
+          "max": 10.02175
+        }
+      }
+    },
+    {
+      "topology": "shared_sqlite",
+      "authorization_stage": 2,
+      "delay_ms": 0,
+      "operation": "work_context",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 57,
+          "total_ms": 4.076625,
+          "phases_ms": {
+            "connection_pool": 0.000792,
+            "mutex": 0.00025,
+            "sqlite_begin": 3.69925
+          },
+          "importer_authorization_wait_ms": 0.0045,
+          "import_total_ms": 5.153209
+        },
+        {
+          "repeat": 2,
+          "source_line": 59,
+          "total_ms": 10.74025,
+          "phases_ms": {
+            "connection_pool": 0.001209,
+            "mutex": 10.411458,
+            "sqlite_begin": 0.036708
+          },
+          "importer_authorization_wait_ms": 0.004125,
+          "import_total_ms": 5.396166
+        },
+        {
+          "repeat": 3,
+          "source_line": 61,
+          "total_ms": 10.462708,
+          "phases_ms": {
+            "connection_pool": 0.002084,
+            "mutex": 0.000167,
+            "sqlite_begin": 10.184916
+          },
+          "importer_authorization_wait_ms": 0.004375,
+          "import_total_ms": 5.587042
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            4.076625,
+            10.74025,
+            10.462708
+          ],
+          "median": 10.462708,
+          "max": 10.74025
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            0.0045,
+            0.004125,
+            0.004375
+          ],
+          "median": 0.004375,
+          "max": 0.0045
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            5.153209,
+            5.396166,
+            5.587042
+          ],
+          "median": 5.396166,
+          "max": 5.587042
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            0.00025,
+            10.411458,
+            0.000167
+          ],
+          "median": 0.00025,
+          "max": 10.411458
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.000792,
+            0.001209,
+            0.002084
+          ],
+          "median": 0.001209,
+          "max": 0.002084
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            3.69925,
+            0.036708,
+            10.184916
+          ],
+          "median": 3.69925,
+          "max": 10.184916
+        }
+      }
+    },
+    {
+      "topology": "shared_sqlite",
+      "authorization_stage": 2,
+      "delay_ms": 5500,
+      "operation": "file_status",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 63,
+          "total_ms": 5514.5875,
+          "phases_ms": {
+            "connection_pool": 0.001334,
+            "mutex": 5514.008959,
+            "sqlite_begin": 0.062542
+          },
+          "importer_authorization_wait_ms": 5502.071125,
+          "import_total_ms": 5510.9595
+        },
+        {
+          "repeat": 2,
+          "source_line": 65,
+          "total_ms": 5612.669959,
+          "phases_ms": {
+            "connection_pool": 0.00125,
+            "mutex": 5612.126583,
+            "sqlite_begin": 0.057167
+          },
+          "importer_authorization_wait_ms": 5502.047042,
+          "import_total_ms": 5511.200041
+        },
+        {
+          "repeat": 3,
+          "source_line": 67,
+          "total_ms": 5610.273042,
+          "phases_ms": {
+            "connection_pool": 0.00425,
+            "mutex": 5609.634625,
+            "sqlite_begin": 0.095
+          },
+          "importer_authorization_wait_ms": 5502.033541,
+          "import_total_ms": 5510.679292
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            5514.5875,
+            5612.669959,
+            5610.273042
+          ],
+          "median": 5610.273042,
+          "max": 5612.669959
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            5502.071125,
+            5502.047042,
+            5502.033541
+          ],
+          "median": 5502.047042,
+          "max": 5502.071125
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            5510.9595,
+            5511.200041,
+            5510.679292
+          ],
+          "median": 5510.9595,
+          "max": 5511.200041
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            5514.008959,
+            5612.126583,
+            5609.634625
+          ],
+          "median": 5609.634625,
+          "max": 5612.126583
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.001334,
+            0.00125,
+            0.00425
+          ],
+          "median": 0.001334,
+          "max": 0.00425
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.062542,
+            0.057167,
+            0.095
+          ],
+          "median": 0.062542,
+          "max": 0.095
+        }
+      }
+    },
+    {
+      "topology": "shared_sqlite",
+      "authorization_stage": 2,
+      "delay_ms": 5500,
+      "operation": "message_lookup",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 63,
+          "total_ms": 5514.015459,
+          "phases_ms": {
+            "connection_pool": 0.003834,
+            "mutex": 5513.283584,
+            "sqlite_begin": 0.104875
+          },
+          "importer_authorization_wait_ms": 5502.071125,
+          "import_total_ms": 5510.9595
+        },
+        {
+          "repeat": 2,
+          "source_line": 65,
+          "total_ms": 5612.133167,
+          "phases_ms": {
+            "connection_pool": 0.003125,
+            "mutex": 5611.498334,
+            "sqlite_begin": 0.0845
+          },
+          "importer_authorization_wait_ms": 5502.047042,
+          "import_total_ms": 5511.200041
+        },
+        {
+          "repeat": 3,
+          "source_line": 67,
+          "total_ms": 5610.651625,
+          "phases_ms": {
+            "connection_pool": 0.001667,
+            "mutex": 5610.26225,
+            "sqlite_begin": 0.056791
+          },
+          "importer_authorization_wait_ms": 5502.033541,
+          "import_total_ms": 5510.679292
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            5514.015459,
+            5612.133167,
+            5610.651625
+          ],
+          "median": 5610.651625,
+          "max": 5612.133167
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            5502.071125,
+            5502.047042,
+            5502.033541
+          ],
+          "median": 5502.047042,
+          "max": 5502.071125
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            5510.9595,
+            5511.200041,
+            5510.679292
+          ],
+          "median": 5510.9595,
+          "max": 5511.200041
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            5513.283584,
+            5611.498334,
+            5610.26225
+          ],
+          "median": 5610.26225,
+          "max": 5611.498334
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.003834,
+            0.003125,
+            0.001667
+          ],
+          "median": 0.003125,
+          "max": 0.003834
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.104875,
+            0.0845,
+            0.056791
+          ],
+          "median": 0.0845,
+          "max": 0.104875
+        }
+      }
+    },
+    {
+      "topology": "shared_sqlite",
+      "authorization_stage": 2,
+      "delay_ms": 5500,
+      "operation": "work_context",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 63,
+          "total_ms": 5513.3095,
+          "phases_ms": {
+            "connection_pool": 0.001042,
+            "mutex": 0.000166,
+            "sqlite_begin": 5461.619624999999
+          },
+          "importer_authorization_wait_ms": 5502.071125,
+          "import_total_ms": 5510.9595
+        },
+        {
+          "repeat": 2,
+          "source_line": 65,
+          "total_ms": 5611.51375,
+          "phases_ms": {
+            "connection_pool": 0.001083,
+            "mutex": 0.000208,
+            "sqlite_begin": 5560.004666
+          },
+          "importer_authorization_wait_ms": 5502.047042,
+          "import_total_ms": 5511.200041
+        },
+        {
+          "repeat": 3,
+          "source_line": 67,
+          "total_ms": 5609.660625,
+          "phases_ms": {
+            "connection_pool": 0.001,
+            "mutex": 0.000167,
+            "sqlite_begin": 5556.944124
+          },
+          "importer_authorization_wait_ms": 5502.033541,
+          "import_total_ms": 5510.679292
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            5513.3095,
+            5611.51375,
+            5609.660625
+          ],
+          "median": 5609.660625,
+          "max": 5611.51375
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            5502.071125,
+            5502.047042,
+            5502.033541
+          ],
+          "median": 5502.047042,
+          "max": 5502.071125
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            5510.9595,
+            5511.200041,
+            5510.679292
+          ],
+          "median": 5510.9595,
+          "max": 5511.200041
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            0.000166,
+            0.000208,
+            0.000167
+          ],
+          "median": 0.000167,
+          "max": 0.000208
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.001042,
+            0.001083,
+            0.001
+          ],
+          "median": 0.001042,
+          "max": 0.001083
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            5461.619624999999,
+            5560.004666,
+            5556.944124
+          ],
+          "median": 5556.944124,
+          "max": 5560.004666
+        }
+      }
+    },
+    {
+      "topology": "shared_sqlite",
+      "authorization_stage": 2,
+      "delay_ms": 30000,
+      "operation": "file_status",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 69,
+          "total_ms": 30049.408917,
+          "phases_ms": {
+            "connection_pool": 0.004375,
+            "mutex": 30048.668208,
+            "sqlite_begin": 0.110708
+          },
+          "importer_authorization_wait_ms": 30002.048875,
+          "import_total_ms": 30010.767583
+        },
+        {
+          "repeat": 2,
+          "source_line": 71,
+          "total_ms": 30045.827917,
+          "phases_ms": {
+            "connection_pool": 0.002125,
+            "mutex": 30045.156458,
+            "sqlite_begin": 0.075334
+          },
+          "importer_authorization_wait_ms": 30002.049208,
+          "import_total_ms": 30011.63125
+        },
+        {
+          "repeat": 3,
+          "source_line": 73,
+          "total_ms": 30057.820709,
+          "phases_ms": {
+            "connection_pool": 0.001291,
+            "mutex": 30057.227292,
+            "sqlite_begin": 0.069333
+          },
+          "importer_authorization_wait_ms": 30002.049125,
+          "import_total_ms": 30009.228333
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            30049.408917,
+            30045.827917,
+            30057.820709
+          ],
+          "median": 30049.408917,
+          "max": 30057.820709
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            30002.048875,
+            30002.049208,
+            30002.049125
+          ],
+          "median": 30002.049125,
+          "max": 30002.049208
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            30010.767583,
+            30011.63125,
+            30009.228333
+          ],
+          "median": 30010.767583,
+          "max": 30011.63125
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            30048.668208,
+            30045.156458,
+            30057.227292
+          ],
+          "median": 30048.668208,
+          "max": 30057.227292
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.004375,
+            0.002125,
+            0.001291
+          ],
+          "median": 0.002125,
+          "max": 0.004375
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.110708,
+            0.075334,
+            0.069333
+          ],
+          "median": 0.075334,
+          "max": 0.110708
+        }
+      }
+    },
+    {
+      "topology": "shared_sqlite",
+      "authorization_stage": 2,
+      "delay_ms": 30000,
+      "operation": "message_lookup",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 69,
+          "total_ms": 30049.954292,
+          "phases_ms": {
+            "connection_pool": 0.00175,
+            "mutex": 30049.386833,
+            "sqlite_begin": 0.07325
+          },
+          "importer_authorization_wait_ms": 30002.048875,
+          "import_total_ms": 30010.767583
+        },
+        {
+          "repeat": 2,
+          "source_line": 71,
+          "total_ms": 30044.498583,
+          "phases_ms": {
+            "connection_pool": 0.001584,
+            "mutex": 0.000208,
+            "sqlite_begin": 29783.508625000002
+          },
+          "importer_authorization_wait_ms": 30002.049208,
+          "import_total_ms": 30011.63125
+        },
+        {
+          "repeat": 3,
+          "source_line": 73,
+          "total_ms": 30057.231666,
+          "phases_ms": {
+            "connection_pool": 0.004083,
+            "mutex": 30056.522292,
+            "sqlite_begin": 0.117958
+          },
+          "importer_authorization_wait_ms": 30002.049125,
+          "import_total_ms": 30009.228333
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            30049.954292,
+            30044.498583,
+            30057.231666
+          ],
+          "median": 30049.954292,
+          "max": 30057.231666
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            30002.048875,
+            30002.049208,
+            30002.049125
+          ],
+          "median": 30002.049125,
+          "max": 30002.049208
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            30010.767583,
+            30011.63125,
+            30009.228333
+          ],
+          "median": 30010.767583,
+          "max": 30011.63125
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            30049.386833,
+            0.000208,
+            30056.522292
+          ],
+          "median": 30049.386833,
+          "max": 30056.522292
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.00175,
+            0.001584,
+            0.004083
+          ],
+          "median": 0.00175,
+          "max": 0.004083
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.07325,
+            29783.508625000002,
+            0.117958
+          ],
+          "median": 0.117958,
+          "max": 29783.508625000002
+        }
+      }
+    },
+    {
+      "topology": "shared_sqlite",
+      "authorization_stage": 2,
+      "delay_ms": 30000,
+      "operation": "work_context",
+      "samples": [
+        {
+          "repeat": 1,
+          "source_line": 69,
+          "total_ms": 30048.6955,
+          "phases_ms": {
+            "connection_pool": 0.002041,
+            "mutex": 0.000417,
+            "sqlite_begin": 29787.690876
+          },
+          "importer_authorization_wait_ms": 30002.048875,
+          "import_total_ms": 30010.767583
+        },
+        {
+          "repeat": 2,
+          "source_line": 71,
+          "total_ms": 30045.1725,
+          "phases_ms": {
+            "connection_pool": 0.004541,
+            "mutex": 30044.498125,
+            "sqlite_begin": 0.10525
+          },
+          "importer_authorization_wait_ms": 30002.049208,
+          "import_total_ms": 30011.63125
+        },
+        {
+          "repeat": 3,
+          "source_line": 73,
+          "total_ms": 30056.528083,
+          "phases_ms": {
+            "connection_pool": 0.001709,
+            "mutex": 0.00025,
+            "sqlite_begin": 29795.583374
+          },
+          "importer_authorization_wait_ms": 30002.049125,
+          "import_total_ms": 30009.228333
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            30048.6955,
+            30045.1725,
+            30056.528083
+          ],
+          "median": 30048.6955,
+          "max": 30056.528083
+        },
+        "importer_authorization_wait_ms": {
+          "n": 3,
+          "raw": [
+            30002.048875,
+            30002.049208,
+            30002.049125
+          ],
+          "median": 30002.049125,
+          "max": 30002.049208
+        },
+        "import_total_ms": {
+          "n": 3,
+          "raw": [
+            30010.767583,
+            30011.63125,
+            30009.228333
+          ],
+          "median": 30010.767583,
+          "max": 30011.63125
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            0.000417,
+            30044.498125,
+            0.00025
+          ],
+          "median": 0.000417,
+          "max": 30044.498125
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.002041,
+            0.004541,
+            0.001709
+          ],
+          "median": 0.002041,
+          "max": 0.004541
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            29787.690876,
+            0.10525,
+            29795.583374
+          ],
+          "median": 29787.690876,
+          "max": 29795.583374
+        }
+      }
+    }
+  ],
+  "history": [
+    {
+      "synthetic_works": 100,
+      "payload_bytes": 56312,
+      "sqlite_bytes": 61440,
+      "samples": [
+        {
+          "kind": "history",
+          "payload_bytes": 56312,
+          "phases_ms": {
+            "connection_pool": 0.000959,
+            "mutex": 0.000292,
+            "sqlite_begin": 0.019542
+          },
+          "repeat": 1,
+          "sqlite_bytes": 61440,
+          "synthetic_works": 100,
+          "total_ms": 2.239667,
+          "source_line": 187
+        },
+        {
+          "kind": "history",
+          "payload_bytes": 56312,
+          "phases_ms": {
+            "connection_pool": 0.001125,
+            "mutex": 0.000166,
+            "sqlite_begin": 0.02275
+          },
+          "repeat": 2,
+          "sqlite_bytes": 61440,
+          "synthetic_works": 100,
+          "total_ms": 1.614583,
+          "source_line": 188
+        },
+        {
+          "kind": "history",
+          "payload_bytes": 56312,
+          "phases_ms": {
+            "connection_pool": 0.00075,
+            "mutex": 8.3e-05,
+            "sqlite_begin": 0.01825
+          },
+          "repeat": 3,
+          "sqlite_bytes": 61440,
+          "synthetic_works": 100,
+          "total_ms": 1.452875,
+          "source_line": 189
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            2.239667,
+            1.614583,
+            1.452875
+          ],
+          "median": 1.614583,
+          "max": 2.239667
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            0.000292,
+            0.000166,
+            8.3e-05
+          ],
+          "median": 0.000166,
+          "max": 0.000292
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.000959,
+            0.001125,
+            0.00075
+          ],
+          "median": 0.000959,
+          "max": 0.001125
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.019542,
+            0.02275,
+            0.01825
+          ],
+          "median": 0.019542,
+          "max": 0.02275
+        }
+      }
+    },
+    {
+      "synthetic_works": 1000,
+      "payload_bytes": 569412,
+      "sqlite_bytes": 577536,
+      "samples": [
+        {
+          "kind": "history",
+          "payload_bytes": 569412,
+          "phases_ms": {
+            "connection_pool": 0.000875,
+            "mutex": 0.000208,
+            "sqlite_begin": 0.012875
+          },
+          "repeat": 1,
+          "sqlite_bytes": 577536,
+          "synthetic_works": 1000,
+          "total_ms": 10.648958,
+          "source_line": 191
+        },
+        {
+          "kind": "history",
+          "payload_bytes": 569412,
+          "phases_ms": {
+            "connection_pool": 0.000458,
+            "mutex": 0.000125,
+            "sqlite_begin": 0.012
+          },
+          "repeat": 2,
+          "sqlite_bytes": 577536,
+          "synthetic_works": 1000,
+          "total_ms": 9.401917,
+          "source_line": 192
+        },
+        {
+          "kind": "history",
+          "payload_bytes": 569412,
+          "phases_ms": {
+            "connection_pool": 0.000208,
+            "mutex": 4.2e-05,
+            "sqlite_begin": 0.00875
+          },
+          "repeat": 3,
+          "sqlite_bytes": 577536,
+          "synthetic_works": 1000,
+          "total_ms": 8.062625,
+          "source_line": 193
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            10.648958,
+            9.401917,
+            8.062625
+          ],
+          "median": 9.401917,
+          "max": 10.648958
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            0.000208,
+            0.000125,
+            4.2e-05
+          ],
+          "median": 0.000125,
+          "max": 0.000208
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.000875,
+            0.000458,
+            0.000208
+          ],
+          "median": 0.000458,
+          "max": 0.000875
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.012875,
+            0.012,
+            0.00875
+          ],
+          "median": 0.012,
+          "max": 0.012875
+        }
+      }
+    },
+    {
+      "synthetic_works": 10000,
+      "payload_bytes": 5763412,
+      "sqlite_bytes": 5775360,
+      "samples": [
+        {
+          "kind": "history",
+          "payload_bytes": 5763412,
+          "phases_ms": {
+            "connection_pool": 0.000709,
+            "mutex": 0.000334,
+            "sqlite_begin": 0.006334
+          },
+          "repeat": 1,
+          "sqlite_bytes": 5775360,
+          "synthetic_works": 10000,
+          "total_ms": 49.304667,
+          "source_line": 195
+        },
+        {
+          "kind": "history",
+          "payload_bytes": 5763412,
+          "phases_ms": {
+            "connection_pool": 0.000958,
+            "mutex": 0.000166,
+            "sqlite_begin": 0.011833
+          },
+          "repeat": 2,
+          "sqlite_bytes": 5775360,
+          "synthetic_works": 10000,
+          "total_ms": 49.788333,
+          "source_line": 196
+        },
+        {
+          "kind": "history",
+          "payload_bytes": 5763412,
+          "phases_ms": {
+            "connection_pool": 0.001041,
+            "mutex": 0.000167,
+            "sqlite_begin": 0.012125
+          },
+          "repeat": 3,
+          "sqlite_bytes": 5775360,
+          "synthetic_works": 10000,
+          "total_ms": 47.807667,
+          "source_line": 197
+        }
+      ],
+      "statistics": {
+        "total_ms": {
+          "n": 3,
+          "raw": [
+            49.304667,
+            49.788333,
+            47.807667
+          ],
+          "median": 49.304667,
+          "max": 49.788333
+        },
+        "mutex_ms": {
+          "n": 3,
+          "raw": [
+            0.000334,
+            0.000166,
+            0.000167
+          ],
+          "median": 0.000167,
+          "max": 0.000334
+        },
+        "connection_pool_ms": {
+          "n": 3,
+          "raw": [
+            0.000709,
+            0.000958,
+            0.001041
+          ],
+          "median": 0.000958,
+          "max": 0.001041
+        },
+        "sqlite_begin_ms": {
+          "n": 3,
+          "raw": [
+            0.006334,
+            0.011833,
+            0.012125
+          ],
+          "median": 0.011833,
+          "max": 0.012125
+        }
+      }
+    }
+  ],
+  "cancellation_run03": [
+    {
+      "authorization_calls": 2,
+      "authorization_stage": 1,
+      "authorization_wait_ms": 1501.096291,
+      "cancel": true,
+      "delay_ms": 1500,
+      "import_total_ms": 1510.986667,
+      "kind": "contention",
+      "post_wait_reusable": true,
+      "reads": [
+        {
+          "operation": "message_lookup",
+          "total_ms": 1510.700583,
+          "phases_ms": {
+            "connection_pool": 0.004916,
+            "mutex": 1510.561417
+          },
+          "error": "context deadline exceeded",
+          "cancel_to_return_ms": 1410.711458,
+          "cancellation_outcome": "deadline_observed"
+        },
+        {
+          "operation": "work_context",
+          "total_ms": 1510.818791,
+          "phases_ms": {
+            "connection_pool": 0.001209,
+            "mutex": 1510.691416
+          },
+          "error": "context deadline exceeded",
+          "cancel_to_return_ms": 1410.830625,
+          "cancellation_outcome": "deadline_observed"
+        },
+        {
+          "operation": "file_status",
+          "total_ms": 1510.920208,
+          "phases_ms": {
+            "connection_pool": 0.000834,
+            "mutex": 1510.800458
+          },
+          "error": "context deadline exceeded",
+          "cancel_to_return_ms": 1410.983,
+          "cancellation_outcome": "deadline_observed"
+        }
+      ],
+      "repeat": 1,
+      "source_sends": 1,
+      "topology": "same_store",
+      "source_line": 5
+    },
+    {
+      "authorization_calls": 2,
+      "authorization_stage": 2,
+      "authorization_wait_ms": 1502.062083,
+      "cancel": true,
+      "delay_ms": 1500,
+      "import_total_ms": 1511.823666,
+      "kind": "contention",
+      "post_wait_reusable": true,
+      "reads": [
+        {
+          "operation": "message_lookup",
+          "total_ms": 1510.352292,
+          "phases_ms": {
+            "connection_pool": 0.004791,
+            "mutex": 1510.159042
+          },
+          "error": "context deadline exceeded",
+          "cancel_to_return_ms": 1410.368333,
+          "cancellation_outcome": "deadline_observed"
+        },
+        {
+          "operation": "work_context",
+          "total_ms": 1510.490333,
+          "phases_ms": {
+            "connection_pool": 0.001208,
+            "mutex": 1510.361958
+          },
+          "error": "context deadline exceeded",
+          "cancel_to_return_ms": 1410.503542,
+          "cancellation_outcome": "deadline_observed"
+        },
+        {
+          "operation": "file_status",
+          "total_ms": 1510.609084,
+          "phases_ms": {
+            "connection_pool": 0.000958,
+            "mutex": 1510.484042
+          },
+          "error": "context deadline exceeded",
+          "cancel_to_return_ms": 1410.640042,
+          "cancellation_outcome": "deadline_observed"
+        }
+      ],
+      "repeat": 1,
+      "source_sends": 1,
+      "topology": "same_store",
+      "source_line": 7
+    },
+    {
+      "authorization_calls": 2,
+      "authorization_stage": 1,
+      "authorization_wait_ms": 1500.337042,
+      "cancel": true,
+      "delay_ms": 1500,
+      "import_total_ms": 1510.214041,
+      "kind": "contention",
+      "post_wait_reusable": true,
+      "reads": [
+        {
+          "operation": "message_lookup",
+          "total_ms": 1571.584375,
+          "phases_ms": {
+            "connection_pool": 0.001291,
+            "mutex": 0.00025,
+            "sqlite_begin": 1571.339
+          },
+          "error": "context deadline exceeded",
+          "cancel_to_return_ms": 1471.605625,
+          "cancellation_outcome": "deadline_observed"
+        },
+        {
+          "operation": "work_context",
+          "total_ms": 1571.784667,
+          "phases_ms": {
+            "connection_pool": 0.002417,
+            "mutex": 1571.597542
+          },
+          "error": "context deadline exceeded",
+          "cancel_to_return_ms": 1471.80025,
+          "cancellation_outcome": "deadline_observed"
+        },
+        {
+          "operation": "file_status",
+          "total_ms": 1571.909167,
+          "phases_ms": {
+            "connection_pool": 0.001083,
+            "mutex": 1571.783125
+          },
+          "error": "context deadline exceeded",
+          "cancel_to_return_ms": 1471.934792,
+          "cancellation_outcome": "deadline_observed"
+        }
+      ],
+      "repeat": 1,
+      "source_sends": 1,
+      "topology": "shared_sqlite",
+      "source_line": 9
+    },
+    {
+      "authorization_calls": 2,
+      "authorization_stage": 2,
+      "authorization_wait_ms": 1502.042375,
+      "cancel": true,
+      "delay_ms": 1500,
+      "import_total_ms": 1510.519167,
+      "kind": "contention",
+      "post_wait_reusable": true,
+      "reads": [
+        {
+          "operation": "message_lookup",
+          "total_ms": 1573.096958,
+          "phases_ms": {
+            "connection_pool": 0.002541,
+            "mutex": 0.00025,
+            "sqlite_begin": 1572.819167
+          },
+          "error": "context deadline exceeded",
+          "cancel_to_return_ms": 1473.122667,
+          "cancellation_outcome": "deadline_observed"
+        },
+        {
+          "operation": "work_context",
+          "total_ms": 1573.280708,
+          "phases_ms": {
+            "connection_pool": 0.003708,
+            "mutex": 1573.113625
+          },
+          "error": "context deadline exceeded",
+          "cancel_to_return_ms": 1473.298333,
+          "cancellation_outcome": "deadline_observed"
+        },
+        {
+          "operation": "file_status",
+          "total_ms": 1573.41025,
+          "phases_ms": {
+            "connection_pool": 0.000917,
+            "mutex": 1573.281125
+          },
+          "error": "context deadline exceeded",
+          "cancel_to_return_ms": 1473.434542,
+          "cancellation_outcome": "deadline_observed"
+        }
+      ],
+      "repeat": 1,
+      "source_sends": 1,
+      "topology": "shared_sqlite",
+      "source_line": 11
+    },
+    {
+      "authorization_calls": 2,
+      "authorization_stage": 1,
+      "authorization_wait_ms": 1502.010291,
+      "cancel": true,
+      "delay_ms": 1500,
+      "import_total_ms": 1511.013875,
+      "kind": "contention",
+      "post_wait_reusable": true,
+      "reads": [
+        {
+          "operation": "work_context",
+          "total_ms": 0.486667,
+          "phases_ms": {
+            "connection_pool": 0.001542,
+            "mutex": 0.000208,
+            "sqlite_begin": 0.052583
+          },
+          "cancellation_outcome": "completed_before_deadline"
+        },
+        {
+          "operation": "file_status",
+          "total_ms": 0.832625,
+          "phases_ms": {
+            "connection_pool": 0.001709,
+            "mutex": 0.47125,
+            "sqlite_begin": 0.039875
+          },
+          "cancellation_outcome": "completed_before_deadline"
+        },
+        {
+          "operation": "message_lookup",
+          "total_ms": 1.103417,
+          "phases_ms": {
+            "connection_pool": 0.000708,
+            "mutex": 0.828917,
+            "sqlite_begin": 0.036834
+          },
+          "cancellation_outcome": "completed_before_deadline"
+        }
+      ],
+      "repeat": 1,
+      "source_sends": 1,
+      "topology": "independent_sqlite",
+      "source_line": 13
+    },
+    {
+      "authorization_calls": 2,
+      "authorization_stage": 2,
+      "authorization_wait_ms": 1502.083208,
+      "cancel": true,
+      "delay_ms": 1500,
+      "import_total_ms": 1511.449917,
+      "kind": "contention",
+      "post_wait_reusable": true,
+      "reads": [
+        {
+          "operation": "message_lookup",
+          "total_ms": 0.340583,
+          "phases_ms": {
+            "connection_pool": 0.002333,
+            "mutex": 0.000375,
+            "sqlite_begin": 0.053458
+          },
+          "cancellation_outcome": "completed_before_deadline"
+        },
+        {
+          "operation": "file_status",
+          "total_ms": 0.685459,
+          "phases_ms": {
+            "connection_pool": 0.001333,
+            "mutex": 0.3395,
+            "sqlite_begin": 0.044708
+          },
+          "cancellation_outcome": "completed_before_deadline"
+        },
+        {
+          "operation": "work_context",
+          "total_ms": 0.963833,
+          "phases_ms": {
+            "connection_pool": 0.001083,
+            "mutex": 0.680166,
+            "sqlite_begin": 0.036542
+          },
+          "cancellation_outcome": "completed_before_deadline"
+        }
+      ],
+      "repeat": 1,
+      "source_sends": 1,
+      "topology": "independent_sqlite",
+      "source_line": 15
+    }
+  ],
+  "authorization_cancellation_run03": [
+    {
+      "authorization_calls": 1,
+      "authorization_stage": 1,
+      "cancel_to_return_ms": 0.03025,
+      "error": "file_host_unavailable\ncontext canceled",
+      "kind": "authorization_cancellation",
+      "post_wait_reusable": true,
+      "source_sends": 1,
+      "source_line": 25
+    },
+    {
+      "authorization_calls": 2,
+      "authorization_stage": 2,
+      "cancel_to_return_ms": 0.017833,
+      "error": "file_host_unavailable\ncontext canceled",
+      "kind": "authorization_cancellation",
+      "post_wait_reusable": true,
+      "source_sends": 1,
+      "source_line": 27
+    }
+  ],
+  "measurement_limits": [
+    "sqlite_begin includes SQL execution and SQLite lock waiting; it is not pure database lock time. The 50ms busy retry backoff is only included in total.",
+    "The three concurrent readers share their reader Store and queue behind one another. Mutex duration cannot all be attributed to importer authorization.",
+    "Authorization delay is measured in the importer callback, not as a directly executed phase of each read. Repeated authorization values per operation refer to the same run and must not be summed.",
+    "A read total begins after the start barrier; importer total begins before authorization-entry/barrier preparation. Residual timings are not decomposed.",
+    "Independent SQLite completed before the 100ms deadline: six reads are controls, not successful cancellations. run02 misleading cancel=true rows are retained separately.",
+    "History samples are synthetic empty work metadata with unique roots/session IDs and one message, passing validState; directories/artifacts are not created for clones. Only FindByMessage processing is timed, not end-to-end host work or months of traffic.",
+    "Three samples support raw values, median and maximum only; no P95 or service promise inferred.",
+    "Build03 pins the main experiment harness but does not include a hash of validation_commit_test.go. The current commit-test hash is captured here; exact historical build-source binding should be supplied in delivery provenance."
+  ],
+  "evidence_sha256": {
+    "ledger-run-01.log": "1461bc6fcb94db61d5528ff2c182482d274b5ab6756d124e523ec222578d16be",
+    "ledger-run-02.log": "8d4f68c438a45f812bfa67ae36d7450c1cdf4b2b94cfa4c1b58f6183c0f5353e",
+    "ledger-cancellation-03.log": "1c2a9663186686d6a46f398660d91d667bcd207aa5a2425ab1f567dc5b66d4b7",
+    "mac-file-tests-02.log": "dc4221c0014e06f8b1586ef73548e9078e8aafbe63dc87b5cb939e72fab57672",
+    "mac-file-tests-03.log": "32e07eadfa1d671805e1c8100de7bbd1a33f56784a694ee9e8dfd660e43abd11"
+  },
+  "source_base": "f28d9f479d55b70e08bdfc4ba36caa49e46ec7a9"
+}
