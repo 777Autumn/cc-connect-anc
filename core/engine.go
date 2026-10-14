@@ -3311,7 +3311,7 @@ func (e *Engine) queueMessageForBusySession(p Platform, msg *Message, interactiv
 	// current turn, causing the event loop to hang waiting for a second
 	// EventResult that never arrives. Instead, the event loop sends the
 	// message after the current turn's EventResult is received.
-	if !(msg.fileOnlyUpload && msg.fileTurn != nil && len(msg.fileTurn.Inputs) > 0) && e.isStaleUserMessageLocked(state, msg.UserMessageTimeMs) {
+	if (!msg.fileOnlyUpload || msg.fileTurn == nil || len(msg.fileTurn.Inputs) == 0) && e.isStaleUserMessageLocked(state, msg.UserMessageTimeMs) {
 		snap := userMessageWatermarkSnapshotLocked(state)
 		e.logStaleUserMessageDropped("reject_before_queue", msg, interactiveKey, snap)
 		return true
