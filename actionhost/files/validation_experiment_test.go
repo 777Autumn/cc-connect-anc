@@ -26,6 +26,19 @@ func validationObserve(ctx context.Context, phase string, start time.Time) {
 		values[phase] += float64(time.Since(start)) / float64(time.Millisecond)
 	}
 }
+
+func TestValidationTimingAccumulatesOnlySelectedContext(t *testing.T) {
+	values := ledgerTimings{}
+	ctx := context.WithValue(context.Background(), ledgerTimingKey{}, values)
+	start := time.Now().Add(-time.Second)
+	validationObserve(ctx, "mutex", start)
+	first := values["mutex"]
+	validationObserve(ctx, "mutex", start)
+	validationObserve(context.Background(), "sqlite_begin", start)
+	if first < 1000 || values["mutex"] < first+1000 || len(values) != 1 {
+		t.Fatal("timing accumulation or context isolation", values)
+	}
+}
 func experimentRecord(t *testing.T, value any) {
 	t.Helper()
 	raw, err := json.Marshal(value)

@@ -71,7 +71,11 @@ func TestValidationUncertainCommitNeverReplaysCallback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer fresh.Close()
+	t.Cleanup(func() {
+		if err := fresh.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	if err := fresh.change(context.Background(), func(st *state) error {
 		if !st.Works[f.context.WorkID].Messages["committed-once"] {
 			return errors.New("real commit missing")
