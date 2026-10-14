@@ -128,7 +128,7 @@ func measureLedgerReads(t *testing.T, ctx context.Context, reader *Host, readerF
 				if errors.Is(err, context.DeadlineExceeded) {
 					row.CancellationReturnMS = &elapsed
 					row.CancellationOutcome = "deadline_observed"
-				} else if topology != "independent_sqlite" || err != nil || elapsed >= 0 {
+				} else if err != nil || elapsed >= 0 {
 					t.Error("cancellation outcome", err)
 				} else {
 					row.CancellationOutcome = "completed_before_deadline"

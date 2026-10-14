@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/chenhg5/cc-connect/core"
@@ -33,7 +32,7 @@ type Store struct {
 	db     *sql.DB
 	path   string
 	file   os.FileInfo
-	mu     sync.Mutex
+	mu     chan struct{}
 	failed bool
 }
 
@@ -83,8 +82,8 @@ func Open(path string) (*Store, error) {
 		return nil, ErrUnavailable
 	}
 	db.SetMaxOpenConns(1)
-	s := &Store{db: db, path: path, file: info}
-	if _, err = db.Exec(`PRAGMA busy_timeout=5000; PRAGMA synchronous=FULL;`); err == nil {
+	s := &Store{db: db, path: path, file: info, mu: make(chan struct{}, 1)}
+	if _, err = db.Exec(`PRAGMA busy_timeout=50; PRAGMA synchronous=FULL;`); err == nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		err = s.change(ctx, func(st *state) error {
@@ -124,11 +123,18 @@ func databaseFile(path string) (os.FileInfo, error) {
 	return info, nil
 }
 
-// shortcut: one document serializes this small tester cohort, including import
-// authorization; split transactions when measured queue latency requires it.
+// shortcut: one JSON document still serializes local validation and file I/O;
+// split the stored state only if measured local transaction latency requires it.
 func (s *Store) change(ctx context.Context, fn func(*state) error) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	select {
+	case s.mu <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	defer func() { <-s.mu }()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	info, err := databaseFile(s.path)
 	if s.failed || err != nil || !os.SameFile(s.file, info) {
 		s.failed = true
@@ -149,7 +155,8 @@ func (s *Store) change(ctx context.Context, fn func(*state) error) error {
 			return s.storageError(ctx)
 		}
 		// No callback ran: wait for another project's transaction, never replay
-		// business work or retry an uncertain commit. SQLite itself waits up to 5s.
+		// business work or retry an uncertain commit. Bound SQLite's own wait to
+		// 50ms so cancellation remains observable before the next attempt.
 		timer := time.NewTimer(50 * time.Millisecond)
 		select {
 		case <-ctx.Done():

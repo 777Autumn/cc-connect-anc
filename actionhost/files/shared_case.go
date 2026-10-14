@@ -17,10 +17,28 @@ func (h *Host) importCaseArtifact(ctx context.Context, p core.ActionPrincipal, w
 		if err != nil {
 			return err
 		}
+		if !w.Messages[p.MessageID] {
+			return ErrScope
+		}
+		_, err = sharedWork(st, p, receipt)
+		return err
+	})
+	if err != nil {
+		return fileRefusal(err)
+	}
+	grant, err := h.authorizeProject(ctx, p, workID, receipt, true)
+	if err != nil {
+		return fileRefusal(err)
+	}
+	err = h.store.change(ctx, func(st *state) error {
+		w, err := owned(st, p, workID)
+		if err != nil {
+			return err
+		}
 		if !w.Messages[p.MessageID] || (h.projectAccess == nil && (w.GroupRealm == "" || w.GroupRealm != h.groupRealm)) {
 			return ErrScope
 		}
-		source, artifact, err := h.sharedArtifact(ctx, st, p, receipt, workID, true)
+		source, artifact, err := h.sharedArtifact(st, p, receipt, workID, true, grant)
 		if err != nil {
 			return err
 		}

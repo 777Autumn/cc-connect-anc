@@ -107,9 +107,8 @@ func TestSharedLedgerPublicationContentionRecoversSameStore(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f, other, otherHost, release, done, calls := blockedPublication(t, tc.call)
 			observePublicationWriter(t, f.database)
-			// The callback-entry handshake establishes the actual lock window.
-			// Keep the production 5000 ms busy timeout and release just after it;
-			// no success depends on guessing when the import goroutine starts.
+			// The callback-entry handshake establishes the authorization window.
+			// Retain the historical 5.5s condition while reads now finish inside it.
 			timer := time.AfterFunc(5500*time.Millisecond, release)
 			defer timer.Stop()
 			start := time.Now()
@@ -138,19 +137,57 @@ func TestSharedLedgerPublicationContentionRecoversSameStore(t *testing.T) {
 }
 
 func TestSharedLedgerWaitCancellationDoesNotPoisonStore(t *testing.T) {
-	f, other, otherHost, release, done, calls := blockedPublication(t, 1)
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-	_, err := otherHost.FindByMessage(ctx, f.binding.Principal, f.binding.Principal.MessageID)
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Errorf("waiting request did not retain its deadline: %v", err)
-	}
-	release()
-	if err := <-done; err != nil {
-		t.Fatal(err)
-	}
-	ref, err := otherHost.FindByMessage(context.Background(), f.binding.Principal, f.binding.Principal.MessageID)
-	if err != nil || ref.WorkID != f.context.WorkID || other.failed || calls.Load() != 2 {
-		t.Errorf("cancelled waiter changed durable state or authorization count: err=%v failed=%v calls=%d", err, other.failed, calls.Load())
+	for _, shared := range []bool{false, true} {
+		t.Run(fmt.Sprint(shared), func(t *testing.T) {
+			f := newFixture(t, nil)
+			other, otherHost := f.store, f.host
+			if shared {
+				var err error
+				other, err = Open(f.database)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer func() { _ = other.Close() }()
+				otherHost, err = New(other, f.snapshots, f.host.send)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer func() { _ = otherHost.Close() }()
+			}
+			entered, release, done := make(chan struct{}), make(chan struct{}), make(chan error, 1)
+			go func() {
+				done <- f.store.change(context.Background(), func(*state) error { close(entered); <-release; return nil })
+			}()
+			<-entered
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			defer cancel()
+			read := make(chan error, 1)
+			go func() {
+				_, err := otherHost.FindByMessage(ctx, f.binding.Principal, f.binding.Principal.MessageID)
+				read <- err
+			}()
+			var err error
+			select {
+			case err = <-read:
+			case <-time.After(500 * time.Millisecond):
+				t.Error("cancelled lock waiter did not return within 400ms of cancellation")
+				close(release)
+				release = nil
+				err = <-read
+			}
+			if !errors.Is(err, context.DeadlineExceeded) {
+				t.Errorf("waiting request did not retain its deadline: %v", err)
+			}
+			if release != nil {
+				close(release)
+			}
+			if err := <-done; err != nil {
+				t.Fatal(err)
+			}
+			ref, err := otherHost.FindByMessage(context.Background(), f.binding.Principal, f.binding.Principal.MessageID)
+			if err != nil || ref.WorkID != f.context.WorkID || other.failed {
+				t.Errorf("cancelled waiter changed durable state: err=%v failed=%v", err, other.failed)
+			}
+		})
 	}
 }
