@@ -292,6 +292,36 @@ The paired Linux test `TestCUJ_CASEIPC_SelectedPrivateFilePublicationAndRealImpo
 uses the real file host, snapshots and CRM fixture (`MYANC_SPIKE_CRM_ROOT`),
 including actual recipient input bytes, privacy and duplicate-confirmation checks.
 
+## Host timing evidence
+
+The action-tool handler logs one `action tool timing` record after each decoded,
+authenticated call. A host-generated `trace_id` joins its connection guard and
+CRM helper processes; message, command and helper subcommand are SHA-256 hashes.
+No argument, response, actor name, token or native error text enters these records.
+The helper's stdout JSON and authorization checks are unchanged.
+
+The handler reports nanoseconds for preflight, project-lock acquisition,
+connection guard and host dispatch, plus total handler time. The host sets
+`MYANC_CRM_TIMING=1`; the companion Python helper emits one `MYANC_TIMING` stderr
+line with version 1, `total_ns` and fixed numeric `phases`. The adapter accepts
+only the bounded numeric schema and logs `measurement_available=false` when it
+is absent, invalid or exceeds the 8 KiB stderr bound. Timing never triggers a
+retry or changes a successful/failed subprocess result.
+
+Python phases count and time connection CLI calls, resource CLI calls, connection
+database setup and per-connection lock acquisition. CLI intervals include process
+startup and any native networking; database setup includes its schema/commit
+work. Remaining SQL execution, native network-only time and model-only time are
+not separately measured. Nested helper/guard/handler totals must not be added to
+their included phases.
+
+Queued-message timing runs from queue append to dequeue, before file activation.
+`turn_duration_ns` includes startup, model and tools; it is not pure inference
+time. `final reply timing` covers the final response handler and records whether
+it returned and whether the answer was silent. A handler return is not proof of
+end-user delivery or read. Existing native event traces remain necessary for the
+model/tool sequence and platform receipts for delivery claims.
+
 ## State and rollback
 
 No ActionHost state is authoritative inside cc-connect. Every decision is

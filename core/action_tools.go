@@ -6,7 +6,9 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -30,6 +32,7 @@ func (e *Engine) ActionToolHandler() http.Handler {
 func ActionToolsHandler(engines ...*Engine) http.Handler {
 	engines = append([]*Engine(nil), engines...)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		started := time.Now()
 		if r.Method != http.MethodPost || r.URL.Path != "/tool" || r.URL.RawQuery != "" {
 			writeActionToolResult(w, http.StatusNotFound, map[string]any{"status": "blocked", "code": "unsupported_route"})
 			return
@@ -68,10 +71,24 @@ func ActionToolsHandler(engines ...*Engine) http.Handler {
 			return
 		}
 		_, connectionWorkID := e.fileWorkForToken(token)
+		traceID := fmt.Sprintf("%x-%x", started.UnixNano(), actionToolTimingSequence.Add(1))
+		r = r.WithContext(context.WithValue(r.Context(), actionToolTimingKey{}, traceID))
+		preflight := time.Since(started)
+		var lockWait, guardTime, hostTime time.Duration
+		var guardAllowed, hostReturned bool
+		defer func() {
+			slog.Info("action tool timing", "trace_id", traceID,
+				"message_sha256", timingMessageHash(principal.MessageID), "command_sha256", timingMessageHash(command),
+				"total_ns", time.Since(started).Nanoseconds(), "preflight_ns", preflight.Nanoseconds(),
+				"project_lock_wait_ns", lockWait.Nanoseconds(), "connection_guard_ns", guardTime.Nanoseconds(),
+				"host_ns", hostTime.Nanoseconds(), "guard_allowed", guardAllowed, "host_returned", hostReturned)
+		}()
 		if e.connectionHost != nil {
 			// ponytail: serialize tools per project for the small pilot; a per-work
 			// lock can replace this if parallel office tasks become a bottleneck.
+			lockStarted := time.Now()
 			e.connectionToolsMu.Lock()
+			lockWait = time.Since(lockStarted)
 			defer e.connectionToolsMu.Unlock()
 			if _, _, _, valid := e.actionToolSession(token); !valid {
 				writeActionToolResult(w, http.StatusUnauthorized, map[string]any{"status": "blocked", "code": "invalid_session"})
@@ -89,14 +106,18 @@ func ActionToolsHandler(engines ...*Engine) http.Handler {
 			}
 		}
 		connectionCtx, connectionCancel := context.WithTimeout(r.Context(), 30*time.Second)
+		guardStarted := time.Now()
 		connectionErr := e.guardConnectionWork(connectionCtx, command, principal, token, connectionWorkID, input)
+		guardTime, guardAllowed = time.Since(guardStarted), connectionErr == nil
 		connectionCancel()
 		if connectionErr != nil {
 			writeActionToolResult(w, http.StatusForbidden, map[string]any{"status": "blocked", "code": "personal_connection_or_scope_unavailable"})
 			return
 		}
 		if isFileWorkCommand(command) {
+			hostStarted := time.Now()
 			e.serveFileWorkTool(w, r, token, principal, command, input)
+			hostTime, hostReturned = time.Since(hostStarted), true
 			return
 		}
 		e.actionMu.RLock()
@@ -138,7 +159,9 @@ func ActionToolsHandler(engines ...*Engine) http.Handler {
 				return
 			}
 		}
+		hostStarted := time.Now()
 		result, approval, err := tools.Tool(ctx, command, input, principal, token, e.i18n.CurrentLang())
+		hostTime, hostReturned = time.Since(hostStarted), true
 		if err == nil && command == "handoff" && result["status"] == "found" {
 			err = e.importHandoffFiles(ctx, token, principal, result)
 		}

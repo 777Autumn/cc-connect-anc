@@ -482,9 +482,14 @@ func (a *Adapter) call(ctx context.Context, subcommand string, input any, action
 
 func runCommand(ctx context.Context, command, subcommand string, input []byte, env []string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, command, subcommand)
-	cmd.Env = env
+	cmd.Env = append(withoutEnv(env, "MYANC_CRM_TIMING"), "MYANC_CRM_TIMING=1")
 	cmd.Stdin = bytes.NewReader(input)
-	return cmd.Output()
+	var stderr timingStderr
+	cmd.Stderr = &stderr
+	started := time.Now()
+	out, err := cmd.Output()
+	logHelperTiming(ctx, subcommand, &stderr, time.Since(started), err == nil)
+	return out, err
 }
 
 func withoutEnv(env []string, keys ...string) []string {
