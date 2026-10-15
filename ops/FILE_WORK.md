@@ -25,7 +25,7 @@ are retained with hashes. Output files must be in this work's `outputs`, regular
 single-link, owned by the configured model UID, and at most 20 MiB (100 MiB expanded).
 One checked descriptor supplies the immutable snapshot and bytes actually sent.
 
-Only `work-context`, `file-deliver`, `file-status` are added to the existing `/tool`
+Only `work-context`, `file-read`, `file-deliver`, `file-status` are added to the existing `/tool`
 handler. They take the live host session token; identity, destination and work
 authority are never caller-selected. The Unix endpoint has no management routes.
 Native mode reuses the existing fixed `127.0.0.1:18743/tool` listener through
@@ -42,6 +42,28 @@ including renamed copies. Restart converts incomplete submissions to unknown.
 Known input/format/scope/version refusals return `blocked` with a safe code;
 post-send journal failures remain uncertain and must not invite resubmission.
 An API acceptance does not prove an employee received or opened the file.
+
+Office/PDF delivery requires a successful `file-read` for the same work, relative
+output path and SHA-256. The host reads actual bytes under the existing ownership
+and format checks, supplies content and records its digest in the protected work
+ledger. DOCX content parts include body/tables, headers/footers and notes; XLSX
+parts retain cell references, formulas and caches. PDF uses the fixed validator's
+`--read-content` mode under its existing resource limits and returns every page's
+text layer, which may be empty for image-only pages. Images and visual layout
+still need the existing page inspection. The bounded content response must fit
+512 KiB; failures/oversize/cancellation do not produce a successful record. Office
+XML parts declared with unsupported non-XML suffixes are refused, not silently
+omitted; regenerate with the existing standard Office path before retrying. Parsing
+runs outside the store transaction; bytes are rechecked before the record commits.
+Caller inspection declarations and writable local JSON never authorize delivery.
+Reads prove content supplied, not model understanding or factual correctness.
+Accepted/unknown delivery reconciliation retains its existing ordering and never
+replays a send just because an old delivery predates content-read evidence.
+
+Successful reads advance the existing ledger to schema 6, retaining old entries.
+Versions 1–5 remain readable; old binaries reject schema 6. Rollback must keep a
+compatible file host or disable file delivery, never restore or downgrade a ledger.
+The content digest is copied into new Office/PDF delivery receipts for later audit.
 
 Banquet materials use CRM authorization on both publication import and pending
 input activation. `handoff` defaults to `purpose: "current"`; `revision` is an

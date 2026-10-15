@@ -52,6 +52,7 @@ type FileWorkArtifact struct {
 	Name           string `json:"name"`
 	SHA256         string `json:"sha256"`
 	MessageReceipt string `json:"message_receipt,omitempty"`
+	ContentSHA256  string `json:"content_sha256,omitempty"`
 }
 
 type FileWorkContext struct {
@@ -62,7 +63,15 @@ type FileWorkContext struct {
 	OutputDir      string             `json:"output_dir"`
 	LatestVersion  int                `json:"latest_version"`
 	Artifacts      []FileWorkArtifact `json:"artifacts"`
+	ContentReads   []FileContentRead  `json:"content_reads"`
 	IncomingInputs []FileWorkInput    `json:"-"` // Host intake receipt, never model-visible pending materials.
+}
+
+// FileContentRead records content supplied by the host, not caller inspection claims.
+type FileContentRead struct {
+	Path          string `json:"path"`
+	SHA256        string `json:"sha256"`
+	ContentSHA256 string `json:"content_sha256"`
 }
 
 type FileWorkRef struct {
@@ -93,7 +102,7 @@ type FileWorkAgent interface {
 }
 
 func isFileWorkCommand(command string) bool {
-	return command == "work-context" || command == "file-deliver" || command == "file-status"
+	return command == "work-context" || command == "file-read" || command == "file-deliver" || command == "file-status"
 }
 
 var errFileWorkUnavailable = errors.New("controlled file work unavailable")

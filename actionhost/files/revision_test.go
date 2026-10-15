@@ -86,7 +86,7 @@ func TestRevisionReferencePersistsAcrossRestartDuplicateAndQueueActivation(t *te
 				t.Fatal("store permitted schema downgrade")
 			}
 			if err := reopened.change(ctx, func(st *state) error {
-				if st.Schema != 5 || !st.Works[work.WorkID].Inputs[0].Source.ReferenceOnly || !validState(*st) {
+				if st.Schema != 6 || !st.Works[work.WorkID].Inputs[0].Source.ReferenceOnly || !validState(*st) {
 					t.Fatal("persisted source damaged")
 				}
 				return nil
@@ -149,6 +149,12 @@ func TestRevisionSchemaReadsLegacyPublicationAndUpgradesOnlyAfterAuthorization(t
 		t.Fatal(err)
 	}
 	legacy.Schema = 4
+	for _, w := range legacy.Works {
+		w.ContentReads = nil
+		for _, d := range w.Deliveries {
+			d.ContentSHA256 = ""
+		}
+	}
 	legacy.Works[work.WorkID].Inputs[0].Source.Purpose = ""
 	legacy.Works[work.WorkID].Inputs[0].Source.PublicationBasisID = ""
 	if !validState(legacy) {

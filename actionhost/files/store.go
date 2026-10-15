@@ -25,6 +25,7 @@ var (
 	ErrInvalid     = errors.New("invalid_file_request")
 	ErrFormat      = errors.New("file_format_unsupported")
 	ErrVersion     = errors.New("file_version_conflict")
+	ErrContentRead = errors.New("file_content_read_required")
 	ErrUncertain   = core.ErrFileWorkUnconfirmed
 )
 
@@ -206,7 +207,7 @@ func (s *Store) storageError(ctx context.Context) error {
 }
 
 func validState(st state) bool {
-	if st.Schema < 1 || st.Schema > 5 || st.Works == nil {
+	if st.Schema < 1 || st.Schema > 6 || st.Works == nil {
 		return false
 	}
 	sessions, roots := map[string]bool{}, map[string]bool{}
@@ -268,7 +269,15 @@ func validState(st state) bool {
 			}
 		}
 		versions := map[int]bool{}
+		for path, read := range w.ContentReads {
+			if st.Schema < 6 || !relativeFile(path) || read.Path != path || !requiresContentRead(path) || !validHash(read.SHA256) || !validHash(read.ContentSHA256) {
+				return false
+			}
+		}
 		for id, d := range w.Deliveries {
+			if d == nil || (d.ContentSHA256 != "" && (st.Schema < 6 || !validHash(d.ContentSHA256))) {
+				return false
+			}
 			if d == nil || d.DeliveryID != id || d.RequestKey == "" || d.Snapshot == "" || !relativeFile(d.Path) || d.Name != filepath.Base(d.Path) || !validHash(d.SHA256) || d.Version < 1 || d.Version > w.Version || versions[d.Version] {
 				return false
 			}
