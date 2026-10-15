@@ -516,6 +516,7 @@ type workspaceInitFlow struct {
 // The message is NOT sent to agent stdin at queue time; the event loop
 // sends it after the current turn completes to avoid mid-turn interference.
 type queuedMessage struct {
+	enqueuedAt        time.Time
 	fileWorkID        string
 	messageID         string
 	platform          Platform
@@ -3335,6 +3336,7 @@ func (e *Engine) queueMessageForBusySession(p Platform, msg *Message, interactiv
 		fileWorkID = msg.fileTurn.WorkID
 	}
 	state.pendingMessages = append(state.pendingMessages, queuedMessage{
+		enqueuedAt:        time.Now(),
 		fileWorkID:        fileWorkID,
 		messageID:         msg.MessageID,
 		platform:          p,
@@ -5027,6 +5029,18 @@ func (e *Engine) agentErrorMessage(err error) string {
 
 func (e *Engine) processInteractiveEvents(state *interactiveState, session *Session, sessions *SessionManager, sessionKey string, msgID string, turnStart time.Time, stopTypingFn func(), sendDone <-chan error, replyCtx any, tp *taskProgress) {
 	defer func() { tp.finish(MsgTaskInterrupted) }()
+	var finalReplyStarted time.Time
+	var finalReplyMessage string
+	var finalReplySilent bool
+	finishReplyTiming := func(returned bool) {
+		if !finalReplyStarted.IsZero() {
+			slog.Info("final reply timing", "message_sha256", timingMessageHash(finalReplyMessage),
+				"elapsed_ns", time.Since(finalReplyStarted).Nanoseconds(), "handler_returned", returned,
+				"silent", finalReplySilent)
+			finalReplyStarted = time.Time{}
+		}
+	}
+	defer func() { finishReplyTiming(false) }()
 	// Keep one display policy for a whole turn, including all streaming paths.
 	// A queued turn picks up a fresh policy after a configuration reload.
 	finalResponseOnly := e.display.FinalResponseOnly
@@ -6020,9 +6034,11 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 				"session", session.ID,
 				"agent_session", session.GetAgentSessionID(),
 				"msg_id", msgID,
+				"message_sha256", timingMessageHash(msgID),
 				"tools", toolCount,
 				"response_len", len(fullResponse),
 				"turn_duration", turnDuration,
+				"turn_duration_ns", turnDuration.Nanoseconds(),
 				"input_tokens", event.InputTokens,
 				"output_tokens", event.OutputTokens,
 				"silent", isSilent,
@@ -6046,6 +6062,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 			state.mu.Unlock()
 
 			replyStart := time.Now()
+			finalReplyStarted, finalReplyMessage, finalReplySilent = replyStart, msgID, isSilent
 
 			// --- StreamingCard path ---
 			if streamCard != nil && !streamCard.Failed() {
@@ -6197,6 +6214,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 			if elapsed := time.Since(replyStart); elapsed >= slowPlatformSend {
 				slog.Warn("slow final reply send", "platform", p.Name(), "elapsed", elapsed, "response_len", len(fullResponse))
 			}
+			finishReplyTiming(true)
 
 			// TTS: async voice reply if enabled (skipped for silent replies)
 			if !isSilent && e.tts != nil && e.tts.Enabled && e.tts.TTS != nil {
@@ -6273,6 +6291,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 				state.currentPrincipal = queued.principal
 				state.caseSources = append([]CaseSource(nil), queued.caseSources...)
 				state.mu.Unlock()
+				logQueuedMessageTiming(queued)
 				if !e.beginQueuedFileTurn(state, session, queued) {
 					return
 				}
@@ -6651,6 +6670,7 @@ func (e *Engine) drainPendingMessages(state *interactiveState, session *Session,
 		state.currentPrincipal = queued.principal
 		state.caseSources = append([]CaseSource(nil), queued.caseSources...)
 		state.mu.Unlock()
+		logQueuedMessageTiming(queued)
 		if !e.beginQueuedFileTurn(state, session, queued) {
 			return false
 		}
