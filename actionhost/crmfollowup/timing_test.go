@@ -21,18 +21,21 @@ func TestCRMHelperTimingProcess(t *testing.T) {
 		os.Exit(3)
 	}
 	line := `MYANC_TIMING {"version":1,"total_ns":90,"phases":{"connection_cli":{"count":3,"elapsed_ns":50},"resource_cli":{"count":1,"elapsed_ns":30}}}`
-	if mode == "invalid" {
+	switch mode {
+	case "invalid":
 		line = `MYANC_TIMING {"version":1,"total_ns":90,"phases":{"private-identity":{"count":1,"elapsed_ns":30}}}`
-	} else if mode == "missing" {
+	case "missing":
 		line = `MYANC_TIMING {"version":1,"total_ns":90,"phases":{"resource_cli":{"count":1}}}`
-	} else if mode == "oversized" {
+	case "oversized":
 		line = strings.Repeat("private-stderr", 1000) + line
-	} else if mode == "oversized-newline" {
+	case "oversized-newline":
 		line = strings.Repeat("private-stderr", 1000) + "\n" + line
 	}
 	fmt.Fprintln(os.Stderr, "private-stderr-must-not-leak")
 	fmt.Fprintln(os.Stderr, line)
-	fmt.Fprint(os.Stdout, `{"status":"found"}`)
+	if _, err := fmt.Fprint(os.Stdout, `{"status":"found"}`); err != nil {
+		os.Exit(4)
+	}
 	if mode == "failed" {
 		os.Exit(1)
 	}
@@ -115,7 +118,11 @@ func TestTimingStderrPipeCopyHonorsBound(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer reader.Close()
+	defer func() {
+		if err := reader.Close(); err != nil {
+			t.Errorf("close stderr pipe reader: %v", err)
+		}
+	}()
 	done := make(chan error, 1)
 	go func() {
 		_, err := writer.Write(bytes.Repeat([]byte("x"), 16384))
