@@ -99,7 +99,30 @@ func helperTimingContext(t *testing.T) context.Context {
 	t.Cleanup(func() {
 		close(release)
 		server.Close()
-		_ = e.Stop()
+		defer func() {
+			if err := e.Stop(); err != nil {
+				t.Errorf("stop timing fixture: %v", err)
+			}
+		}()
+		// Closing HTTP does not join the Engine's response/persistence work.
+		// The normal turn saves assistant history before releasing Busy.
+		session := e.GetSessions().GetOrCreateActive("timing-fixture")
+		deadline := time.Now().Add(5 * time.Second)
+		for {
+			history := session.GetHistory(1)
+			if !session.Busy() && len(history) == 1 && history[0].Role == "assistant" && strings.Contains(history[0].Content, "TURN-1") {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Error("timing fixture turn did not finish before cleanup")
+				return
+			}
+			time.Sleep(time.Millisecond)
+		}
+		stored := core.NewSessionManager(e.GetSessions().StorePath()).FindByID(session.ID)
+		if stored == nil || len(stored.GetHistory(1)) != 1 || stored.GetHistory(1)[0].Role != "assistant" {
+			t.Error("timing fixture assistant history was not persisted before cleanup")
+		}
 	})
 	agent.steps <- toolJourneyStep{number: 1, command: "banquet", input: map[string]any{"banquet_query": "B-FIXTURE"}}
 	e.ReceiveMessage(p, &core.Message{Platform: "mock", SessionKey: "timing-fixture", UserID: "fixture", ChannelID: "fixture", MessageID: "timing-fixture", Content: "Read the fictional banquet", ReplyCtx: "fixture"})
