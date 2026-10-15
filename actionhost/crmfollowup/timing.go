@@ -25,16 +25,17 @@ type helperTiming struct {
 }
 
 // Discard unbounded/unstructured stderr, including native CLI error content.
+// A named buffer prevents io.Copy from bypassing Write via Buffer.ReadFrom.
 type timingStderr struct {
-	bytes.Buffer
+	buffer   bytes.Buffer
 	overflow bool
 }
 
 func (b *timingStderr) Write(p []byte) (int, error) {
-	if len(p) > 8192-b.Len() {
+	if len(p) > 8192-b.buffer.Len() {
 		b.overflow = true
 	} else if !b.overflow {
-		_, _ = b.Buffer.Write(p)
+		_, _ = b.buffer.Write(p)
 	}
 	return len(p), nil
 }
@@ -43,7 +44,7 @@ func logHelperTiming(ctx context.Context, subcommand string, stderr *timingStder
 	var report helperTiming
 	valid := false
 	if !stderr.overflow {
-		lines := bytes.Split(bytes.TrimSpace(stderr.Bytes()), []byte("\n"))
+		lines := bytes.Split(bytes.TrimSpace(stderr.buffer.Bytes()), []byte("\n"))
 		var candidate []byte
 		for _, line := range lines {
 			if bytes.HasPrefix(line, []byte("MYANC_TIMING ")) {

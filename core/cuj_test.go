@@ -29,10 +29,12 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -3387,5 +3389,69 @@ func runCUJThreeHostedHandoffs(t *testing.T, finalOnly bool) {
 		if !strings.Contains(output, "Approval pending") || strings.Contains(output, "AGENT_") {
 			t.Fatalf("unexpected user-visible handoff output: %q", output)
 		}
+	}
+}
+
+func TestCUJ_TIMING1_QueuedQueriesKeepRepliesAndSeparateFinalSend(t *testing.T) {
+	logPath := t.TempDir() + "/timing.jsonl"
+	file, err := os.Create(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = file.Close() })
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(file, nil)))
+	defer slog.SetDefault(previous)
+	env := newCUJEnv(t)
+	env.agent.nextSessionEvents = []Event{{Type: EventResult, Content: "first answer", Done: true}}
+	env.agent.nextSessionDelayMs = 120
+	env.userSends("alex", "first query")
+	env.waitFor("first agent started", 2*time.Second, func() bool {
+		env.agent.mu.Lock()
+		defer env.agent.mu.Unlock()
+		return len(env.agent.sessions) == 1
+	})
+	env.userSends("alex", "second query")
+	env.userSends("alex", "third query")
+	env.waitFor("three replies and idle", 3*time.Second, func() bool {
+		env.agent.mu.Lock()
+		session := env.agent.sessions[0]
+		env.agent.mu.Unlock()
+		return len(session.getSentPrompts()) == 3 && !env.engine.sessions.GetOrCreateActive("test:alex").Busy()
+	})
+	if !env.sentContains("first answer") || len(env.plat.getSent()) < 3 {
+		t.Fatal("queued queries lost their answers")
+	}
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var replies, queues int
+	for _, line := range bytes.Split(bytes.TrimSpace(data), []byte("\n")) {
+		var record map[string]any
+		if err := json.Unmarshal(line, &record); err != nil {
+			t.Fatal(err)
+		}
+		kind := record["msg"]
+		if kind != "final reply timing" && kind != "queued message timing" {
+			continue
+		}
+		if len(record["message_sha256"].(string)) != 64 || record["elapsed_ns"].(float64) < 0 {
+			t.Fatal("missing exact message duration")
+		}
+		if kind == "final reply timing" {
+			replies++
+			if record["handler_returned"] != true {
+				t.Fatal("final handler did not return")
+			}
+		} else {
+			queues++
+		}
+		if strings.Contains(string(line), "query") || strings.Contains(string(line), "alex") || strings.Contains(string(line), "answer") {
+			t.Fatal("private conversation leaked into timing")
+		}
+	}
+	if replies != 3 || queues != 2 {
+		t.Fatalf("missing correlated send/queue spans: replies=%d queues=%d", replies, queues)
 	}
 }

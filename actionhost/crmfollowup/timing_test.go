@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -26,6 +27,8 @@ func TestCRMHelperTimingProcess(t *testing.T) {
 		line = `MYANC_TIMING {"version":1,"total_ns":90,"phases":{"resource_cli":{"count":1}}}`
 	} else if mode == "oversized" {
 		line = strings.Repeat("private-stderr", 1000) + line
+	} else if mode == "oversized-newline" {
+		line = strings.Repeat("private-stderr", 1000) + "\n" + line
 	}
 	fmt.Fprintln(os.Stderr, "private-stderr-must-not-leak")
 	fmt.Fprintln(os.Stderr, line)
@@ -37,7 +40,7 @@ func TestCRMHelperTimingProcess(t *testing.T) {
 }
 
 func TestCRMHelperTimingKeepsOutputAndFailureWithoutLoggingStderr(t *testing.T) {
-	for _, mode := range []string{"valid", "invalid", "missing", "oversized", "failed"} {
+	for _, mode := range []string{"valid", "invalid", "missing", "oversized", "oversized-newline", "failed"} {
 		var logs bytes.Buffer
 		previous := slog.Default()
 		slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
@@ -104,4 +107,36 @@ func TestCRMHelperTimingPhasesStayNumericForTextAndJSON(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestTimingStderrPipeCopyHonorsBound(t *testing.T) {
+	var capture timingStderr
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	done := make(chan error, 1)
+	go func() {
+		_, err := writer.Write(bytes.Repeat([]byte("x"), 16384))
+		closeErr := writer.Close()
+		if err == nil {
+			err = closeErr
+		}
+		done <- err
+	}()
+	copied, err := io.Copy(&capture, reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if copied != 16384 {
+		t.Fatalf("stderr was not fully drained: copied=%d", copied)
+	}
+	if capture.buffer.Len() > 8192 || !capture.overflow {
+		t.Fatalf("stderr bound bypassed: stored=%d overflow=%v", capture.buffer.Len(), capture.overflow)
+	}
+	t.Logf("drained=%d stored=%d overflow=%v", copied, capture.buffer.Len(), capture.overflow)
 }
