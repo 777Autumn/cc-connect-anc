@@ -134,16 +134,17 @@ func TestFinalContentProofCannotBeCopiedFromSourceOldBytesOrAnotherWork(t *testi
 				}
 			}
 			raw, _ := json.Marshal(map[string]any{"work_id": f.context.WorkID, "path": readName, "sha256": hash(data)})
-			if defect == "local-json" {
+			switch defect {
+			case "local-json":
 				if err := os.WriteFile(filepath.Join(f.context.OutputDir, "content-read.json"), raw, 0600); err != nil {
 					t.Fatal(err)
 				}
-			} else if defect == "another-work" {
+			case "another-work":
 				other := newFixture(t, nil)
 				if result, err := other.host.Tool(context.Background(), "file-read", raw, other.binding.Principal, other.context.WorkID); err == nil {
 					t.Fatal("cross-work read accepted", result)
 				}
-			} else {
+			default:
 				if _, err := f.host.Tool(context.Background(), "file-read", raw, f.binding.Principal, f.context.WorkID); err != nil {
 					t.Fatal(err)
 				}
