@@ -75,7 +75,14 @@ func logHelperTiming(ctx context.Context, subcommand string, stderr *timingStder
 		"subcommand_sha256", fmt.Sprintf("%x", sha256.Sum256([]byte(subcommand))),
 		"process_succeeded", succeeded, "measurement_available", valid}
 	if valid {
-		attrs = append(attrs, "python_total_ns", *report.TotalNS, "phases", report.Phases)
+		// Structured numeric attrs keep TextHandler and JSONHandler equally readable.
+		phases := make([]any, 0, len(report.Phases))
+		for _, name := range []string{"connection_cli", "resource_cli", "connection_db_setup", "connection_lock_wait"} {
+			if phase, ok := report.Phases[name]; ok {
+				phases = append(phases, slog.Group(name, slog.Int64("count", *phase.Count), slog.Int64("elapsed_ns", *phase.ElapsedNS)))
+			}
+		}
+		attrs = append(attrs, "python_total_ns", *report.TotalNS, slog.Group("phases", phases...))
 	}
 	slog.Info("CRM helper timing", attrs...)
 }
