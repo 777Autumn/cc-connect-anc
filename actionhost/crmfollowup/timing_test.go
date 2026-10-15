@@ -7,9 +7,16 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"os/user"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/chenhg5/cc-connect/core"
 )
 
 func TestCRMHelperTimingProcess(t *testing.T) {
@@ -30,24 +37,91 @@ func TestCRMHelperTimingProcess(t *testing.T) {
 		line = strings.Repeat("private-stderr", 1000) + line
 	case "oversized-newline":
 		line = strings.Repeat("private-stderr", 1000) + "\n" + line
+	case "maintenance-refresh":
+		line = `MYANC_TIMING {"version":1,"total_ns":90,"phases":{"connection_cli":{"count":3,"elapsed_ns":50},"connection_db_setup":{"count":1,"elapsed_ns":10},"connection_lock_wait":{"count":1,"elapsed_ns":5}}}`
+	case "unmeasured-failure":
+		line = ""
 	}
 	fmt.Fprintln(os.Stderr, "private-stderr-must-not-leak")
 	fmt.Fprintln(os.Stderr, line)
 	if _, err := fmt.Fprint(os.Stdout, `{"status":"found"}`); err != nil {
 		os.Exit(4)
 	}
-	if mode == "failed" {
+	if mode == "failed" || mode == "unmeasured-failure" {
 		os.Exit(1)
 	}
 	os.Exit(0)
 }
 
+func TestCRMHelperTimingBackgroundDoesNotPolluteStartupQuietLogs(t *testing.T) {
+	for _, mode := range []string{"valid", "maintenance-refresh", "failed", "unmeasured-failure"} {
+		t.Run(mode, func(t *testing.T) {
+			var logs bytes.Buffer
+			previous := slog.Default()
+			slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+			defer slog.SetDefault(previous)
+			out, err := runCommand(context.Background(), os.Args[0], "-test.run=TestCRMHelperTimingProcess", nil,
+				append(os.Environ(), "CRM_TIMING_TEST_CHILD="+mode))
+			if (err != nil) != (mode == "failed" || mode == "unmeasured-failure") || string(out) != `{"status":"found"}` {
+				t.Fatalf("changed background child result: %q, %v", out, err)
+			}
+			if logs.Len() != 0 {
+				t.Fatal("background subprocess polluted startup quiet logs with query telemetry")
+			}
+		})
+	}
+}
+
+// Borrow an in-flight context from the real authenticated handler, without
+// exporting or fabricating its private timing key. The child tests run while
+// the handler is blocked, before its normal cancellation on return.
+func helperTimingContext(t *testing.T) context.Context {
+	t.Helper()
+	contexts, release := make(chan context.Context, 1), make(chan struct{})
+	a := &Adapter{toolsEnabled: true, run: func(ctx context.Context, _, _ string, _ []byte, _ []string) ([]byte, error) {
+		contexts <- ctx
+		<-release
+		return []byte(`{"status":"found"}`), nil
+	}}
+	account, err := user.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a.SetWorkDir(t.TempDir(), account.Username); err != nil {
+		t.Fatal(err)
+	}
+	p := &toolJourneyPlatform{}
+	agent := &toolJourneyAgent{client: &http.Client{Timeout: 30 * time.Second}, steps: make(chan toolJourneyStep, 1), results: make(chan toolJourneyReply, 1), events: make(chan core.Event, 16)}
+	e := core.NewEngine("timing-fixture", agent, []core.Platform{p}, filepath.Join(t.TempDir(), "sessions.json"), core.LangEnglish)
+	e.SetActionHost(a)
+	server := httptest.NewServer(e.ActionToolHandler())
+	agent.url = server.URL
+	t.Cleanup(func() {
+		close(release)
+		server.Close()
+		_ = e.Stop()
+	})
+	agent.steps <- toolJourneyStep{number: 1, command: "banquet", input: map[string]any{"banquet_query": "B-FIXTURE"}}
+	e.ReceiveMessage(p, &core.Message{Platform: "mock", SessionKey: "timing-fixture", UserID: "fixture", ChannelID: "fixture", MessageID: "timing-fixture", Content: "Read the fictional banquet", ReplyCtx: "fixture"})
+	select {
+	case ctx := <-contexts:
+		if core.ActionToolTimingID(ctx) == "" {
+			t.Fatal("authenticated tool request has no timing correlation")
+		}
+		return ctx
+	case <-time.After(5 * time.Second):
+		t.Fatal("authenticated tool request did not reach the helper")
+		return nil
+	}
+}
+
 func TestCRMHelperTimingKeepsOutputAndFailureWithoutLoggingStderr(t *testing.T) {
+	ctx := helperTimingContext(t)
 	for _, mode := range []string{"valid", "invalid", "missing", "oversized", "oversized-newline", "failed"} {
 		var logs bytes.Buffer
 		previous := slog.Default()
 		slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
-		out, err := runCommand(context.Background(), os.Args[0], "-test.run=TestCRMHelperTimingProcess", nil,
+		out, err := runCommand(ctx, os.Args[0], "-test.run=TestCRMHelperTimingProcess", nil,
 			append(os.Environ(), "CRM_TIMING_TEST_CHILD="+mode))
 		slog.SetDefault(previous)
 		if (err != nil) != (mode == "failed") || string(out) != `{"status":"found"}` {
@@ -60,6 +134,9 @@ func TestCRMHelperTimingKeepsOutputAndFailureWithoutLoggingStderr(t *testing.T) 
 		if record["measurement_available"] != (mode == "valid" || mode == "failed") || record["process_succeeded"] != (mode != "failed") {
 			t.Fatalf("mode %s: invalid timing status: %v", mode, record)
 		}
+		if record["trace_id"] != core.ActionToolTimingID(ctx) {
+			t.Fatal("helper timing lost the authenticated tool trace")
+		}
 		if value, ok := record["process_ns"].(float64); !ok || value < 0 {
 			t.Fatal("missing process duration")
 		}
@@ -70,6 +147,7 @@ func TestCRMHelperTimingKeepsOutputAndFailureWithoutLoggingStderr(t *testing.T) 
 }
 
 func TestCRMHelperTimingPhasesStayNumericForTextAndJSON(t *testing.T) {
+	ctx := helperTimingContext(t)
 	for _, format := range []string{"text", "json"} {
 		t.Run(format, func(t *testing.T) {
 			var logs bytes.Buffer
@@ -80,7 +158,7 @@ func TestCRMHelperTimingPhasesStayNumericForTextAndJSON(t *testing.T) {
 			previous := slog.Default()
 			slog.SetDefault(slog.New(handler))
 			defer slog.SetDefault(previous)
-			out, err := runCommand(context.Background(), os.Args[0], "-test.run=TestCRMHelperTimingProcess", nil,
+			out, err := runCommand(ctx, os.Args[0], "-test.run=TestCRMHelperTimingProcess", nil,
 				append(os.Environ(), "CRM_TIMING_TEST_CHILD=valid"))
 			if err != nil || string(out) != `{"status":"found"}` {
 				t.Fatalf("changed child result: %q, %v", out, err)

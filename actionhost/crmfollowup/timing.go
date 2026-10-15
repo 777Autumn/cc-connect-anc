@@ -41,6 +41,12 @@ func (b *timingStderr) Write(p []byte) (int, error) {
 }
 
 func logHelperTiming(ctx context.Context, subcommand string, stderr *timingStderr, elapsed time.Duration, succeeded bool) {
+	traceID := core.ActionToolTimingID(ctx)
+	if traceID == "" {
+		// Query telemetry belongs to a live action-tool request. Background
+		// maintenance keeps its existing outcome/error logs and quiet checks.
+		return
+	}
 	var report helperTiming
 	valid := false
 	if !stderr.overflow {
@@ -72,7 +78,7 @@ func logHelperTiming(ctx context.Context, subcommand string, stderr *timingStder
 			}
 		}
 	}
-	attrs := []any{"trace_id", core.ActionToolTimingID(ctx), "process_ns", elapsed.Nanoseconds(),
+	attrs := []any{"trace_id", traceID, "process_ns", elapsed.Nanoseconds(),
 		"subcommand_sha256", fmt.Sprintf("%x", sha256.Sum256([]byte(subcommand))),
 		"process_succeeded", succeeded, "measurement_available", valid}
 	if valid {
