@@ -195,7 +195,12 @@ func (a *fileJourneyAgent) perform(step fileJourneyStep, files []core.FileAttach
 		return
 	}
 	var read map[string]any
-	result.err = a.tool("file-read", map[string]any{"work_id": w.WorkID, "path": name, "sha256": hash(result.data)}, &read)
+	for chunk := 0; chunk < 512; chunk++ {
+		result.err = a.tool("file-read", map[string]any{"work_id": w.WorkID, "path": name, "sha256": hash(result.data), "chunk": chunk}, &read)
+		if result.err != nil || read["status"] == "content_read" {
+			break
+		}
+	}
 	if result.err == nil {
 		result.err = a.tool("file-deliver", map[string]any{"work_id": w.WorkID, "path": name, "sha256": hash(result.data), "expected_version": w.LatestVersion}, &result.artifact)
 	}

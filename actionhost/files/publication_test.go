@@ -94,7 +94,7 @@ func TestPublishedPrivateFileImportsSnapshotWithoutInventingGroupOrResending(t *
 	}
 	if err := f.store.change(ctx, func(st *state) error {
 		source, destination := st.Works[grant.WorkID], st.Works[work.WorkID]
-		if source.GroupRealm != "" || destination.GroupRealm != "" || destination.ProjectImportRealm != "" || st.Schema != 6 || !validState(*st) {
+		if source.GroupRealm != "" || destination.GroupRealm != "" || destination.ProjectImportRealm != "" || st.Schema != 7 || !validState(*st) {
 			t.Fatal("invented realm or invalid provenance")
 		}
 		provenance := destination.Inputs[0].Source
@@ -105,7 +105,7 @@ func TestPublishedPrivateFileImportsSnapshotWithoutInventingGroupOrResending(t *
 		if validState(*st) {
 			t.Fatal("old schema silently erases publication provenance")
 		}
-		st.Schema = 6
+		st.Schema = 7
 		return nil
 	}); err != nil {
 		t.Fatal(err)
@@ -253,7 +253,7 @@ func TestPublicationThenLegacyImportNeverDowngradesSchema(t *testing.T) {
 				t.Fatal("work read after mixed imports", err)
 			}
 			checkState := func(st *state) error {
-				if st.Schema != 6 || !validState(*st) || len(st.Works[work.WorkID].Inputs) != 2 || st.Works[grant.WorkID].GroupRealm != "" {
+				if st.Schema != 7 || !validState(*st) || len(st.Works[work.WorkID].Inputs) != 2 || st.Works[grant.WorkID].GroupRealm != "" {
 					t.Fatal("publication provenance downgraded")
 				}
 				return nil

@@ -736,7 +736,7 @@ func (h *Host) deliver(ctx context.Context, r deliverRequest, p core.ActionPrinc
 		}
 		if requiresContentRead(r.Path) {
 			read, ok := w.ContentReads[r.Path]
-			if !ok || read.SHA256 != r.SHA256 {
+			if !ok || read.SHA256 != r.SHA256 || read.ReadVersion != 2 || read.ChunksTotal < 1 || read.ChunksProvided != read.ChunksTotal {
 				return ErrContentRead
 			}
 		}

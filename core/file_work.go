@@ -69,9 +69,12 @@ type FileWorkContext struct {
 
 // FileContentRead records content supplied by the host, not caller inspection claims.
 type FileContentRead struct {
-	Path          string `json:"path"`
-	SHA256        string `json:"sha256"`
-	ContentSHA256 string `json:"content_sha256"`
+	Path           string `json:"path"`
+	SHA256         string `json:"sha256"`
+	ContentSHA256  string `json:"content_sha256"`
+	ReadVersion    int    `json:"read_version,omitempty"`
+	ChunksProvided int    `json:"chunks_provided,omitempty"`
+	ChunksTotal    int    `json:"chunks_total,omitempty"`
 }
 
 type FileWorkRef struct {

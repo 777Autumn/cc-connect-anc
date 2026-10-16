@@ -244,9 +244,14 @@ func output(t *testing.T, f fixture, ext string) []byte {
 
 func deliver(t *testing.T, f fixture, name string, data []byte, version int) (map[string]any, error) {
 	t.Helper()
-	read, _ := json.Marshal(map[string]any{"work_id": f.context.WorkID, "path": name, "sha256": hash(data)})
 	// Existing negative fixtures still exercise delivery's own rejection below.
-	_, _ = f.host.Tool(context.Background(), "file-read", read, f.binding.Principal, f.context.WorkID)
+	for chunk := 0; chunk < 512; chunk++ {
+		read, _ := json.Marshal(map[string]any{"work_id": f.context.WorkID, "path": name, "sha256": hash(data), "chunk": chunk})
+		result, err := f.host.Tool(context.Background(), "file-read", read, f.binding.Principal, f.context.WorkID)
+		if err != nil || result["status"] == "content_read" {
+			break
+		}
+	}
 	input, _ := json.Marshal(map[string]any{"work_id": f.context.WorkID, "path": name, "sha256": hash(data), "expected_version": version})
 	return f.host.Tool(context.Background(), "file-deliver", input, f.binding.Principal, f.context.WorkID)
 }

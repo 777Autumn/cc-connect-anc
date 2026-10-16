@@ -84,12 +84,15 @@ def transport():
 
 
 def emit(stdout, result, code):
-    print(json.dumps(result, ensure_ascii=False), file=stdout)
+    print(json.dumps(result, ensure_ascii=False, separators=(',', ':')), file=stdout)
     return code
 
 
 def valid_input(command, value):
-    if not isinstance(value, dict) or set(value) != FIELDS[command]:
+    if not isinstance(value, dict) or (set(value) != FIELDS[command]
+            and not (command == 'file-read' and set(value) == FIELDS[command] | {'chunk'})):
+        return False
+    if command == 'file-read' and (type(value.get('chunk', 0)) is not int or not 0 <= value.get('chunk', 0) < 512):
         return False
     for name in ("work_id", "delivery_id"):
         if name in value and (not isinstance(value[name], str) or not value[name]
@@ -209,11 +212,19 @@ def main(argv=None, *, stdin=None, stdout=None):
                     or not isinstance(result.get("output_dir"), str)):
                 raise ValueError("invalid work context")
         elif argv[0] == "file-read":
-            if (result.get('status') != 'content_read' or any(result.get(k) != v for k, v in value.items())
+            chunk, total, provided = result.get('chunk'), result.get('chunks_total'), result.get('chunks_provided')
+            if (len(json.dumps(result, ensure_ascii=False, separators=(',', ':')).encode()) + 1 > 8192
+                    or result.get('read_version') != 2
+                    or any(type(n) is not int for n in (chunk, total, provided))
+                    or not 0 <= chunk < provided <= total <= 512 or chunk != value.get('chunk', 0)
+                    or result.get('status') != ('content_read' if chunk + 1 == total else 'content_read_partial')
+                    or (chunk + 1 < total and result.get('next_chunk') != chunk + 1)
+                    or (chunk + 1 == total and 'next_chunk' in result)
+                    or any(result.get(k) != v for k, v in value.items())
                     or not isinstance(result.get('content_sha256'), str)
                     or not re.fullmatch(r'[0-9a-f]{64}', result['content_sha256'])
                     or not isinstance(result.get('content'), dict)
-                    or not isinstance(result['content'].get('parts'), list) or not result['content']['parts']):
+                    or not isinstance(result['content'].get('parts'), list) or len(result['content']['parts']) != 1):
                 raise ValueError('invalid content read')
         elif (result.get("status") not in {"submitted", "accepted", "failed", "unknown"}
               or not isinstance(result.get("delivery_id"), str) or not result["delivery_id"]

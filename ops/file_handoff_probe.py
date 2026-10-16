@@ -74,8 +74,12 @@ output.parent.mkdir(mode=0o700, exist_ok=True)
 output.write_bytes(body.getvalue())
 output.chmod(0o600)
 assert stat.S_IMODE(output.stat().st_mode) == 0o600
-read = tool('file-read', {'work_id':work['work_id'], 'path':relative,
-    'sha256':hashlib.sha256(output.read_bytes()).hexdigest()})
+for chunk in range(512):
+    read = tool('file-read', {'work_id':work['work_id'], 'path':relative,
+        'sha256':hashlib.sha256(output.read_bytes()).hexdigest(), 'chunk': chunk})
+    assert read['content']['parts']
+    if read['status'] == 'content_read':
+        break
 assert read['status'] == 'content_read' and read['content']['parts']
 artifact = tool('file-deliver', {'work_id':work['work_id'], 'path':relative,
     'sha256':hashlib.sha256(body.getvalue()).hexdigest(), 'expected_version':work['latest_version']})

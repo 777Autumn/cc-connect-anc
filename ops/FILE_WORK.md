@@ -50,8 +50,14 @@ ledger. DOCX content parts include body/tables, headers/footers and notes; XLSX
 parts retain cell references, formulas and caches. PDF uses the fixed validator's
 `--read-content` mode under its existing resource limits and returns every page's
 text layer, which may be empty for image-only pages. Images and visual layout
-still need the existing page inspection. The bounded content response must fit
-512 KiB; failures/oversize/cancellation do not produce a successful record. Office
+still need the existing page inspection. The full extracted content must fit
+512 KiB. Each `file-read` returns one UTF-8-safe segment below 8 KiB; start at
+`chunk: 0` (the default), inspect it, and follow `next_chunk` until `content_read`.
+`content_read_partial` cannot authorize delivery. The protected record requires
+read version 2 and all sequential segments for that exact path, file hash and
+content hash; duplicate segments do not advance progress, missing segments fail,
+and a changed file restarts at zero. Failures/oversize/cancellation do not produce
+a complete record. Office
 XML parts declared with unsupported non-XML suffixes are refused, not silently
 omitted; regenerate with the existing standard Office path before retrying. Parsing
 runs outside the store transaction; bytes are rechecked before the record commits.
@@ -60,8 +66,9 @@ Reads prove content supplied, not model understanding or factual correctness.
 Accepted/unknown delivery reconciliation retains its existing ordering and never
 replays a send just because an old delivery predates content-read evidence.
 
-Successful reads advance the existing ledger to schema 6, retaining old entries.
-Versions 1–5 remain readable; old binaries reject schema 6. Rollback must keep a
+Successful reads advance the existing ledger to schema 7, retaining old entries.
+Versions 1–6 remain readable; legacy single-response proofs cannot authorize new
+delivery and require a full reread. Old binaries reject schema 7. Rollback must keep a
 compatible file host or disable file delivery, never restore or downgrade a ledger.
 The content digest is copied into new Office/PDF delivery receipts for later audit.
 
