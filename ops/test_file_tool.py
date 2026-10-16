@@ -44,6 +44,18 @@ class Peer:
 
 
 class FileClientTests(unittest.TestCase):
+    def test_content_read_requires_actual_matching_content_response(self):
+        value = {'work_id': 'fictional', 'path': 'render/final.docx', 'sha256': 'a' * 64}
+        expected = {**value, 'status': 'content_read', 'content_sha256': 'b' * 64,
+                    'content': {'format': 'ooxml_content_parts', 'parts': [{'name': 'word/document.xml', 'text': '<document>Final</document>'}]}}
+        with patch.object(file_tool, 'prepare_delivery'):
+            code, result, _ = self.invoke(['file-read'], json.dumps(value).encode(), Peer(expected))
+            self.assertEqual((code, result), (0, expected))
+            for bad in ({**expected, 'path': 'source.docx'}, {**expected, 'sha256': 'c' * 64},
+                        {**expected, 'content': {}}, {**expected, 'work_id': 'other-work'}):
+                code, result, _ = self.invoke(['file-read'], json.dumps(value).encode(), Peer(bad))
+                self.assertEqual((code, result['code']), (1, 'invalid_response'))
+
     @unittest.skipUnless(os.name == 'posix', 'POSIX ownership and no-follow publication')
     def test_only_selected_owned_output_is_published_and_links_digest_fail_closed(self):
         with tempfile.TemporaryDirectory() as directory:

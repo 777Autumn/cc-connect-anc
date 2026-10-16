@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 
@@ -51,6 +52,7 @@ type work struct {
 	PendingInputs                                                    map[string][]Input `json:",omitempty"`
 	Version                                                          int
 	Deliveries                                                       map[string]*delivery
+	ContentReads                                                     map[string]core.FileContentRead `json:",omitempty"`
 	Messages                                                         map[string]bool
 	GroupRealm                                                       string `json:",omitempty"`
 	ProjectImportRealm                                               string `json:",omitempty"`
@@ -120,6 +122,11 @@ func validHash(s string) bool {
 
 func workContext(w *work) WorkContext {
 	r := WorkContext{Enabled: true, WorkID: w.ID, WorkRoot: w.Root, Inputs: append([]Input{}, w.Inputs...), OutputDir: filepath.Join(w.Root, "outputs"), LatestVersion: w.Version, Artifacts: []Artifact{}}
+	r.ContentReads = []core.FileContentRead{}
+	for _, read := range w.ContentReads {
+		r.ContentReads = append(r.ContentReads, read)
+	}
+	sort.Slice(r.ContentReads, func(i, j int) bool { return r.ContentReads[i].Path < r.ContentReads[j].Path })
 	for i, input := range r.Inputs {
 		if input.Source != nil && input.Source.PublicationID != "" {
 			// Private receipt/work provenance remains in the host ledger only.
@@ -599,6 +606,9 @@ func (h *Host) Tool(ctx context.Context, command string, input json.RawMessage, 
 	if command == "host-handoff-check" {
 		return h.checkHandoffSnapshots(ctx, principal, workID, input)
 	}
+	if command == "file-read" {
+		return h.readContent(ctx, input, principal, workID)
+	}
 	if command == "host-case-import" {
 		var request struct {
 			Receipt       string `json:"receipt"`
@@ -663,7 +673,7 @@ func (h *Host) Tool(ctx context.Context, command string, input json.RawMessage, 
 // after submission must stay uncertain even when an underlying error resembles
 // a scope/version refusal.
 func fileRefusal(err error) (map[string]any, error) {
-	for _, known := range []error{ErrScope, ErrInvalid, ErrFormat, ErrVersion, ErrUncertain} {
+	for _, known := range []error{ErrScope, ErrInvalid, ErrFormat, ErrVersion, ErrUncertain, ErrContentRead} {
 		if errors.Is(err, known) {
 			return map[string]any{"status": "blocked", "code": known.Error()}, err
 		}
@@ -724,6 +734,12 @@ func (h *Host) deliver(ctx context.Context, r deliverRequest, p core.ActionPrinc
 			}
 			return ErrFormat
 		}
+		if requiresContentRead(r.Path) {
+			read, ok := w.ContentReads[r.Path]
+			if !ok || read.SHA256 != r.SHA256 {
+				return ErrContentRead
+			}
+		}
 		id := uuid.NewString()
 		snapshot := id + strings.ToLower(filepath.Ext(r.Path))
 		if err := writeNew(h.snapshots, snapshot, data, 0400); err != nil {
@@ -731,6 +747,9 @@ func (h *Host) deliver(ctx context.Context, r deliverRequest, p core.ActionPrinc
 		}
 		w.Version++
 		selected = Artifact{DeliveryID: id, Version: w.Version, Status: "submitted", Name: filepath.Base(r.Path), Path: r.Path, SHA256: r.SHA256}
+		if requiresContentRead(r.Path) {
+			selected.ContentSHA256 = w.ContentReads[r.Path].ContentSHA256
+		}
 		w.Deliveries[id] = &delivery{Artifact: selected, RequestKey: requestKey, Snapshot: snapshot}
 		route, created = append(json.RawMessage{}, w.Route...), true
 		return nil

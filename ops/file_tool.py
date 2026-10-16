@@ -20,6 +20,7 @@ MAX_RESPONSE = 1024 * 1024
 FIELDS = {
     "work-context": set(),
     "file-deliver": {"work_id", "path", "sha256", "expected_version"},
+    "file-read": {"work_id", "path", "sha256"},
     "file-status": {"work_id", "delivery_id"},
 }
 
@@ -94,9 +95,9 @@ def valid_input(command, value):
         if name in value and (not isinstance(value[name], str) or not value[name]
                               or len(value[name]) > 256):
             return False
-    if command == "file-deliver":
+    if command in {"file-deliver", "file-read"}:
         path = value["path"]
-        return (type(value["expected_version"]) is int and value["expected_version"] >= 0
+        return ((command == "file-read" or (type(value["expected_version"]) is int and value["expected_version"] >= 0))
                 and isinstance(value["sha256"], str)
                 and re.fullmatch(r"[0-9a-f]{64}", value["sha256"]) is not None
                 and isinstance(path, str) and bool(path)
@@ -171,7 +172,7 @@ def main(argv=None, *, stdin=None, stdout=None):
     except (ValueError, OSError, RecursionError):
         return emit(stdout, {"status": "blocked", "code": "invalid_input"}, 2)
 
-    if argv[0] == "file-deliver":
+    if argv[0] in {"file-deliver", "file-read"}:
         try:
             prepare_delivery(value)
         except (ValueError, OSError, AttributeError) as error:
@@ -207,6 +208,13 @@ def main(argv=None, *, stdin=None, stdout=None):
                     or not result["work_id"] or not isinstance(result.get("inputs"), list)
                     or not isinstance(result.get("output_dir"), str)):
                 raise ValueError("invalid work context")
+        elif argv[0] == "file-read":
+            if (result.get('status') != 'content_read' or any(result.get(k) != v for k, v in value.items())
+                    or not isinstance(result.get('content_sha256'), str)
+                    or not re.fullmatch(r'[0-9a-f]{64}', result['content_sha256'])
+                    or not isinstance(result.get('content'), dict)
+                    or not isinstance(result['content'].get('parts'), list) or not result['content']['parts']):
+                raise ValueError('invalid content read')
         elif (result.get("status") not in {"submitted", "accepted", "failed", "unknown"}
               or not isinstance(result.get("delivery_id"), str) or not result["delivery_id"]
               or (result["status"] == "accepted" and not result.get("message_receipt"))):

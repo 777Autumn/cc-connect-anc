@@ -186,6 +186,7 @@ func TestCUJ_CASEIPC_SelectedPrivateFilePublicationAndRealImport(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(work.OutputDir, item.name), item.data, 0600); err != nil {
 			t.Fatal(err)
 		}
+		expect(owner.turn("先核对实际最终文件", "file-read", map[string]any{"work_id": work.WorkID, "path": item.name, "sha256": fmt.Sprintf("%x", sha256.Sum256(item.data))}), "content_read")
 		expect(owner.turn("把这份文件发给我", "file-deliver", map[string]any{"work_id": work.WorkID, "path": item.name, "sha256": fmt.Sprintf("%x", sha256.Sum256(item.data)), "expected_version": i}), "accepted")
 	}
 	work = decodeWork(owner.turn("只把共同方案放进项目", "work-context", map[string]any{}))

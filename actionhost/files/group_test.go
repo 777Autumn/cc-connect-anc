@@ -114,7 +114,7 @@ func TestCUJ_GroupFile_ExplicitArtifactHandoffKeepsActorsAndOtherWorkSeparate(t 
 		}
 	}
 	if err := f.store.change(context.Background(), func(st *state) error {
-		if st.Schema != 2 || !validState(*st) {
+		if st.Schema != 6 || !validState(*st) {
 			t.Fatal("group provenance lost its ledger version")
 		}
 		old := *st

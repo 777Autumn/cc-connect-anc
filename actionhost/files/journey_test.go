@@ -194,7 +194,11 @@ func (a *fileJourneyAgent) perform(step fileJourneyStep, files []core.FileAttach
 	if result.err = os.WriteFile(filepath.Join(w.OutputDir, name), result.data, 0600); result.err != nil {
 		return
 	}
-	result.err = a.tool("file-deliver", map[string]any{"work_id": w.WorkID, "path": name, "sha256": hash(result.data), "expected_version": w.LatestVersion}, &result.artifact)
+	var read map[string]any
+	result.err = a.tool("file-read", map[string]any{"work_id": w.WorkID, "path": name, "sha256": hash(result.data)}, &read)
+	if result.err == nil {
+		result.err = a.tool("file-deliver", map[string]any{"work_id": w.WorkID, "path": name, "sha256": hash(result.data), "expected_version": w.LatestVersion}, &result.artifact)
+	}
 	return
 }
 
