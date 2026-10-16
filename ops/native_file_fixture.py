@@ -85,8 +85,12 @@ def main():
             with path.open('xb') as stream:
                 stream.write(output.getvalue())
             path.chmod(0o600)
-            read = tool('file-read', {'work_id':work['work_id'], 'path':name,
-                'sha256':hashlib.sha256(path.read_bytes()).hexdigest()})
+            for chunk in range(512):
+                read = tool('file-read', {'work_id':work['work_id'], 'path':name,
+                    'sha256':hashlib.sha256(path.read_bytes()).hexdigest(), 'chunk': chunk})
+                assert read['content']['parts']
+                if read['status'] == 'content_read':
+                    break
             assert read['status'] == 'content_read' and read['content']['parts']
             receipt = tool('file-deliver', {'work_id':work['work_id'], 'path':name,
                 'sha256':hashlib.sha256(path.read_bytes()).hexdigest(), 'expected_version':work['latest_version']})

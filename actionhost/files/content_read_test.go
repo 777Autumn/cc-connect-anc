@@ -99,12 +99,19 @@ func TestFinalWordReadReturnsSavedBodyTablesHeadersAndFooterBeforeSend(t *testin
 	if err := os.WriteFile(filepath.Join(f.context.OutputDir, "final.docx"), data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	raw, _ := json.Marshal(map[string]any{"work_id": f.context.WorkID, "path": "final.docx", "sha256": hash(data)})
-	read, err := f.host.Tool(context.Background(), "file-read", raw, f.binding.Principal, f.context.WorkID)
-	if err != nil || read["status"] != "content_read" || read["sha256"] != hash(data) || read["path"] != "final.docx" {
-		t.Fatal("final content read failed", read, err)
+	var content []byte
+	for chunk := 0; chunk < 512; chunk++ {
+		raw, _ := json.Marshal(map[string]any{"work_id": f.context.WorkID, "path": "final.docx", "sha256": hash(data), "chunk": chunk})
+		read, err := f.host.Tool(context.Background(), "file-read", raw, f.binding.Principal, f.context.WorkID)
+		if err != nil || read["sha256"] != hash(data) || read["path"] != "final.docx" {
+			t.Fatal("final content read failed", read, err)
+		}
+		part, _ := json.Marshal(read["content"])
+		content = append(content, part...)
+		if read["status"] == "content_read" {
+			break
+		}
 	}
-	content, _ := json.Marshal(read["content"])
 	for _, expected := range []string{"Fictional reception brief", "Outstanding 4500", "FINAL HEADER", "source-014", "RELOCATED HEADER"} {
 		if !strings.Contains(string(content), expected) {
 			t.Fatal("missing saved content", expected)

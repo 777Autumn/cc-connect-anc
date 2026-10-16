@@ -207,7 +207,7 @@ func (s *Store) storageError(ctx context.Context) error {
 }
 
 func validState(st state) bool {
-	if st.Schema < 1 || st.Schema > 6 || st.Works == nil {
+	if st.Schema < 1 || st.Schema > 7 || st.Works == nil {
 		return false
 	}
 	sessions, roots := map[string]bool{}, map[string]bool{}
@@ -271,6 +271,13 @@ func validState(st state) bool {
 		versions := map[int]bool{}
 		for path, read := range w.ContentReads {
 			if st.Schema < 6 || !relativeFile(path) || read.Path != path || !requiresContentRead(path) || !validHash(read.SHA256) || !validHash(read.ContentSHA256) {
+				return false
+			}
+			if read.ReadVersion == 0 {
+				if read.ChunksProvided != 0 || read.ChunksTotal != 0 {
+					return false
+				}
+			} else if st.Schema < 7 || read.ReadVersion != 2 || read.ChunksProvided < 1 || read.ChunksProvided > read.ChunksTotal || read.ChunksTotal > 512 {
 				return false
 			}
 		}

@@ -47,6 +47,8 @@ class FileClientTests(unittest.TestCase):
     def test_content_read_requires_actual_matching_content_response(self):
         value = {'work_id': 'fictional', 'path': 'render/final.docx', 'sha256': 'a' * 64}
         expected = {**value, 'status': 'content_read', 'content_sha256': 'b' * 64,
+                    'read_version': 2, 'chunk': 0, 'chunks_total': 1, 'chunks_provided': 1,
+                    'part_offset': 0, 'part_bytes': 26,
                     'content': {'format': 'ooxml_content_parts', 'parts': [{'name': 'word/document.xml', 'text': '<document>Final</document>'}]}}
         with patch.object(file_tool, 'prepare_delivery'):
             code, result, _ = self.invoke(['file-read'], json.dumps(value).encode(), Peer(expected))
@@ -55,6 +57,46 @@ class FileClientTests(unittest.TestCase):
                         {**expected, 'content': {}}, {**expected, 'work_id': 'other-work'}):
                 code, result, _ = self.invoke(['file-read'], json.dumps(value).encode(), Peer(bad))
                 self.assertEqual((code, result['code']), (1, 'invalid_response'))
+
+    def test_content_read_forwards_only_one_bounded_segment_and_rejects_legacy_proof(self):
+        value = {'work_id': 'fictional', 'path': 'final.docx', 'sha256': 'a' * 64, 'chunk': 1}
+        expected = {**value, 'status': 'content_read_partial', 'content_sha256': 'b' * 64,
+                    'read_version': 2, 'chunks_total': 3, 'chunks_provided': 2, 'next_chunk': 2,
+                    'part_offset': 4, 'part_bytes': 12,
+                    'content': {'format': 'ooxml_content_parts', 'parts': [{'name': 'word/document.xml', 'text': 'body'}]}}
+        with patch.object(file_tool, 'prepare_delivery'):
+            peer = Peer(expected)
+            code, result, _ = self.invoke(['file-read'], json.dumps(value).encode(), peer)
+            self.assertEqual((code, result), (0, expected))
+            self.assertEqual(bytes(peer.sent).count(b'POST /tool HTTP/1.1'), 1)
+            for bad in ({**expected, 'read_version': 0}, {**expected, 'chunk': 0},
+                        {**expected, 'next_chunk': 1}, {**expected, 'chunks_provided': 1},
+                        {**expected, 'status': 'content_read'},
+                        {**expected, 'scope': 'x' * 8192}):
+                code, result, _ = self.invoke(['file-read'], json.dumps(value).encode(), Peer(bad))
+                self.assertEqual((code, result['code']), (1, 'invalid_response'))
+            for chunk in (-1, True, 512, '1'):
+                code, result, factory = self.invoke(['file-read'], json.dumps(dict(value, chunk=chunk)).encode(), Peer(expected))
+                self.assertEqual((code, result['code']), (2, 'invalid_input'))
+                factory.assert_not_called()
+
+    def test_bounded_content_response_is_not_rejected_by_added_client_whitespace(self):
+        value = {'work_id': 'fictional', 'path': 'seg/' * 900 + 'final.docx', 'sha256': 'a' * 64}
+        expected = {**value, 'status': 'content_read', 'content_sha256': 'b' * 64,
+                    'read_version': 2, 'chunk': 0, 'chunks_total': 1, 'chunks_provided': 1,
+                    'part_offset': 0, 'part_bytes': 4096,
+                    'content': {'format': 'ooxml_content_parts', 'parts': [{'name': 'word/document.xml', 'text': 'x' * 4096}]}}
+        compact = lambda item: json.dumps(item, ensure_ascii=False, separators=(',', ':')).encode()
+        expected['scope'] = ''
+        expected['scope'] = 'x' * (8188 - len(compact(expected)))
+        self.assertEqual(len(compact(expected)), 8188)
+        self.assertGreater(len(json.dumps(expected).encode()), 8192)
+        with patch.object(file_tool, 'prepare_delivery'):
+            code, result, _ = self.invoke(['file-read'], json.dumps(value).encode(), Peer(expected))
+        self.assertEqual((code, result), (0, expected))
+        out = io.StringIO()
+        file_tool.emit(out, result, 0)
+        self.assertLessEqual(len(out.getvalue().encode()), 8192)
 
     @unittest.skipUnless(os.name == 'posix', 'POSIX ownership and no-follow publication')
     def test_only_selected_owned_output_is_published_and_links_digest_fail_closed(self):

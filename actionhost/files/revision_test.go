@@ -86,7 +86,7 @@ func TestRevisionReferencePersistsAcrossRestartDuplicateAndQueueActivation(t *te
 				t.Fatal("store permitted schema downgrade")
 			}
 			if err := reopened.change(ctx, func(st *state) error {
-				if st.Schema != 6 || !st.Works[work.WorkID].Inputs[0].Source.ReferenceOnly || !validState(*st) {
+				if st.Schema != 7 || !st.Works[work.WorkID].Inputs[0].Source.ReferenceOnly || !validState(*st) {
 					t.Fatal("persisted source damaged")
 				}
 				return nil
