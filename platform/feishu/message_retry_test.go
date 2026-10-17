@@ -335,7 +335,7 @@ func TestMessageRetryPublicCallersAndReceiptAssociation(t *testing.T) {
 					t.Fatalf("saved=%+v err=%v", saved, err)
 				}
 				// Legacy standalone media does not register a file-work association.
-				wantReceipt := !(create && (caller == "image" || caller == "file"))
+				wantReceipt := !create || (caller != "image" && caller != "file")
 				if wantReceipt && (len(receipts) != 1 || receipts[0] != saved[0].ID) {
 					t.Fatalf("receipts=%v saved=%+v", receipts, saved)
 				}
