@@ -4068,7 +4068,8 @@ func (p *Platform) sendNewMessageToChat(ctx context.Context, rc replyContext, ms
 func (p *Platform) buildReplyMessageReqBody(rc replyContext, msgType, content string) *larkim.ReplyMessageReqBody {
 	body := larkim.NewReplyMessageReqBodyBuilder().
 		MsgType(msgType).
-		Content(content)
+		Content(content).
+		Uuid(uuid.NewString())
 	if p.shouldReplyInThread(rc) {
 		body.ReplyInThread(true)
 	}
@@ -4089,6 +4090,12 @@ func (p *Platform) replyMessageResult(ctx context.Context, rc replyContext, msgT
 }
 
 func (p *Platform) replyMessageResultWithUUID(ctx context.Context, rc replyContext, msgType, content string, requireMessageID bool, uuid string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, messageSendTimeout)
+	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	var outcome messageSendOutcome
 	body := p.buildReplyMessageReqBody(rc, msgType, content)
 	if uuid != "" {
 		body.Uuid = &uuid
@@ -4104,18 +4111,24 @@ func (p *Platform) replyMessageResultWithUUID(ctx context.Context, rc replyConte
 	}
 	err := p.withTransientRetryLogging(ctx, retryOperation, func() error {
 		return p.withFreshTenantAccessTokenRetry(ctx, "reply", func(client *lark.Client, options ...larkcore.RequestOptionFunc) error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			resp, err := client.Im.Message.Reply(ctx, req, options...)
 			if err != nil {
-				return fmt.Errorf("%s: reply api call: %w", p.tag(), err)
+				return outcome.unconfirmed(fmt.Errorf("%s: reply api call: %w", p.tag(), err))
 			}
-			if !resp.Success() {
-				return fmt.Errorf("%s: reply failed code=%d msg=%s", p.tag(), resp.Code, resp.Msg)
+			if resp == nil {
+				return outcome.unconfirmed(fmt.Errorf("%s: reply returned no response", p.tag()))
+			}
+			if err := outcome.response(p.tag()+": reply", resp.ApiResp, resp.Code, resp.Msg); err != nil {
+				return err
 			}
 			if resp.Data != nil && resp.Data.MessageId != nil {
 				messageID = *resp.Data.MessageId
 			}
 			if requireMessageID && messageID == "" {
-				return fmt.Errorf("%s: reply returned no message id", p.tag())
+				return outcome.unconfirmed(fmt.Errorf("%s: reply returned no message id", p.tag()))
 			}
 			return nil
 		})
@@ -4123,7 +4136,7 @@ func (p *Platform) replyMessageResultWithUUID(ctx context.Context, rc replyConte
 	if err == nil {
 		p.observeFileWorkReply(rc, messageID)
 	}
-	return messageID, err
+	return messageID, outcome.result(ctx, err)
 }
 
 func (p *Platform) createMessage(ctx context.Context, chatID, msgType, content, op string) error {
@@ -4136,34 +4149,47 @@ func (p *Platform) createMessageWithID(ctx context.Context, chatID, msgType, con
 }
 
 func (p *Platform) createMessageResult(ctx context.Context, chatID, msgType, content, op string, requireMessageID bool) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, messageSendTimeout)
+	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	var outcome messageSendOutcome
 	req := larkim.NewCreateMessageReqBuilder().
 		ReceiveIdType(larkim.ReceiveIdTypeChatId).
 		Body(larkim.NewCreateMessageReqBodyBuilder().
 			ReceiveId(chatID).
 			MsgType(msgType).
 			Content(content).
+			Uuid(uuid.NewString()).
 			Build()).
 		Build()
 	var messageID string
 	err := p.withTransientRetry(ctx, op, func() error {
 		return p.withFreshTenantAccessTokenRetry(ctx, op, func(client *lark.Client, options ...larkcore.RequestOptionFunc) error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			resp, err := client.Im.Message.Create(ctx, req, options...)
 			if err != nil {
-				return fmt.Errorf("%s: %s api call: %w", p.tag(), op, err)
+				return outcome.unconfirmed(fmt.Errorf("%s: %s api call: %w", p.tag(), op, err))
 			}
-			if !resp.Success() {
-				return fmt.Errorf("%s: %s failed code=%d msg=%s", p.tag(), op, resp.Code, resp.Msg)
+			if resp == nil {
+				return outcome.unconfirmed(fmt.Errorf("%s: %s returned no response", p.tag(), op))
+			}
+			if err := outcome.response(p.tag()+": "+op, resp.ApiResp, resp.Code, resp.Msg); err != nil {
+				return err
 			}
 			if resp.Data != nil && resp.Data.MessageId != nil {
 				messageID = *resp.Data.MessageId
 			}
 			if requireMessageID && messageID == "" {
-				return fmt.Errorf("%s: %s returned no message id", p.tag(), op)
+				return outcome.unconfirmed(fmt.Errorf("%s: %s returned no message id", p.tag(), op))
 			}
 			return nil
 		})
 	})
-	return messageID, err
+	return messageID, outcome.result(ctx, err)
 }
 
 func (p *Platform) withFreshTenantAccessTokenRetry(ctx context.Context, operation string, fn feishuRequestFunc) error {
@@ -4966,7 +4992,17 @@ func (p *Platform) previewRequest(ctx context.Context, operation string, singleA
 	})
 }
 
-func (p *Platform) sendPreviewStart(ctx context.Context, rctx any, content string, singleAttempt bool) (any, error) {
+func (p *Platform) sendPreviewStart(ctx context.Context, rctx any, content string, singleAttempt bool) (handle any, sendErr error) {
+	var outcome messageSendOutcome
+	if !singleAttempt {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, messageSendTimeout)
+		defer cancel()
+		defer func() { sendErr = outcome.result(ctx, sendErr) }()
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if !p.useInteractiveCard {
 		return nil, core.ErrNotSupported
 	}
@@ -5015,16 +5051,22 @@ func (p *Platform) sendPreviewStart(ctx context.Context, rctx any, content strin
 			Build()
 		var resp *larkim.ReplyMessageResp
 		if err := p.previewRequest(ctx, "send preview", singleAttempt, func(client *lark.Client, options ...larkcore.RequestOptionFunc) error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			var err error
 			resp, err = client.Im.Message.Reply(ctx, req, options...)
 			if err != nil {
-				return fmt.Errorf("%s: send preview (reply): %w", p.tag(), err)
+				return outcome.unconfirmed(fmt.Errorf("%s: send preview (reply): %w", p.tag(), err))
 			}
 			if singleAttempt && (resp == nil || resp.ApiResp == nil || resp.StatusCode != http.StatusOK) {
 				return fmt.Errorf("%s: task status reply unconfirmed", p.tag())
 			}
-			if !resp.Success() {
-				return fmt.Errorf("%s: send preview (reply) code=%d msg=%s", p.tag(), resp.Code, resp.Msg)
+			if resp == nil {
+				return outcome.unconfirmed(fmt.Errorf("%s: send preview (reply): no response", p.tag()))
+			}
+			if err := outcome.response(p.tag()+": send preview (reply)", resp.ApiResp, resp.Code, resp.Msg); err != nil {
+				return err
 			}
 			return nil
 		}); err != nil {
@@ -5040,20 +5082,27 @@ func (p *Platform) sendPreviewStart(ctx context.Context, rctx any, content strin
 				ReceiveId(chatID).
 				MsgType(larkim.MsgTypeInteractive).
 				Content(sendContent).
+				Uuid(uuid.NewString()).
 				Build()).
 			Build()
 		var resp *larkim.CreateMessageResp
 		if err := p.previewRequest(ctx, "send preview", singleAttempt, func(client *lark.Client, options ...larkcore.RequestOptionFunc) error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			var err error
 			resp, err = client.Im.Message.Create(ctx, req, options...)
 			if err != nil {
-				return fmt.Errorf("%s: send preview: %w", p.tag(), err)
+				return outcome.unconfirmed(fmt.Errorf("%s: send preview: %w", p.tag(), err))
 			}
 			if singleAttempt && (resp == nil || resp.ApiResp == nil || resp.StatusCode != http.StatusOK) {
 				return fmt.Errorf("%s: task status create unconfirmed", p.tag())
 			}
-			if !resp.Success() {
-				return fmt.Errorf("%s: send preview code=%d msg=%s", p.tag(), resp.Code, resp.Msg)
+			if resp == nil {
+				return outcome.unconfirmed(fmt.Errorf("%s: send preview: no response", p.tag()))
+			}
+			if err := outcome.response(p.tag()+": send preview", resp.ApiResp, resp.Code, resp.Msg); err != nil {
+				return err
 			}
 			return nil
 		}); err != nil {
@@ -5065,7 +5114,7 @@ func (p *Platform) sendPreviewStart(ctx context.Context, rctx any, content strin
 	}
 
 	if msgID == "" {
-		return nil, fmt.Errorf("%s: send preview: no message ID returned", p.tag())
+		return nil, outcome.unconfirmed(fmt.Errorf("%s: send preview: no message ID returned", p.tag()))
 	}
 
 	p.observeFileWorkReply(rc, msgID)

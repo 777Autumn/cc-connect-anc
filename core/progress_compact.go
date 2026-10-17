@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -456,7 +457,8 @@ func (w *compactProgressWriter) AppendStructured(item ProgressCardEntry, fallbac
 			if err != nil || handle == nil {
 				slog.Warn("progress writer: SendPreviewStart failed", "platform", w.platform.Name(), "style", w.style, "error", err, "handle_nil", handle == nil)
 				w.failed = true
-				return false
+				// Handled means no fallback for this event, not confirmed delivery.
+				return errors.Is(err, ErrMessageDeliveryUnconfirmed)
 			}
 			w.handle = handle
 			w.lastSent = w.content
@@ -469,7 +471,7 @@ func (w *compactProgressWriter) AppendStructured(item ProgressCardEntry, fallbac
 		if err != nil {
 			slog.Warn("progress writer: initial Send failed", "platform", w.platform.Name(), "style", w.style, "error", err)
 			w.failed = true
-			return false
+			return errors.Is(err, ErrMessageDeliveryUnconfirmed)
 		}
 		w.handle = w.replyCtx
 		w.lastSent = w.content

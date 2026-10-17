@@ -335,8 +335,8 @@ func TestSendChunksWithStatusFooter_RoutesToFooterSender(t *testing.T) {
 	send := func(pl Platform, rctx any, content string) error {
 		return pl.Send(context.Background(), rctx, content)
 	}
-	ok := sendChunksWithStatusFooter(context.Background(), p, "ctx", "hello body", "model · ctx 5%", send)
-	if !ok {
+	err := sendChunksWithStatusFooter(context.Background(), p, "ctx", "hello body", "model · ctx 5%", send)
+	if err != nil {
 		t.Fatal("expected success")
 	}
 	if len(p.footerCalls) != 1 {
@@ -356,8 +356,8 @@ func TestSendChunksWithStatusFooter_FallsBackInlineWhenFooterSenderFails(t *test
 	send := func(pl Platform, rctx any, content string) error {
 		return pl.Send(context.Background(), rctx, content)
 	}
-	ok := sendChunksWithStatusFooter(context.Background(), p, "ctx", "hello body", "model · ctx 5%", send)
-	if !ok {
+	err := sendChunksWithStatusFooter(context.Background(), p, "ctx", "hello body", "model · ctx 5%", send)
+	if err != nil {
 		t.Fatal("expected success after fallback")
 	}
 	if len(p.footerCalls) != 1 {
@@ -378,8 +378,8 @@ func TestSendChunksWithStatusFooter_NoFooter(t *testing.T) {
 	send := func(pl Platform, rctx any, content string) error {
 		return pl.Send(context.Background(), rctx, content)
 	}
-	ok := sendChunksWithStatusFooter(context.Background(), p, "ctx", "hello body", "", send)
-	if !ok {
+	err := sendChunksWithStatusFooter(context.Background(), p, "ctx", "hello body", "", send)
+	if err != nil {
 		t.Fatal("expected success")
 	}
 	// No footer → routes via plain Send only, never tries SendWithStatusFooter.
@@ -398,8 +398,8 @@ func TestSendChunksWithStatusFooter_PlatformWithoutFooterSender(t *testing.T) {
 	send := func(pl Platform, rctx any, content string) error {
 		return pl.Send(context.Background(), rctx, content)
 	}
-	ok := sendChunksWithStatusFooter(context.Background(), p, "ctx", "hello body", "model · ctx 5%", send)
-	if !ok {
+	err := sendChunksWithStatusFooter(context.Background(), p, "ctx", "hello body", "model · ctx 5%", send)
+	if err != nil {
 		t.Fatal("expected success")
 	}
 	sent := p.getSent()
