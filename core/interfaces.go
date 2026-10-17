@@ -19,6 +19,10 @@ type Platform interface {
 // ErrNotSupported indicates a platform doesn't support a particular operation.
 var ErrNotSupported = errors.New("operation not supported by this platform")
 
+// ErrMessageDeliveryUnconfirmed means a message may have been accepted without
+// a usable receipt. Callers must not create a replacement for the same message.
+var ErrMessageDeliveryUnconfirmed = errors.New("message delivery unconfirmed")
+
 // ErrSessionResumeBlocked preserves a session binding when starting a new
 // session could bypass an unresolved stop or access failure.
 var ErrSessionResumeBlocked = errors.New("session resume requires inspection")

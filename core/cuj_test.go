@@ -3101,6 +3101,9 @@ func (a *cujAgent) setNextSessionEvents(events []Event, delayMs int) {
 // ===========================================================================
 
 func TestCUJ_STREAM1_StreamingResumesAfterPermissionPrompt(t *testing.T) {
+	t.Run("LostReceiptDoesNotReplayAnswer", testCUJUnknownPreviewPermission)
+	t.Run("LostRichReceiptAllowsQueuedTurn", testCUJUnknownRichQueued)
+	t.Run("LostFinalReceiptAllowsQueuedTurn", testCUJUnknownFinalAllowsQueued)
 	env := newCUJStreamingEnv(t)
 	key := "test:jack"
 

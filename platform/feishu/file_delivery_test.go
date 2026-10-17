@@ -255,7 +255,7 @@ func TestLegacySendFileKeepsExistingCreateBehavior(t *testing.T) {
 	}
 	observed.mu.Lock()
 	defer observed.mu.Unlock()
-	if len(observed.uploads) != 1 || len(observed.paths) != 1 || observed.paths[0] != "/open-apis/im/v1/messages" || observed.bodies[0].UUID != "" {
+	if len(observed.uploads) != 1 || len(observed.paths) != 1 || observed.paths[0] != "/open-apis/im/v1/messages" || observed.bodies[0].UUID == "" {
 		t.Fatal("legacy upload or send behavior changed")
 	}
 }

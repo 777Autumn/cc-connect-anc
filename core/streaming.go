@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"strings"
 	"sync"
@@ -40,12 +41,13 @@ type streamPreview struct {
 	ctx       context.Context
 	transform func(string) string
 
-	fullText          string // accumulated full text so far
-	lastSentText      string // what was last successfully sent to the platform
-	lastSentAt        time.Time
-	lastSentViaUpdate bool // true if lastSentText was delivered via UpdateMessage (not SendPreviewStart)
-	previewMsgID      any  // platform-specific ID for the preview message (returned by SendPreviewStart)
-	degraded          bool // if true, stop trying (platform doesn't support it or permanent error)
+	fullText            string // accumulated full text so far
+	lastSentText        string // what was last successfully sent to the platform
+	lastSentAt          time.Time
+	lastSentViaUpdate   bool // true if lastSentText was delivered via UpdateMessage (not SendPreviewStart)
+	previewMsgID        any  // platform-specific ID for the preview message (returned by SendPreviewStart)
+	degraded            bool // if true, stop trying (platform doesn't support it or permanent error)
+	deliveryUnconfirmed bool // sticky for this answer, including interruption cleanup
 
 	timer     *time.Timer
 	timerStop chan struct{} // closed when preview ends
@@ -262,6 +264,7 @@ func (sp *streamPreview) flushLocked(text string) {
 			if err != nil {
 				slog.Debug("stream preview: start failed, degrading", "error", err)
 				sp.degraded = true
+				sp.deliveryUnconfirmed = errors.Is(err, ErrMessageDeliveryUnconfirmed)
 				return
 			}
 			sp.previewMsgID = handle
@@ -269,6 +272,7 @@ func (sp *streamPreview) flushLocked(text string) {
 			if err := sp.platform.Send(sp.ctx, sp.replyCtx, text); err != nil {
 				slog.Debug("stream preview: initial send failed", "error", err)
 				sp.degraded = true
+				sp.deliveryUnconfirmed = errors.Is(err, ErrMessageDeliveryUnconfirmed)
 				return
 			}
 			sp.previewMsgID = sp.replyCtx
@@ -343,6 +347,9 @@ func (sp *streamPreview) unfreeze() {
 	defer sp.mu.Unlock()
 
 	sp.cancelTimerLocked()
+	if sp.deliveryUnconfirmed {
+		return
+	}
 
 	// Allow appendText() to bypass the interval/MinDeltaChars throttle on
 	// the first chunk after the interruption: lastSentAt is the only gate
@@ -362,6 +369,12 @@ func (sp *streamPreview) unfreeze() {
 	// next flushLocked() will see nil and call SendPreviewStart, opening
 	// a fresh card.
 	sp.degraded = false
+}
+
+func (sp *streamPreview) deliveryUnknown() bool {
+	sp.mu.Lock()
+	defer sp.mu.Unlock()
+	return sp.deliveryUnconfirmed
 }
 
 // discard removes the preview message when possible and disables further

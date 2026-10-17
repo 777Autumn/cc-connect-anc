@@ -300,6 +300,10 @@ func (e *Engine) dispatchRestartNotify(req *RestartRequest) error {
 		}
 		if err := p.Send(e.ctx, rctx, text); err != nil {
 			lastErr = err
+			if errors.Is(err, ErrMessageDeliveryUnconfirmed) {
+				slog.Warn("restart notify: delivery unconfirmed; replacement suppressed", "platform", req.Platform)
+				return err
+			}
 			slog.Warn("restart notify: send failed, will retry",
 				"platform", req.Platform, "session", req.SessionKey,
 				"attempt", attempt+1, "max_attempts", len(backoffs), "error", err)
@@ -1995,6 +1999,7 @@ func (e *Engine) executeTimerShell(p Platform, replyCtx any, job *TimerJob) erro
 	// Long-running command — try in-place updates
 	var previewHandle any
 	var useUpdate bool
+	var progressDeliveryUnconfirmed bool
 	if _, ok := p.(MessageUpdater); ok {
 		if starter, ok := p.(PreviewStarter); ok {
 			mu.Lock()
@@ -2005,13 +2010,17 @@ func (e *Engine) executeTimerShell(p Platform, replyCtx any, job *TimerJob) erro
 				progressMsg = fmt.Sprintf("⏰ ⏳ `%s`\n\n%s", cmdLabel, truncateStr(output, 3000))
 			}
 			handle, err := starter.SendPreviewStart(e.ctx, replyCtx, progressMsg)
+			progressDeliveryUnconfirmed = errors.Is(err, ErrMessageDeliveryUnconfirmed)
+			if progressDeliveryUnconfirmed {
+				slog.Warn("shell progress delivery unconfirmed; replacement suppressed", "platform", p.Name())
+			}
 			if err == nil && handle != nil {
 				previewHandle = handle
 				useUpdate = true
 			}
 		}
 	}
-	if !useUpdate {
+	if !useUpdate && !progressDeliveryUnconfirmed {
 		e.send(p, replyCtx, fmt.Sprintf("⏰ ⏳ `%s`", cmdLabel))
 	}
 
@@ -2174,6 +2183,7 @@ func (e *Engine) executeCronShell(p Platform, replyCtx any, job *CronJob) error 
 	// Long-running command. Try in-place updates.
 	var previewHandle any
 	var useUpdate bool
+	var progressDeliveryUnconfirmed bool
 	if _, ok := p.(MessageUpdater); ok {
 		if starter, ok := p.(PreviewStarter); ok {
 			mu.Lock()
@@ -2184,13 +2194,17 @@ func (e *Engine) executeCronShell(p Platform, replyCtx any, job *CronJob) error 
 				progressMsg = fmt.Sprintf("⏰ ⏳ `%s`\n\n%s", cmdLabel, truncateStr(output, 3000))
 			}
 			handle, err := starter.SendPreviewStart(e.ctx, replyCtx, progressMsg)
+			progressDeliveryUnconfirmed = errors.Is(err, ErrMessageDeliveryUnconfirmed)
+			if progressDeliveryUnconfirmed {
+				slog.Warn("shell progress delivery unconfirmed; replacement suppressed", "platform", p.Name())
+			}
 			if err == nil && handle != nil {
 				previewHandle = handle
 				useUpdate = true
 			}
 		}
 	}
-	if !useUpdate {
+	if !useUpdate && !progressDeliveryUnconfirmed {
 		e.send(p, replyCtx, fmt.Sprintf("⏰ ⏳ `%s`", cmdLabel))
 	}
 
@@ -5061,6 +5075,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 	var lastRichCardUpdate time.Time
 	var lastRichCardLen int
 	var cardMessageID any
+	var turnDeliveryUnconfirmed bool
 	var partialText string
 	triggerAutoCompress := false
 	pendingSend := sendDone
@@ -5122,6 +5137,16 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 	sp := newStreamPreview(previewCfg, state.platform, state.replyCtx, e.ctx, workspaceRenderer)
 	cp := newCompactProgressWriter(e.ctx, state.platform, state.replyCtx, e.agent.Name(), e.i18n.CurrentLang(), workspaceRenderer)
 	state.mu.Unlock()
+
+	sendAnswerSegment := func(p Platform, replyCtx any, segment string) {
+		for _, chunk := range SplitMessageCodeFenceAware(segment, maxPlatformMessageLen) {
+			if err := sendWorkspaceWithError(p, replyCtx, chunk); errors.Is(err, ErrMessageDeliveryUnconfirmed) {
+				turnDeliveryUnconfirmed = true
+				sp.discard()
+				return
+			}
+		}
+	}
 
 	// Send instant confirmation reply if enabled and no streaming card is active.
 	// Streaming cards provide their own "processing" indicator, so instant reply
@@ -5336,10 +5361,11 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 				}
 				if cardMessageID == nil {
 					card := buildResolvedRichCard(CardStatusThinking, "", toolSteps, partialText, true, e.composeRichStatusFooter(true, turnStart, e.agent, state.agentSession, state.workspaceDir))
-					if starter, ok := p.(PreviewStarter); ok {
+					if starter, ok := p.(PreviewStarter); ok && !turnDeliveryUnconfirmed {
 						handle, err := starter.SendPreviewStart(e.ctx, replyCtx, card)
 						if err != nil {
 							slog.Debug("rich card: failed to create initial thinking card", "platform", p.Name(), "error", err)
+							turnDeliveryUnconfirmed = errors.Is(err, ErrMessageDeliveryUnconfirmed)
 						} else {
 							cardMessageID = handle
 						}
@@ -5364,12 +5390,10 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 					if sp.canPreview() {
 						sp.freeze()
 						sp.detachPreview()
-					} else {
+					} else if !turnDeliveryUnconfirmed && !sp.deliveryUnknown() {
 						segment := strings.Join(textParts[segmentStart:], "")
 						if segment != "" {
-							for _, chunk := range SplitMessageCodeFenceAware(segment, maxPlatformMessageLen) {
-								sendWorkspace(p, replyCtx, chunk)
-							}
+							sendAnswerSegment(p, replyCtx, segment)
 						}
 					}
 					segmentStart = len(textParts)
@@ -5387,12 +5411,10 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 				// Flush accumulated text segment before thinking display
 				previewActive := sp.canPreview()
 				if len(textParts) > segmentStart {
-					if !previewActive {
+					if !previewActive && !turnDeliveryUnconfirmed && !sp.deliveryUnknown() {
 						segment := strings.Join(textParts[segmentStart:], "")
 						if segment != "" {
-							for _, chunk := range SplitMessageCodeFenceAware(segment, maxPlatformMessageLen) {
-								sendWorkspace(p, replyCtx, chunk)
-							}
+							sendAnswerSegment(p, replyCtx, segment)
 						}
 					}
 					segmentStart = len(textParts)
@@ -5428,10 +5450,11 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 				})
 				if cardMessageID == nil {
 					card := buildResolvedRichCard(CardStatusWorking, "", toolSteps, partialText, true, e.composeRichStatusFooter(true, turnStart, e.agent, state.agentSession, state.workspaceDir))
-					if starter, ok := p.(PreviewStarter); ok {
+					if starter, ok := p.(PreviewStarter); ok && !turnDeliveryUnconfirmed {
 						handle, err := starter.SendPreviewStart(e.ctx, replyCtx, card)
 						if err != nil {
 							slog.Debug("rich card: failed to create initial tool card", "platform", p.Name(), "error", err)
+							turnDeliveryUnconfirmed = errors.Is(err, ErrMessageDeliveryUnconfirmed)
 						} else {
 							cardMessageID = handle
 						}
@@ -5456,12 +5479,10 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 					if sp.canPreview() {
 						sp.freeze()
 						sp.detachPreview()
-					} else {
+					} else if !turnDeliveryUnconfirmed && !sp.deliveryUnknown() {
 						segment := strings.Join(textParts[segmentStart:], "")
 						if segment != "" {
-							for _, chunk := range SplitMessageCodeFenceAware(segment, maxPlatformMessageLen) {
-								sendWorkspace(p, replyCtx, chunk)
-							}
+							sendAnswerSegment(p, replyCtx, segment)
 						}
 					}
 					segmentStart = len(textParts)
@@ -5500,12 +5521,10 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 				// Flush accumulated text segment before tool display
 				previewActive := sp.canPreview()
 				if len(textParts) > segmentStart {
-					if !previewActive {
+					if !previewActive && !turnDeliveryUnconfirmed && !sp.deliveryUnknown() {
 						segment := strings.Join(textParts[segmentStart:], "")
 						if segment != "" {
-							for _, chunk := range SplitMessageCodeFenceAware(segment, maxPlatformMessageLen) {
-								sendWorkspace(p, replyCtx, chunk)
-							}
+							sendAnswerSegment(p, replyCtx, segment)
 						}
 					}
 					segmentStart = len(textParts)
@@ -5562,10 +5581,11 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 						toolSteps = mergeRichToolResult(toolSteps, event, result, e.display.ToolMaxLen)
 						if cardMessageID == nil {
 							card := buildResolvedRichCard(CardStatusWorking, "", toolSteps, partialText, true, e.composeRichStatusFooter(true, turnStart, e.agent, state.agentSession, state.workspaceDir))
-							if starter, ok := p.(PreviewStarter); ok {
+							if starter, ok := p.(PreviewStarter); ok && !turnDeliveryUnconfirmed {
 								handle, err := starter.SendPreviewStart(e.ctx, replyCtx, card)
 								if err != nil {
 									slog.Debug("rich card: failed to create tool-result card", "platform", p.Name(), "error", err)
+									turnDeliveryUnconfirmed = errors.Is(err, ErrMessageDeliveryUnconfirmed)
 								} else {
 									cardMessageID = handle
 								}
@@ -5631,10 +5651,11 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 						if hasRichCard {
 							if cardMessageID == nil && !silentHold {
 								card := buildResolvedRichCard(CardStatusWorking, "", toolSteps, partialText, true, e.composeRichStatusFooter(true, turnStart, e.agent, state.agentSession, state.workspaceDir))
-								if starter, ok := p.(PreviewStarter); ok {
+								if starter, ok := p.(PreviewStarter); ok && !turnDeliveryUnconfirmed {
 									handle, err := starter.SendPreviewStart(e.ctx, replyCtx, card)
 									if err != nil {
 										slog.Debug("rich card: failed to create initial text card", "platform", p.Name(), "error", err)
+										turnDeliveryUnconfirmed = errors.Is(err, ErrMessageDeliveryUnconfirmed)
 									} else {
 										cardMessageID = handle
 									}
@@ -5655,10 +5676,11 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 							// with the post-prefix content already in body.
 							if cardMessageID == nil {
 								card := buildResolvedRichCard(CardStatusWorking, "", toolSteps, partialText, true, e.composeRichStatusFooter(true, turnStart, e.agent, state.agentSession, state.workspaceDir))
-								if starter, ok := p.(PreviewStarter); ok {
+								if starter, ok := p.(PreviewStarter); ok && !turnDeliveryUnconfirmed {
 									handle, err := starter.SendPreviewStart(e.ctx, replyCtx, card)
 									if err != nil {
 										slog.Debug("rich card: failed to create deferred text card", "platform", p.Name(), "error", err)
+										turnDeliveryUnconfirmed = errors.Is(err, ErrMessageDeliveryUnconfirmed)
 									} else {
 										cardMessageID = handle
 									}
@@ -5702,7 +5724,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 							}
 						}
 					} else {
-						if !silentHold && sp.canPreview() {
+						if !silentHold && !turnDeliveryUnconfirmed && sp.canPreview() {
 							if releasedNow {
 								sp.appendText(peekSegment) // flush all held chunks at once
 							} else {
@@ -5803,12 +5825,10 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 			if finalResponseOnly {
 				finalSegmentStart = len(textParts)
 			} else if len(textParts) > segmentStart {
-				if !previewActive {
+				if !previewActive && !turnDeliveryUnconfirmed && !sp.deliveryUnknown() {
 					segment := strings.Join(textParts[segmentStart:], "")
 					if segment != "" {
-						for _, chunk := range SplitMessageCodeFenceAware(segment, maxPlatformMessageLen) {
-							sendWorkspace(p, replyCtx, chunk)
-						}
+						sendAnswerSegment(p, replyCtx, segment)
 					}
 				}
 				segmentStart = len(textParts)
@@ -5988,14 +6008,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 				}
 			}
 
-			if !isSilent {
-				e.hooks.Emit(HookEvent{
-					Event:      HookEventMessageSent,
-					SessionKey: sessionKey,
-					Platform:   p.Name(),
-					Content:    baseResponse,
-				})
-			}
+			answerDeliveryUnconfirmed := turnDeliveryUnconfirmed || sp.deliveryUnknown()
 
 			// statusFooter holds the structured CCD-style footer separately so
 			// platforms implementing StatusFooterSender / StatusFooterUpdater
@@ -6134,6 +6147,9 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 					cardMessageID = nil
 				}
 				slog.Info("silent reply suppressed", "session", session.ID)
+			} else if answerDeliveryUnconfirmed {
+				sp.discard()
+				slog.Warn("answer delivery unconfirmed; replacement suppressed", "session", session.ID)
 			} else if hasRichCard {
 				parts := []string{fullResponse}
 				if splitter, ok := p.(MarkdownTableSplitter); ok {
@@ -6162,22 +6178,34 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 							slog.Debug("rich card: final update failed, falling back to send", "platform", p.Name(), "error", err)
 							if err := p.Send(e.ctx, replyCtx, finalCard); err != nil {
 								slog.Error("failed to send rich card reply", "error", err)
-								return
+								if !errors.Is(err, ErrMessageDeliveryUnconfirmed) {
+									return
+								}
+								answerDeliveryUnconfirmed = true
 							}
 						}
 					}
 				} else {
 					if err := p.Send(e.ctx, replyCtx, finalCard); err != nil {
 						slog.Error("failed to send rich card reply", "error", err)
-						return
+						if !errors.Is(err, ErrMessageDeliveryUnconfirmed) {
+							return
+						}
+						answerDeliveryUnconfirmed = true
 					}
 				}
 				for _, overflow := range parts[1:] {
+					if answerDeliveryUnconfirmed {
+						break
+					}
 					overflowBody := resolveRichCardMarkdown(overflow, true)
 					overflowCard := richCardSupporter.BuildRichCard(CardStatusDone, "", nil, overflowBody, false, richStatusFooter)
 					if err := p.Send(e.ctx, replyCtx, overflowCard); err != nil {
 						slog.Error("failed to send overflow rich card", "error", err)
-						return
+						if !errors.Is(err, ErrMessageDeliveryUnconfirmed) {
+							return
+						}
+						answerDeliveryUnconfirmed = true
 					}
 				}
 			} else if toolCount > 0 && segmentStart > 0 {
@@ -6188,8 +6216,11 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 				if segmentStart < len(textParts) {
 					unsent := strings.Join(textParts[segmentStart:], "")
 					if unsent != "" {
-						if !sendChunksWithStatusFooter(e.ctx, p, replyCtx, unsent, statusFooter, sendWorkspaceWithError) {
-							return
+						if err := sendChunksWithStatusFooter(e.ctx, p, replyCtx, unsent, statusFooter, sendWorkspaceWithError); err != nil {
+							if !errors.Is(err, ErrMessageDeliveryUnconfirmed) {
+								return
+							}
+							answerDeliveryUnconfirmed = true
 						}
 					}
 				}
@@ -6197,18 +6228,37 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 				sp.discard()
 				metaOnly := strings.TrimSpace(strings.TrimPrefix(fullResponse, baseResponse))
 				if metaOnly != "" || statusFooter != "" {
-					if !sendChunksWithStatusFooter(e.ctx, p, replyCtx, metaOnly, statusFooter, sendWorkspaceWithError) {
-						return
+					if err := sendChunksWithStatusFooter(e.ctx, p, replyCtx, metaOnly, statusFooter, sendWorkspaceWithError); err != nil {
+						if !errors.Is(err, ErrMessageDeliveryUnconfirmed) {
+							return
+						}
+						answerDeliveryUnconfirmed = true
 					}
 				}
 				slog.Debug("EventResult: suppressed duplicate side-channel text", "response_len", len(fullResponse))
 			} else if sp.finish(fullResponse, statusFooter) {
 				slog.Debug("EventResult: finalized via stream preview", "response_len", len(fullResponse), "footer_len", len(statusFooter))
+			} else if sp.deliveryUnknown() {
+				answerDeliveryUnconfirmed = true
+				sp.discard()
 			} else {
 				slog.Debug("EventResult: sending via p.Send (preview inactive or failed)", "response_len", len(fullResponse), "footer_len", len(statusFooter))
-				if !sendChunksWithStatusFooter(e.ctx, p, replyCtx, fullResponse, statusFooter, sendWorkspaceWithError) {
-					return
+				if err := sendChunksWithStatusFooter(e.ctx, p, replyCtx, fullResponse, statusFooter, sendWorkspaceWithError); err != nil {
+					if !errors.Is(err, ErrMessageDeliveryUnconfirmed) {
+						return
+					}
+					answerDeliveryUnconfirmed = true
 				}
+			}
+
+			answerDeliveryUnconfirmed = answerDeliveryUnconfirmed || sp.deliveryUnknown()
+			if !isSilent && !answerDeliveryUnconfirmed {
+				e.hooks.Emit(HookEvent{
+					Event:      HookEventMessageSent,
+					SessionKey: sessionKey,
+					Platform:   p.Name(),
+					Content:    baseResponse,
+				})
 			}
 
 			if elapsed := time.Since(replyStart); elapsed >= slowPlatformSend {
@@ -6217,7 +6267,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 			finishReplyTiming(true)
 
 			// TTS: async voice reply if enabled (skipped for silent replies)
-			if !isSilent && e.tts != nil && e.tts.Enabled && e.tts.TTS != nil {
+			if !isSilent && !answerDeliveryUnconfirmed && e.tts != nil && e.tts.Enabled && e.tts.TTS != nil {
 				state.mu.Lock()
 				fromVoice := state.fromVoice
 				state.mu.Unlock()
@@ -6367,6 +6417,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 				// turn's cardID, overwriting that card's body with the new turn's
 				// content. Same risk for partialText/toolSteps leaking across turns.
 				cardMessageID = nil
+				turnDeliveryUnconfirmed = false
 				toolSteps = nil
 				partialText = ""
 				lastRichCardUpdate = time.Time{}
@@ -6432,7 +6483,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 
 			// Add a "done" reaction after the final answer when supported. Skip
 			// silent turns and rich card mode (the card itself shows done status).
-			if !isSilent && !hasRichCard {
+			if !isSilent && !hasRichCard && !answerDeliveryUnconfirmed {
 				if doneTI, ok := p.(TypingIndicatorDone); ok {
 					doneReaction = func() { doneTI.AddDoneReaction(replyCtx) }
 				}
@@ -6530,12 +6581,11 @@ channelClosed:
 			fullResponse = stripped
 		}
 
-		e.hooks.Emit(HookEvent{
-			Event:      HookEventMessageSent,
-			SessionKey: sessionKey,
-			Platform:   p.Name(),
-			Content:    fullResponse,
-		})
+		if turnDeliveryUnconfirmed || sp.deliveryUnknown() {
+			sp.discard()
+			slog.Warn("answer delivery unconfirmed on channel close; replacement suppressed", "session", session.ID)
+			return
+		}
 
 		if toolCount > 0 && segmentStart > 0 {
 			sp.discard()
@@ -6551,6 +6601,9 @@ channelClosed:
 			}
 		} else if sp.finish(fullResponse, "") {
 			slog.Debug("stream preview: finalized in-place (process exited)")
+		} else if sp.deliveryUnknown() {
+			sp.discard()
+			return
 		} else {
 			for _, chunk := range SplitMessageCodeFenceAware(fullResponse, maxPlatformMessageLen) {
 				if err := sendWorkspaceWithError(p, replyCtx, chunk); err != nil {
@@ -6558,6 +6611,13 @@ channelClosed:
 				}
 			}
 		}
+		e.hooks.Emit(HookEvent{
+			Event:      HookEventMessageSent,
+			SessionKey: sessionKey,
+			Platform:   p.Name(),
+			Content:    fullResponse,
+		})
+
 	}
 }
 
@@ -8090,10 +8150,10 @@ func (e *Engine) buildClaudeStatusLineFooter(agent Agent, session AgentSession, 
 // each chunk via the supplied sendFn. The final chunk carries the structured
 // statusFooter: platforms implementing StatusFooterSender render it as a
 // small/dim block; otherwise the footer is appended inline via
-// appendReplyFooter. Returns true on success, false if any send failed (in
-// which case caller should bail). sendFn is the workspace-aware send closure
+// appendReplyFooter. Returns the original send error so callers can distinguish
+// an unconfirmed delivery from a rejection. sendFn is the workspace-aware send closure
 // (so the helper picks up workspace transforms like path remapping).
-func sendChunksWithStatusFooter(ctx context.Context, p Platform, replyCtx any, body, statusFooter string, sendFn func(Platform, any, string) error) bool {
+func sendChunksWithStatusFooter(ctx context.Context, p Platform, replyCtx any, body, statusFooter string, sendFn func(Platform, any, string) error) error {
 	chunks := SplitMessageCodeFenceAware(body, maxPlatformMessageLen)
 	for i, chunk := range chunks {
 		isLast := i == len(chunks)-1
@@ -8101,6 +8161,9 @@ func sendChunksWithStatusFooter(ctx context.Context, p Platform, replyCtx any, b
 			if sfs, ok := p.(StatusFooterSender); ok {
 				if err := sfs.SendWithStatusFooter(ctx, replyCtx, chunk, statusFooter); err == nil {
 					continue
+				} else if errors.Is(err, ErrMessageDeliveryUnconfirmed) {
+					slog.Warn("status footer delivery unconfirmed; replacement suppressed", "platform", p.Name())
+					return err
 				} else {
 					slog.Warn("SendWithStatusFooter failed, falling back to inline footer", "error", err)
 				}
@@ -8108,10 +8171,10 @@ func sendChunksWithStatusFooter(ctx context.Context, p Platform, replyCtx any, b
 			chunk = appendReplyFooter(chunk, statusFooter)
 		}
 		if err := sendFn(p, replyCtx, chunk); err != nil {
-			return false
+			return err
 		}
 	}
-	return true
+	return nil
 }
 
 func appendReplyFooter(content, footer string) string {
@@ -8295,6 +8358,7 @@ func (e *Engine) runShellWithProgress(p Platform, replyCtx any, command string, 
 	// Command is long-running. Try to send a progress message.
 	var previewHandle any
 	var useUpdate bool
+	var progressDeliveryUnconfirmed bool
 	if _, ok := p.(MessageUpdater); ok {
 		if starter, ok := p.(PreviewStarter); ok {
 			mu.Lock()
@@ -8302,6 +8366,10 @@ func (e *Engine) runShellWithProgress(p Platform, replyCtx any, command string, 
 			mu.Unlock()
 			progressMsg := e.formatShellProgress(cmdLabel, output, maxOutput)
 			handle, err := starter.SendPreviewStart(e.ctx, replyCtx, progressMsg)
+			progressDeliveryUnconfirmed = errors.Is(err, ErrMessageDeliveryUnconfirmed)
+			if progressDeliveryUnconfirmed {
+				slog.Warn("shell progress delivery unconfirmed; replacement suppressed", "platform", p.Name())
+			}
 			if err == nil && handle != nil {
 				previewHandle = handle
 				useUpdate = true
@@ -8309,7 +8377,7 @@ func (e *Engine) runShellWithProgress(p Platform, replyCtx any, command string, 
 		}
 	}
 
-	if !useUpdate {
+	if !useUpdate && !progressDeliveryUnconfirmed {
 		// Platform doesn't support in-place updates — send a status message
 		e.send(p, replyCtx, fmt.Sprintf("⏳ `%s`", cmdLabel))
 	}
