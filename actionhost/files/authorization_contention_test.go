@@ -60,6 +60,7 @@ func testAuthorizationDoesNotLockOtherWork(t *testing.T, project bool) {
 					realm := hash([]byte("fixture-project-realm"))
 					if err := f.store.change(ctx, func(st *state) error {
 						st.Works[grant.WorkID].GroupRealm = realm
+						st.Works[grant.WorkID].DeliveryAudience = "group"
 						st.Schema = max(st.Schema, 2)
 						return nil
 					}); err != nil {

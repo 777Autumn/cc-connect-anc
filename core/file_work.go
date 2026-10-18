@@ -56,15 +56,16 @@ type FileWorkArtifact struct {
 }
 
 type FileWorkContext struct {
-	Enabled        bool               `json:"enabled"`
-	WorkID         string             `json:"work_id"`
-	WorkRoot       string             `json:"-"`
-	Inputs         []FileWorkInput    `json:"inputs"`
-	OutputDir      string             `json:"output_dir"`
-	LatestVersion  int                `json:"latest_version"`
-	Artifacts      []FileWorkArtifact `json:"artifacts"`
-	ContentReads   []FileContentRead  `json:"content_reads"`
-	IncomingInputs []FileWorkInput    `json:"-"` // Host intake receipt, never model-visible pending materials.
+	Enabled          bool               `json:"enabled"`
+	DeliveryAudience string             `json:"delivery_audience"` // Transport-attested private/group; unknown for legacy work until rebound.
+	WorkID           string             `json:"work_id"`
+	WorkRoot         string             `json:"-"`
+	Inputs           []FileWorkInput    `json:"inputs"`
+	OutputDir        string             `json:"output_dir"`
+	LatestVersion    int                `json:"latest_version"`
+	Artifacts        []FileWorkArtifact `json:"artifacts"`
+	ContentReads     []FileContentRead  `json:"content_reads"`
+	IncomingInputs   []FileWorkInput    `json:"-"` // Host intake receipt, never model-visible pending materials.
 }
 
 // FileContentRead records content supplied by the host, not caller inspection claims.

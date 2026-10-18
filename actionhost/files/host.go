@@ -55,6 +55,7 @@ type work struct {
 	ContentReads                                                     map[string]core.FileContentRead `json:",omitempty"`
 	Messages                                                         map[string]bool
 	GroupRealm                                                       string `json:",omitempty"`
+	DeliveryAudience                                                 string `json:",omitempty"`
 	ProjectImportRealm                                               string `json:",omitempty"`
 }
 
@@ -122,6 +123,10 @@ func validHash(s string) bool {
 
 func workContext(w *work) WorkContext {
 	r := WorkContext{Enabled: true, WorkID: w.ID, WorkRoot: w.Root, Inputs: append([]Input{}, w.Inputs...), OutputDir: filepath.Join(w.Root, "outputs"), LatestVersion: w.Version, Artifacts: []Artifact{}}
+	r.DeliveryAudience = w.DeliveryAudience
+	if r.DeliveryAudience == "" {
+		r.DeliveryAudience = "unknown"
+	}
 	r.ContentReads = []core.FileContentRead{}
 	for _, read := range w.ContentReads {
 		r.ContentReads = append(r.ContentReads, read)
@@ -215,8 +220,10 @@ func (h *Host) Bind(ctx context.Context, b Binding) (WorkContext, error) {
 			b.Inputs = append(append([]core.FileAttachment(nil), b.Inputs...), core.FileAttachment{FileName: d.Name, Data: data})
 		}
 		realm := ""
+		audience := "private"
 		if b.Group {
 			realm = h.groupRealm
+			audience = "group"
 		}
 		var w *work
 		for _, old := range st.Works {
@@ -226,6 +233,9 @@ func (h *Host) Bind(ctx context.Context, b Binding) (WorkContext, error) {
 			}
 		}
 		if w != nil {
+			if w.DeliveryAudience != "" && w.DeliveryAudience != audience {
+				return ErrScope
+			}
 			if w.Root != b.WorkRoot || w.RootIdentity != identity(rootInfo) || w.InputIdentity != identity(inputInfo) || w.OutputIdentity != identity(outputInfo) || w.OwnerUID != b.OwnerUID || w.GroupRealm != realm {
 				return ErrScope
 			}
@@ -241,6 +251,8 @@ func (h *Host) Bind(ctx context.Context, b Binding) (WorkContext, error) {
 			}
 			w.GroupRealm = realm
 		}
+		// Legacy work gains audience only on an authenticated, scope-checked rebind.
+		w.DeliveryAudience = audience
 		if b.SourceReceipt != "" {
 			if w.ID != boundID {
 				return ErrScope

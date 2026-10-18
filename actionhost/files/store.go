@@ -228,6 +228,12 @@ func validState(st state) bool {
 			return false
 		}
 		key := scope(w.Principal) + ":" + w.SessionID
+		if w.DeliveryAudience != "" && w.DeliveryAudience != "private" && w.DeliveryAudience != "group" {
+			return false
+		}
+		if w.DeliveryAudience == "private" && w.GroupRealm != "" {
+			return false
+		}
 		if w.GroupRealm != "" && (st.Schema < 2 || !validHash(w.GroupRealm)) {
 			return false
 		}
