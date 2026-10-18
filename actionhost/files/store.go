@@ -127,6 +127,11 @@ func databaseFile(path string) (os.FileInfo, error) {
 // shortcut: one JSON document still serializes local validation and file I/O;
 // split the stored state only if measured local transaction latency requires it.
 func (s *Store) change(ctx context.Context, fn func(*state) error) error {
+	return s.changeExpected(ctx, "", fn)
+}
+
+// Recovery pins the raw payload inside this transaction, before decoding it.
+func (s *Store) changeExpected(ctx context.Context, expected string, fn func(*state) error) error {
 	select {
 	case s.mu <- struct{}{}:
 	case <-ctx.Done():
@@ -174,7 +179,14 @@ func (s *Store) change(ctx context.Context, fn func(*state) error) error {
 	}
 	var data []byte
 	var st state
-	if err = conn.QueryRowContext(ctx, "SELECT payload FROM file_state WHERE id=1").Scan(&data); err != nil || json.Unmarshal(data, &st) != nil || !validState(st) {
+	if err = conn.QueryRowContext(ctx, "SELECT payload FROM file_state WHERE id=1").Scan(&data); err != nil {
+		s.failed = true
+		return ErrUnavailable
+	}
+	if expected != "" && hash(data) != expected {
+		return ErrVersion
+	}
+	if json.Unmarshal(data, &st) != nil || !validState(st) {
 		s.failed = true
 		return ErrUnavailable
 	}

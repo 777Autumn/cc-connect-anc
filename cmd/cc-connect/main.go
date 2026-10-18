@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -238,6 +239,20 @@ var topLevelCommandHandlers = map[string]func([]string){
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "files-recover-device" {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		result, err := recoverFileDevices(ctx, os.Args[2:], os.Stdin)
+		if err != nil {
+			slog.Error("file device recovery not confirmed; reconcile state before any retry", "error", err)
+			os.Exit(1)
+		}
+		if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
+			slog.Error("file device recovery committed but receipt output failed; reconcile state before any retry", "before_sha256", result.BeforeSHA256, "after_sha256", result.AfterSHA256, "error", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "file-check" {
 		if err := checkOfficeInput(os.Args[2:], os.Stdin); err != nil {
 			fmt.Fprintln(os.Stderr, "office content rejected")
