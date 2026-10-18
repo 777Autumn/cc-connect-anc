@@ -529,7 +529,7 @@ func TestInputBatchFailsBeforeSavingAnyPart(t *testing.T) {
 		t.Fatal(err)
 	}
 	encoded, _ := json.Marshal(contextResult)
-	if strings.Contains(string(encoded), "audience") || strings.Contains(string(encoded), "owner_uid") || strings.Contains(string(encoded), "WorkRoot") {
+	if strings.Contains(string(encoded), `"audience"`) || strings.Contains(string(encoded), "original-thread") || strings.Contains(string(encoded), "owner_uid") || strings.Contains(string(encoded), "WorkRoot") {
 		t.Fatal("host fields leaked")
 	}
 }
