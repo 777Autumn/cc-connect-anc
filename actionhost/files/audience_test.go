@@ -31,7 +31,11 @@ func TestWorkContextAudienceComesFromTransportAndSurvivesReopen(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer reopened.Close()
+			defer func() {
+				if err := reopened.Close(); err != nil {
+					t.Error(err)
+				}
+			}()
 			f.host.store = reopened
 			got, err := f.host.Tool(context.Background(), "work-context", json.RawMessage(`{}`), b.Principal, w.WorkID)
 			want := map[bool]string{false: "private", true: "group"}[group]
