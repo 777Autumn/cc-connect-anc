@@ -11,7 +11,9 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/chenhg5/cc-connect/actionhost/files"
@@ -79,5 +81,57 @@ func TestRecoverFileDevicesGuardsConfigurationAndRunningInstance(t *testing.T) {
 				t.Fatal("guard did not reject before ledger access", err, want)
 			}
 		})
+	}
+}
+
+func TestRecoverFileDevicesRejectsAmbiguousDescriptorLists(t *testing.T) {
+	for _, value := range []string{"", "--other=3", "--inherited-output-fds=", "--inherited-output-fds=0", "--inherited-output-fds=03", "--inherited-output-fds=+3", "--inherited-output-fds=3,3", "--inherited-output-fds=3,", "--inherited-output-fds=999999999999999999999", "--inherited-output-fds=" + strings.Repeat("3,", 1024)} {
+		request := files.DeviceRecoveryRequest{}
+		opened, err := recoveryOutputFiles(&request, value)
+		if err == nil || len(opened) != 0 {
+			t.Fatal("invalid descriptor list accepted", value, err)
+		}
+	}
+}
+
+func TestRecoverFileDevicesMapsTwoWorkDescriptorsInManifestOrder(t *testing.T) {
+	request := files.DeviceRecoveryRequest{Works: []files.DeviceRecoveryWork{
+		{WorkSHA256: "second", Entries: map[string]files.RecoveryEntry{"outputs/z": {}, "outputs/a": {}, "inputs/x": {}, "outputs/dir": {Directory: true}}},
+		{WorkSHA256: "first", Entries: map[string]files.RecoveryEntry{"outputs/b": {}}},
+	}}
+	values := []string{}
+	for _, name := range []string{"a", "z", "b"} {
+		path := filepath.Join(t.TempDir(), name)
+		if err := os.WriteFile(path, []byte(name), 0600); err != nil {
+			t.Fatal(err)
+		}
+		fd, err := syscall.Open(path, syscall.O_RDONLY, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		values = append(values, strconv.Itoa(fd))
+	}
+	opened, err := recoveryOutputFiles(&request, "--inherited-output-fds="+strings.Join(values, ","))
+	defer func() {
+		for _, f := range opened {
+			_ = f.Close()
+		}
+	}()
+	if err != nil || len(opened) != 3 {
+		t.Fatal("descriptor ordering rejected", err)
+	}
+	for i, name := range []string{"outputs/a", "outputs/z", "outputs/b"} {
+		work := 0
+		if i == 2 {
+			work = 1
+		}
+		f := request.Works[work].ReadFiles[name]
+		if f != opened[i] {
+			t.Fatal("descriptor bound to wrong work/path", i)
+		}
+		data := make([]byte, 1)
+		if _, err := f.ReadAt(data, 0); err != nil || string(data) != filepath.Base(name) {
+			t.Fatal("wrong original file", err)
+		}
 	}
 }

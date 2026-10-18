@@ -22,6 +22,8 @@ type DeviceRecoveryWork struct {
 	Project    string                   `json:"project"`
 	WorkSHA256 string                   `json:"work_sha256"`
 	Entries    map[string]RecoveryEntry `json:"entries"`
+	// Operator-inherited read capabilities; never accepted from manifest JSON.
+	ReadFiles map[string]*os.File `json:"-"`
 }
 
 type RecoveryEntry struct {
@@ -58,6 +60,9 @@ func RecoverDeviceChange(ctx context.Context, path, snapshotDir string, request 
 	var result DeviceRecoveryResult
 	if !validHash(request.StateSHA256) || len(request.Works) < 1 || len(request.Works) > 2 {
 		return result, ErrInvalid
+	}
+	if err := validateRecoveryReadFiles(request); err != nil {
+		return result, err
 	}
 	info, err := databaseFile(path)
 	if err != nil {
@@ -162,7 +167,7 @@ func verifyRecoveryWork(ctx context.Context, w *work, proof DeviceRecoveryWork, 
 	defer func() { _ = r.Close() }()
 	remaining := int64(200 << 20)
 	entries := map[string]RecoveryEntry{}
-	if err := recoveryTree(ctx, r, ".", w.OwnerUID, newDev, &remaining, entries, 0); err != nil {
+	if err := recoveryTree(ctx, r, ".", w.OwnerUID, newDev, &remaining, entries, proof.ReadFiles, 0); err != nil {
 		return err
 	}
 	if !reflect.DeepEqual(entries, proof.Entries) {
@@ -202,7 +207,7 @@ func verifyRecoveryWork(ctx context.Context, w *work, proof DeviceRecoveryWork, 
 	return ctx.Err()
 }
 
-func recoveryTree(ctx context.Context, r *os.Root, path string, owner int, dev string, remaining *int64, entries map[string]RecoveryEntry, depth int) error {
+func recoveryTree(ctx context.Context, r *os.Root, path string, owner int, dev string, remaining *int64, entries map[string]RecoveryEntry, readFiles map[string]*os.File, depth int) error {
 	if depth > 12 || len(entries) >= 1024 {
 		return ErrInvalid
 	}
@@ -245,13 +250,13 @@ func recoveryTree(ctx context.Context, r *os.Root, path string, owner int, dev s
 			if err != nil {
 				return err
 			}
-			err = recoveryTree(ctx, child, relative, owner, dev, remaining, entries, depth+1)
+			err = recoveryTree(ctx, child, relative, owner, dev, remaining, entries, readFiles, depth+1)
 			_ = child.Close()
 			if err != nil {
 				return err
 			}
 		} else {
-			digest, err := recoveryFile(r, name.Name(), uid, remaining)
+			digest, err := recoveryFileHandle(r, name.Name(), uid, remaining, readFiles[relative])
 			if err != nil {
 				return err
 			}
@@ -270,6 +275,10 @@ func recoveryTree(ctx context.Context, r *os.Root, path string, owner int, dev s
 }
 
 func recoveryFile(root *os.Root, name string, uid int, remaining *int64) (string, error) {
+	return recoveryFileHandle(root, name, uid, remaining, nil)
+}
+
+func recoveryFileHandle(root *os.Root, name string, uid int, remaining *int64, inherited *os.File) (string, error) {
 	if filepath.Base(name) != name || name == "." || name == ".." {
 		return "", ErrInvalid
 	}
@@ -277,16 +286,22 @@ func recoveryFile(root *os.Root, name string, uid int, remaining *int64) (string
 	if err != nil || !before.Mode().IsRegular() || before.Mode().Perm()&0022 != 0 || checkOwner(before, uid, true) != nil || before.Size() > MaxFileBytes || before.Size() > *remaining {
 		return "", ErrInvalid
 	}
-	f, err := root.OpenFile(name, os.O_RDONLY|noFollowFlag(), 0)
-	if err != nil {
-		return "", ErrUnavailable
+	f := inherited
+	if f == nil {
+		f, err = root.OpenFile(name, os.O_RDONLY|noFollowFlag(), 0)
+		if err != nil {
+			return "", ErrUnavailable
+		}
+		defer func() { _ = f.Close() }()
+	} else if !recoveryReadOnly(f) {
+		return "", ErrInvalid
 	}
-	defer func() { _ = f.Close() }()
 	opened, err := f.Stat()
 	if err != nil || !unchanged(before, opened) {
 		return "", ErrScope
 	}
-	data, err := io.ReadAll(io.LimitReader(f, MaxFileBytes+1))
+	// Each verification pass reads actual bytes from zero, regardless of FD offset.
+	data, err := io.ReadAll(io.NewSectionReader(f, 0, MaxFileBytes+1))
 	after, statErr := f.Stat()
 	current, pathErr := root.Lstat(name)
 	if err != nil || statErr != nil || pathErr != nil || !unchanged(opened, after) || !unchanged(after, current) || int64(len(data)) != before.Size() {
@@ -294,4 +309,37 @@ func recoveryFile(root *os.Root, name string, uid int, remaining *int64) (string
 	}
 	*remaining -= int64(len(data))
 	return hash(data), nil
+}
+
+func validateRecoveryReadFiles(request DeviceRecoveryRequest) error {
+	inherited := false
+	for _, w := range request.Works {
+		inherited = inherited || w.ReadFiles != nil
+	}
+	if !inherited {
+		return nil
+	}
+	seen := map[uintptr]bool{}
+	for _, w := range request.Works {
+		expected := 0
+		for name, entry := range w.Entries {
+			if entry.Directory || !strings.HasPrefix(name, "outputs/") {
+				continue
+			}
+			expected++
+			f := w.ReadFiles[name]
+			if f == nil || f.Fd() < 3 || seen[f.Fd()] || len(seen) >= 1024 || !recoveryReadOnly(f) {
+				return ErrInvalid
+			}
+			info, err := f.Stat()
+			if err != nil || !info.Mode().IsRegular() || identity(info) != entry.Identity || recoveryMode(info) != entry.Mode {
+				return ErrScope
+			}
+			seen[f.Fd()] = true
+		}
+		if len(w.ReadFiles) != expected {
+			return ErrInvalid
+		}
+	}
+	return nil
 }

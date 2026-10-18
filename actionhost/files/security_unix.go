@@ -7,8 +7,11 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 func checkOwner(info os.FileInfo, uid int, single bool) error {
@@ -101,3 +104,9 @@ func protectedRoot(path string) (*os.Root, error) {
 }
 
 func noFollowFlag() int { return syscall.O_NOFOLLOW | syscall.O_NONBLOCK }
+
+func recoveryReadOnly(f *os.File) bool {
+	flags, err := unix.FcntlInt(f.Fd(), unix.F_GETFL, 0)
+	// F_GETFL succeeds for Linux O_PATH too; these handles cannot read bytes.
+	return err == nil && flags&unix.O_ACCMODE == unix.O_RDONLY && (runtime.GOOS != "linux" || flags&0x200000 == 0)
+}
