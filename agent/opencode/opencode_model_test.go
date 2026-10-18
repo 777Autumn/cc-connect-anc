@@ -756,6 +756,8 @@ func TestAvailableModels_BackgroundRefreshUpdatesDiskCache(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
+	a := agent.(*Agent)
+	t.Cleanup(func() { a.refreshWg.Wait() })
 	switcher, ok := agent.(core.ModelSwitcher)
 	if !ok {
 		t.Fatalf("New() agent does not implement core.ModelSwitcher")
@@ -771,6 +773,8 @@ func TestAvailableModels_BackgroundRefreshUpdatesDiskCache(t *testing.T) {
 	}
 
 	waitForModelsInPersistentCache(t, cachePath, []string{"fresh/model", "second/model"})
+	// The disk rename precedes the in-memory cache update in this refresh.
+	a.refreshWg.Wait()
 
 	got = switcher.AvailableModels(context.Background())
 	if len(got) != 2 || got[0].Name != "fresh/model" || got[1].Name != "second/model" {

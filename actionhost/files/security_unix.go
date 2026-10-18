@@ -35,6 +35,14 @@ func identity(info os.FileInfo) string {
 	return fmt.Sprintf("%d:%d:%d:%d", s.Dev, s.Ino, s.Uid, s.Gid)
 }
 
+func recoveryMode(info os.FileInfo) uint32 {
+	s, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return 0
+	}
+	return uint32(s.Mode) & 07777
+}
+
 func unchanged(a, b os.FileInfo) bool {
 	if !os.SameFile(a, b) || a.Size() != b.Size() || a.Mode() != b.Mode() || !a.ModTime().Equal(b.ModTime()) || identity(a) != identity(b) {
 		return false
