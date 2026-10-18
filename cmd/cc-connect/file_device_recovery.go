@@ -7,6 +7,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/chenhg5/cc-connect/actionhost/files"
@@ -16,7 +19,7 @@ import (
 // Runs before runtime initialization; no platform, agent or sender is created.
 func recoverFileDevices(ctx context.Context, args []string, input io.Reader) (files.DeviceRecoveryResult, error) {
 	var empty files.DeviceRecoveryResult
-	if len(args) != 2 || !filepath.IsAbs(args[0]) || filepath.Clean(args[0]) != args[0] {
+	if (len(args) != 2 && len(args) != 3) || !filepath.IsAbs(args[0]) || filepath.Clean(args[0]) != args[0] {
 		return empty, files.ErrInvalid
 	}
 	raw, err := readRecoveryConfig(args[0], args[1])
@@ -34,6 +37,17 @@ func recoverFileDevices(ctx context.Context, args []string, input io.Reader) (fi
 	request, err := files.DecodeDeviceRecoveryRequest(manifest)
 	if err != nil {
 		return empty, err
+	}
+	if len(args) == 3 {
+		opened, err := recoveryOutputFiles(&request, args[2])
+		defer func() {
+			for _, f := range opened {
+				_ = f.Close()
+			}
+		}()
+		if err != nil {
+			return empty, err
+		}
 	}
 	ledger, snapshots := "", ""
 	for _, work := range request.Works {
@@ -65,6 +79,54 @@ func recoverFileDevices(ctx context.Context, args []string, input io.Reader) (fi
 		return empty, files.ErrScope
 	}
 	return files.RecoverDeviceChange(ctx, ledger, snapshots, request)
+}
+
+// File order comes from the frozen manifest; argv contains only descriptor numbers.
+func recoveryOutputFiles(request *files.DeviceRecoveryRequest, option string) ([]*os.File, error) {
+	const prefix = "--inherited-output-fds="
+	if !strings.HasPrefix(option, prefix) || len(option) > 16384 {
+		return nil, files.ErrInvalid
+	}
+	values := strings.Split(strings.TrimPrefix(option, prefix), ",")
+	if len(values) > 1024 {
+		return nil, files.ErrInvalid
+	}
+	fds, seen := []int{}, map[int]bool{}
+	for _, value := range values {
+		fd, err := strconv.Atoi(value)
+		if err != nil || fd < 3 || strconv.Itoa(fd) != value || seen[fd] {
+			return nil, files.ErrInvalid
+		}
+		fds = append(fds, fd)
+		seen[fd] = true
+	}
+	opened := []*os.File{}
+	for i := range request.Works {
+		work := &request.Works[i]
+		names := []string{}
+		for name, entry := range work.Entries {
+			if strings.HasPrefix(name, "outputs/") && !entry.Directory {
+				names = append(names, name)
+			}
+		}
+		sort.Strings(names)
+		work.ReadFiles = map[string]*os.File{}
+		for _, name := range names {
+			if len(opened) >= len(fds) {
+				return opened, files.ErrInvalid
+			}
+			f := os.NewFile(uintptr(fds[len(opened)]), "recovery-output")
+			if f == nil {
+				return opened, files.ErrInvalid
+			}
+			opened = append(opened, f)
+			work.ReadFiles[name] = f
+		}
+	}
+	if len(opened) != len(fds) {
+		return opened, files.ErrInvalid
+	}
+	return opened, nil
 }
 
 func readRecoveryConfig(path, expected string) ([]byte, error) {

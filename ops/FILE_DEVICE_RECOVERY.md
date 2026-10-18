@@ -34,6 +34,29 @@ Run as the ordinary gateway account, using the frozen absolute configuration
 path and its SHA-256. The existing same-configuration instance lock must be free.
 No platform, agent or sender is initialized by this command.
 
+Model-owned `0600` drafts can be unreadable by the gateway. Do not change their
+permissions, skip their hashes or run the ledger transaction as root. A reviewed
+maintenance parent may pre-open precisely the frozen output files read-only,
+using no-follow directory traversal and verifying the frozen identities, then
+spawn this command under the original gateway UID/GID/groups with those handles
+inherited. The optional final argument `--inherited-output-fds=7,9,12` contains
+only descriptor numbers. Their order is manifest work order, then sorted relative
+paths of **all** non-directory `outputs/` entries for each work. No config, ledger,
+input, snapshot or directory handle is accepted. No descriptor remapping or
+permission change is needed; Python's `pass_fds`, `user`, `group`, and
+`extra_groups` can preserve that boundary without a `preexec_fn`.
+
+The list must be canonical, unique, bounded and exactly match those output
+entries. The command verifies read-only regular handles against both the frozen
+inventory and current paths. Both tree passes read their actual bytes from offset
+zero; invalid handles never fall back to opening another path. All existing
+ownership, single-link, no-follow, content, size and transaction checks remain.
+The command closes inherited handles before returning. The parent must also
+close its copies before its existing no-writers check. Read handles do not lock
+out external writers; stopped-runtime exclusion and the full post-check remain
+required. Invalid or excessive inherited handles reject before the transaction;
+later I/O failure aborts recovery and still requires read-only reconciliation.
+
 ```text
 cc-connect-anc files-recover-device /absolute/config.toml <config-sha256> < manifest.json
 ```
@@ -85,3 +108,6 @@ Feishu results are distinct evidence.
 Regression entry points: `TestBindDeviceChange*`, `TestRecoverDeviceChange*`,
 `TestDecodeDeviceRecovery*`, `TestRecoverFileDevices*`. Native Ubuntu/macOS CI
 runs these with the race detector. No device fault is injected into production.
+The same two CI platforms explicitly run the privileged disposable setup for
+`TestRecoverDeviceChangeAcrossUIDReadOnlyFiles`; both real command invocations
+inside that fixture use an ordinary ledger UID distinct from the private-file UID.

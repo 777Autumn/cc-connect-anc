@@ -13,3 +13,4 @@ func unchanged(os.FileInfo, os.FileInfo) bool { return false }
 func noFollowFlag() int                       { return 0 }
 func fileGroup(os.FileInfo) int               { return -1 }
 func recoveryMode(os.FileInfo) uint32         { return 0 }
+func recoveryReadOnly(*os.File) bool          { return false }

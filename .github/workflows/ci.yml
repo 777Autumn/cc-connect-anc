@@ -42,6 +42,7 @@ jobs:
           CGO_ENABLED=0 go test -c ./agent/codex -o "$RUNNER_TEMP/codex-identity.test"
           CGO_ENABLED=0 go test -c ./actionhost/files -o "$RUNNER_TEMP/codex-files.test"
           CGO_ENABLED=0 go test -c -tags=no_web ./cmd/cc-connect -o "$RUNNER_TEMP/codex-startup.test"
+          sudo -n "$RUNNER_TEMP/codex-startup.test" -test.run='^TestRecoverDeviceChangeAcrossUIDReadOnlyFiles$' -test.v -test.timeout=60s
           sudo -n --preserve-env=GITHUB_ACTIONS python3 -B ops/codex_identity_fixture.py --test-binary "$RUNNER_TEMP/codex-identity.test" --file-test-binary "$RUNNER_TEMP/codex-files.test" --startup-test-binary "$RUNNER_TEMP/codex-startup.test"
 
   lint:
