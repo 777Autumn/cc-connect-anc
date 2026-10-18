@@ -184,7 +184,11 @@ func TestRecoverDeviceChangeAcrossUIDReadOnlyFiles(t *testing.T) {
 		if e != nil {
 			t.Fatal(e)
 		}
-		defer d.Close()
+		defer func() {
+			if err := d.Close(); err != nil {
+				t.Error(err)
+			}
+		}()
 		var b []byte
 		if e = d.QueryRow("SELECT payload FROM file_state WHERE id=1").Scan(&b); e != nil {
 			t.Fatal(e)
@@ -237,7 +241,9 @@ func TestRecoveryCommandIdentityChild(t *testing.T) {
 		t.Fatal("gateway identity required")
 	}
 	if f, err := os.Open(os.Getenv("ANC_RECOVERY_PRIVATE")); err == nil {
-		f.Close()
+		if err := f.Close(); err != nil {
+			t.Error(err)
+		}
 		t.Fatal("fixture did not deny ordinary path read")
 	}
 	args := []string{os.Getenv("ANC_RECOVERY_CONFIG"), os.Getenv("ANC_RECOVERY_CONFIG_SHA")}
