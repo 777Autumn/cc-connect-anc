@@ -51,6 +51,36 @@ func TestFileCitationQuotedBracesAndIncompleteFrames(t *testing.T) {
 	}
 }
 
+func TestFileCitationUnicodeMarkerDoesNotExposeInternalPath(t *testing.T) {
+	citation := "\ue200" + `codex-file-citation{path="/private/example/a}b.pdf" purpose="source"}`
+	for _, body := range []string{"Next question?", "**Pending**. Next question?", `<at user_id="fictional">Owner</at> Next question?`, strings.Repeat("| A | B |\n|---|---|\n| 1 | 2 |\n\n", 6)} {
+		wantType, want := buildReplyContent(body)
+		if gotType, got := buildReplyContent(body + citation); gotType != wantType || got != want {
+			t.Errorf("Unicode citation changed reply: got %s %s; want %s %s", gotType, got, wantType, want)
+		}
+	}
+	for _, render := range []func(string) string{buildCardJSON, buildPostMdJSON, sanitizeCardMarkdownForCard} {
+		if got, want := render("Before"+citation+"After"), render("BeforeAfter"); got != want {
+			t.Errorf("Unicode citation leaked from card/post: %s", got)
+		}
+	}
+	if got, want := buildCardJSONWithStatusFooter("Answer"+citation, "Footer"+citation), buildCardJSONWithStatusFooter("Answer", "Footer"); got != want {
+		t.Errorf("Unicode citation leaked from footer card: %s", got)
+	}
+	for i := len("\ue200codex-file-citation{"); i <= len(citation); i++ {
+		if got := stripFileCitationDirectives("Before" + citation[:i]); got != "Before" {
+			t.Fatalf("partial Unicode citation leaked at byte %d: %q", i, got)
+		}
+	}
+	if got := stripFileCitationDirectives("Before" + citation + ":codex-file-citation{path='C:\\private\\file.pdf'}After"); got != "BeforeAfter" {
+		t.Errorf("mixed citation markers leaked: %q", got)
+	}
+	ordinary := "[Source](https://example.com/report) \ue200ordinary{value} /tmp/example.txt"
+	if got := stripFileCitationDirectives(ordinary); got != ordinary {
+		t.Errorf("unrelated text changed: %q", got)
+	}
+}
+
 func TestFileCitationStreamPayloadDoesNotExposeInternalPath(t *testing.T) {
 	var payloads []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -74,12 +104,12 @@ func TestFileCitationStreamPayloadDoesNotExposeInternalPath(t *testing.T) {
 	defer srv.Close()
 	p := &Platform{platformName: "feishu", domain: srv.URL, appID: t.Name(), client: lark.NewClient(t.Name(), "fictional", lark.WithOpenBaseUrl(srv.URL), lark.WithHttpClient(srv.Client()))}
 	h := &feishuPreviewHandle{cardID: "fictional-card"}
-	for _, text := range []string{`Answer:codex-file-citation{path="/private/example`, `Answer:codex-file-citation{path="/private/example.pdf"} next`} {
+	for _, text := range []string{`Answer:codex-file-citation{path="/private/example`, `Answer:codex-file-citation{path="/private/example.pdf"} next`, "Answer\ue200codex-file-citation{path=\"/private/example", "Answer\ue200codex-file-citation{path=\"/private/example.pdf\"} next"} {
 		if err := p.StreamRichCardText(context.Background(), h, text); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if len(payloads) != 2 || payloads[0] != "Answer" || payloads[1] != "Answer next" {
+	if len(payloads) != 4 || payloads[0] != "Answer" || payloads[1] != "Answer next" || payloads[2] != "Answer" || payloads[3] != "Answer next" {
 		t.Fatalf("stream payloads leaked citation: %q", payloads)
 	}
 }
