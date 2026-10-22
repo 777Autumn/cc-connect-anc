@@ -3482,6 +3482,7 @@ func detectMimeType(data []byte) string {
 }
 
 func buildReplyContent(content string) (msgType string, body string) {
+	content = stripFileCitationDirectives(content)
 	// Feishu does not generate mention events for <at> tags in card/post
 	// messages sent by bots. Force MsgTypeText when a real mention is present
 	// (resolved to an <at user_id="..."> or <at id=...> tag) so Feishu
@@ -3662,9 +3663,43 @@ func isValidFeishuHref(u string) bool {
 
 var mdLinkRe = regexp.MustCompile(`\[([^\]]*)\]\(([^)]+)\)`)
 
+// Feishu cannot render native file citations. Suppress their attributes, including
+// incomplete streaming frames, instead of publishing local paths as fake links.
+func stripFileCitationDirectives(text string) string {
+	const marker = ":codex-file-citation{"
+	var out strings.Builder
+	for {
+		start := strings.Index(text, marker)
+		if start < 0 {
+			out.WriteString(text)
+			return out.String()
+		}
+		out.WriteString(text[:start])
+		end := start + len(marker)
+		var quote byte
+		for end < len(text) {
+			ch := text[end]
+			end++
+			if quote != 0 {
+				if ch == '\\' && end < len(text) {
+					end++
+				} else if ch == quote {
+					quote = 0
+				}
+			} else if ch == '"' || ch == '\'' {
+				quote = ch
+			} else if ch == '}' {
+				break
+			}
+		}
+		text = text[end:]
+	}
+}
+
 // sanitizeMarkdownURLs rewrites markdown links with non-HTTP(S) schemes
 // to plain text, preventing Feishu API rejection (code 230001).
 func sanitizeMarkdownURLs(md string) string {
+	md = stripFileCitationDirectives(md)
 	var b strings.Builder
 	last := 0
 	for _, loc := range mdLinkRe.FindAllStringSubmatchIndex(md, -1) {
@@ -5192,7 +5227,7 @@ func (p *Platform) StreamRichCardText(ctx context.Context, previewHandle any, fu
 	apiPath := fmt.Sprintf("/open-apis/cardkit/v1/cards/%s/elements/%s/content",
 		h.cardID, richCardMainTextElementID)
 	body := map[string]any{
-		"content":  fullText,
+		"content":  stripFileCitationDirectives(fullText),
 		"sequence": h.sequence,
 	}
 
