@@ -3667,6 +3667,8 @@ var mdLinkRe = regexp.MustCompile(`\[([^\]]*)\]\(([^)]+)\)`)
 // incomplete streaming frames, instead of publishing local paths as fake links.
 func stripFileCitationDirectives(text string) string {
 	const marker = ":codex-file-citation{"
+	// Codex can emit the native U+E200 opener instead of a colon.
+	text = strings.ReplaceAll(text, "\ue200codex-file-citation{", marker)
 	var out strings.Builder
 	for {
 		start := strings.Index(text, marker)
