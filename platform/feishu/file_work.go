@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"reflect"
 	"slices"
 	"sort"
 	"strings"
@@ -196,13 +197,8 @@ func (p *Platform) fileWorkPostContent(raw string, allowImages bool) (string, []
 	_, hasContent := fields["content"]
 	_, hasFiles := fields["files"]
 	if hasContent || hasFiles {
-		for key := range fields {
-			if key != "title" && key != "content" && key != "files" {
-				return "", nil, nil, false
-			}
-		}
-		var post postLang
-		if json.Unmarshal([]byte(raw), &post) != nil {
+		post, ok := decodeFileWorkPost([]byte(raw))
+		if !ok {
 			return "", nil, nil, false
 		}
 		posts = append(posts, post)
@@ -213,8 +209,8 @@ func (p *Platform) fileWorkPostContent(raw string, allowImages bool) (string, []
 		}
 		sort.Strings(keys)
 		for _, key := range keys {
-			var post postLang
-			if json.Unmarshal(fields[key], &post) != nil {
+			post, ok := decodeFileWorkPost(fields[key])
+			if !ok {
 				return "", nil, nil, false
 			}
 			posts = append(posts, post)
@@ -264,4 +260,25 @@ func (p *Platform) fileWorkPostContent(raw string, allowImages bool) (string, []
 	}
 	parts, _ := p.extractPostParts("", &posts[0])
 	return strings.Join(parts, "\n"), selectedKeys, posts[0].Files, true
+}
+
+func decodeFileWorkPost(raw json.RawMessage) (postLang, bool) {
+	var post postLang
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil || json.Unmarshal(raw, &post) != nil {
+		return post, false
+	}
+	for key := range fields {
+		if key != "title" && key != "content" && key != "content_v2" && key != "files" {
+			return post, false
+		}
+	}
+	if alternate, exists := fields["content_v2"]; exists {
+		// Accept the mobile duplicate only; never silently discard different text or attachments.
+		var original, duplicate any
+		if json.Unmarshal(fields["content"], &original) != nil || json.Unmarshal(alternate, &duplicate) != nil || !reflect.DeepEqual(original, duplicate) {
+			return post, false
+		}
+	}
+	return post, true
 }
