@@ -167,3 +167,22 @@ func TestControlledResourceDoesNotRetryOtherAPIErrors(t *testing.T) {
 		t.Fatal("permission failure retried or returned as original")
 	}
 }
+
+func TestControlledResourceHTTPRefusalNeverNegotiates(t *testing.T) {
+	for _, status := range []int{401, 403, 429, 500} {
+		t.Run(strconv.Itoa(status), func(t *testing.T) {
+			requests := 0
+			p := imageReceiverFixture(t, func(w http.ResponseWriter, r *http.Request) {
+				requests++
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(status)
+				_, _ = w.Write([]byte(`{"code":234037}`))
+			})
+			data, err := p.downloadFileBounded(context.Background(), "message", "file", 1024)
+			requireFileInputError(t, err, core.MsgFileInputUnavailable)
+			if requests != 1 || data != nil {
+				t.Fatal("HTTP refusal retried or returned as original")
+			}
+		})
+	}
+}

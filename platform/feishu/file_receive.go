@@ -37,6 +37,10 @@ func controlledResourceResponse(client *http.Client, req *http.Request, limit in
 	if err != nil {
 		return nil, err
 	}
+	if initial.StatusCode != http.StatusOK && initial.StatusCode != http.StatusBadRequest {
+		initial.Body.Close()
+		return nil, core.NewFileInputError(core.MsgFileInputUnavailable)
+	}
 	if initial.ContentLength > limit {
 		initial.Body.Close()
 		return nil, core.NewFileInputError(core.MsgFileInputTooLarge)
