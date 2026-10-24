@@ -166,6 +166,10 @@ func (h *Host) Bind(ctx context.Context, b Binding) (WorkContext, error) {
 			return result, ErrInvalid
 		}
 		if err := h.validateFile(ctx, f.FileName, f.Data); err != nil {
+			var inputError *core.FileInputError
+			if errors.As(err, &inputError) {
+				return result, inputError
+			}
 			if errors.Is(err, ErrUnavailable) {
 				return result, core.NewFileInputError(core.MsgFileInputUnavailable)
 			}

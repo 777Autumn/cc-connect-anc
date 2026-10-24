@@ -684,6 +684,8 @@ const (
 	MsgFileInputUnavailable               MsgKey = "file_input_unavailable"
 	MsgFileInputSaveFailed                MsgKey = "file_input_save_failed"
 	MsgFileInputFormatUnsupported         MsgKey = "file_input_format_unsupported"
+	MsgFileVideoUnsupported               MsgKey = "file_video_unsupported"
+	MsgFileVideoIncomplete                MsgKey = "file_video_incomplete"
 	MsgFileWorkUnavailable                MsgKey = "file_work_unavailable"
 	MsgFileWorkAssociationRequired        MsgKey = "file_work_association_required"
 	MsgFileSupplementQueued               MsgKey = "file_supplement_queued"
@@ -4678,6 +4680,20 @@ var messages = map[MsgKey]map[Language]string{
 		LangTraditionalChinese: "檔案損壞、格式尚未啟用或含不支援的內容，本批未提交模型處理。請保留原件；暫不支援巨集、嵌入的主動物件及外部連結。",
 		LangJapanese:           "ファイルの破損、未有効の形式、または未対応の内容のため未送信です。原本を保存してください。マクロ、埋め込みアクティブオブジェクト、外部リンクには対応していません。",
 		LangSpanish:            "Un archivo está dañado, su formato no está habilitado o contiene funciones no admitidas. No se envió nada. Conserve el original; no se admiten macros, objetos activos incrustados ni enlaces externos.",
+	},
+	MsgFileVideoUnsupported: {
+		LangEnglish:            "This video did not pass the enabled format/size checks. Supported: self-contained H.264 MP4, 8-bit landscape, up to 12 seconds, 1280x720, 30 fps and 20 MiB. Nothing was submitted to the model. Keep the original; repeating the same upload will not fix it.",
+		LangChinese:            "这个视频未通过已启用的格式或规格检查。当前支持独立的 H.264 MP4、8位横屏，最多12秒、1280×720、30帧/秒、20MiB。本批未提交模型。请保留原件；反复上传同一文件无法解决这个问题。",
+		LangTraditionalChinese: "這個影片未通過已啟用的格式或規格檢查。目前支援獨立 H.264 MP4、8位橫向，最多12秒、1280×720、30幀/秒、20MiB。本批未提交模型；請保留原件，不要反覆上傳同一檔案。",
+		LangJapanese:           "動画の形式または仕様が未対応です。H.264 MP4、8ビット横向き、12秒・1280x720・30fps・20MiBまで対応。モデルには未送信です。原本を保存し、同じファイルを繰り返し送信しないでください。",
+		LangSpanish:            "Vídeo fuera del formato habilitado: MP4 H.264 autónomo, horizontal de 8 bits, hasta 12 s, 1280x720, 30 fps y 20 MiB. No se envió al modelo. Conserve el original; repetir la misma carga no lo resuelve.",
+	},
+	MsgFileVideoIncomplete: {
+		LangEnglish:            "Video integrity or full decoding could not be verified. No partial frames were submitted to the model. Keep the original and ask the administrator to inspect the retained failure; do not repeatedly upload the same file.",
+		LangChinese:            "视频完整性或完整解码校验未通过，没有把部分画面提交模型。请保留原件，由管理员核对已记录的失败原因；不要反复上传同一文件。",
+		LangTraditionalChinese: "影片完整性或完整解碼檢查未通過，部分畫面未提交模型。請保留原件，由管理員核對已記錄的失敗原因；不要反覆上傳同一檔案。",
+		LangJapanese:           "動画の完全性または全フレームのデコードを確認できませんでした。部分的な画像は未送信です。原本を保存し、管理者に記録された原因の確認を依頼してください。再送を繰り返さないでください。",
+		LangSpanish:            "No se verificó la integridad o la decodificación completa. No se enviaron fotogramas parciales. Conserve el original y pida revisar el fallo registrado; no repita la carga.",
 	},
 	MsgImageLimit: {
 		LangEnglish: "No images or text in this batch were submitted. Limit: 4 images, 5 MiB each, 10 MiB total (including a decoded first frame). Compress or resend in smaller batches.", LangChinese: "本批图片和文字均未提交。上限为4张、每张5MiB、合计10MiB（含动图首帧转换后大小）。请压缩或分批重发。", LangTraditionalChinese: "本批圖片和文字均未提交。上限為4張、每張5MiB、合計10MiB（含動圖首幀轉換後大小）。請壓縮或分批重發。", LangJapanese: "この画像・テキスト一式は未送信です。上限は4枚、各5MiB、合計10MiB（先頭フレーム変換後を含む）。圧縮または分割して再送してください。", LangSpanish: "No se envió este lote de imágenes ni texto. Máximo: 4 imágenes, 5 MiB cada una, 10 MiB total (incluido el primer fotograma convertido). Comprima o divida el lote.",
