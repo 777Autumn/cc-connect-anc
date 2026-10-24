@@ -55,6 +55,8 @@ func (c imageBoundedHTTPClient) Do(req *http.Request) (*http.Response, error) {
 				return nil, core.NewFileInputError(core.MsgFileInputTooLarge)
 			}
 			resp.Body = boundedImageBody{Reader: io.LimitReader(resp.Body, limit+1), Closer: resp.Body}
+			// Preserved originals use the file budget, not the model's visual budget.
+			return resp, nil
 		}
 	}
 	if req.Method == http.MethodGet && strings.HasPrefix(req.URL.Path, "/open-apis/im/v1/messages/") && strings.Contains(req.URL.Path, "/resources/") && req.URL.Query().Get("type") == "image" {
