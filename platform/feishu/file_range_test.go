@@ -38,7 +38,6 @@ func TestControlledResourceRangeKeepsOriginalAndBounds(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			requests := 0
 			p := imageReceiverFixture(t, func(w http.ResponseWriter, r *http.Request) {
-				requests++
 				if r.URL.Query().Get("type") != "file" {
 					t.Error("wrong resource type")
 				}
@@ -48,6 +47,7 @@ func TestControlledResourceRangeKeepsOriginalAndBounds(t *testing.T) {
 					_, _ = w.Write([]byte(`{"code":234037,"msg":"download interrupted"}`))
 					return
 				}
+				requests++
 				if end >= len(payload) || start < 0 || end < start {
 					t.Error("out of range request")
 					w.WriteHeader(400)
@@ -113,6 +113,11 @@ func TestControlledResourceRangeKeepsOriginalAndBounds(t *testing.T) {
 
 func TestControlledResourceRangeUsesOneDeadline(t *testing.T) {
 	p := imageReceiverFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Range") == "" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"code":234037}`))
+			return
+		}
 		if strings.HasPrefix(r.Header.Get("Range"), "bytes=0-0") {
 			w.Header().Set("ETag", `"deadline-fixture"`)
 			w.Header().Set("Content-Range", "bytes 0-0/2")
@@ -125,9 +130,26 @@ func TestControlledResourceRangeUsesOneDeadline(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 	started := time.Now()
-	got, err := p.downloadFileBounded(ctx, "message", "file", 2)
+	got, err := p.downloadFileBounded(ctx, "message", "file", 128)
 	requireFileInputError(t, err, core.MsgFileInputUnavailable)
 	if got != nil || time.Since(started) > time.Second {
 		t.Fatal("range reset deadline or returned partial input")
+	}
+}
+
+func TestControlledResourceSingleGetKeepsWorkingWithoutETag(t *testing.T) {
+	payload := bytes.Repeat([]byte("unchanged original"), 100)
+	requests := 0
+	p := imageReceiverFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		if r.Header.Get("Range") != "" {
+			t.Error("working download unexpectedly depends on ranged ETag")
+		}
+		w.Header().Set("Content-Type", "application/octet-stream")
+		_, _ = w.Write(payload)
+	})
+	got, err := p.downloadFileBounded(context.Background(), "message", "file", int64(len(payload)))
+	if err != nil || requests != 1 || sha256.Sum256(got) != sha256.Sum256(payload) {
+		t.Fatalf("working single download changed: calls=%d err=%v", requests, err)
 	}
 }

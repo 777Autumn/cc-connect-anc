@@ -3,6 +3,7 @@ package feishu
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -30,6 +31,39 @@ func controlledResourceResponse(client *http.Client, req *http.Request, limit in
 	}
 	copy := *client
 	copy.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	// Preserve working single-GET servers. Negotiate ranges only for Feishu's
+	// explicit streaming-cap error; never retry arbitrary network/API failures.
+	initial, err := copy.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if initial.ContentLength > limit {
+		initial.Body.Close()
+		return nil, core.NewFileInputError(core.MsgFileInputTooLarge)
+	}
+	initial.Body = boundedImageBody{Reader: io.LimitReader(initial.Body, limit+1), Closer: initial.Body}
+	if !strings.HasPrefix(strings.ToLower(initial.Header.Get("Content-Type")), "application/json") {
+		return initial, nil
+	}
+	body, readErr := io.ReadAll(initial.Body)
+	closeErr := initial.Body.Close()
+	if int64(len(body)) > limit {
+		return nil, core.NewFileInputError(core.MsgFileInputTooLarge)
+	}
+	if readErr != nil || closeErr != nil || req.Context().Err() != nil {
+		return nil, core.NewFileInputError(core.MsgFileInputUnavailable)
+	}
+	var apiError struct {
+		Code int `json:"code"`
+	}
+	parseError := json.Unmarshal(body, &apiError)
+	if parseError == nil && apiError.Code != 0 && apiError.Code != 234037 {
+		return nil, core.NewFileInputError(core.MsgFileInputUnavailable)
+	}
+	if parseError != nil || apiError.Code != 234037 {
+		initial.Body = io.NopCloser(bytes.NewReader(body))
+		return initial, nil
+	}
 	var data []byte
 	var total int64
 	var etag, modified string
