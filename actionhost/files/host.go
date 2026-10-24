@@ -65,6 +65,7 @@ type Host struct {
 	send              Sender
 	groupRealm        string
 	documentValidator string
+	videoValidator    string
 	projectAccess     ProjectAccess
 	publicationAccess func(context.Context, core.ActionPrincipal, string, string, string) (core.CasePublishedSource, error)
 }

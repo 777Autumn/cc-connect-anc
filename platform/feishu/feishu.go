@@ -141,6 +141,7 @@ type Platform struct {
 	legacyPrivateRedirect      string
 	fileWorkEnabled            bool // Host opt-in, protected by mu.
 	fileWorkImages             bool // New format opt-in, protected by mu.
+	fileWorkVideo              bool // Fixed MP4 validator opt-in, protected by mu.
 	fileReplyAuthorized        func(core.Message, string) error
 	fileReplyObserver          func(core.Message, string) error
 	groupOnly                  bool

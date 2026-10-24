@@ -570,6 +570,7 @@ type FileWorkConfig struct {
 	SharedCases       bool   `toml:"shared_cases"`       // opt-in: scoped mock collaboration through CRM host
 	CaseConfirmations bool   `toml:"case_confirmations"` // opt-in: host-bound business clarification in existing sessions
 	DocumentValidator string `toml:"document_validator"` // empty: original DOCX/XLSX limits; protected PDF validator enables new formats
+	VideoValidator    string `toml:"video_validator"`    // empty: MP4 intake remains disabled; fixed protected stdin validator
 }
 
 type AgentConfig struct {

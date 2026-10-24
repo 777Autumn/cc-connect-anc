@@ -23,6 +23,12 @@ func (h *Host) SetDocumentFormats(validator string) error {
 }
 
 func (h *Host) validateFile(ctx context.Context, name string, data []byte) error {
+	if strings.EqualFold(path.Ext(name), ".mp4") {
+		if h.videoValidator == "" || len(data) == 0 || len(data) > MaxFileBytes {
+			return ErrInvalid
+		}
+		return validateVideo(ctx, h.videoValidator, data)
+	}
 	if h.documentValidator == "" {
 		return validateOOXML(name, data)
 	}
@@ -58,4 +64,13 @@ func (h *Host) validateFile(ctx context.Context, name string, data []byte) error
 	default:
 		return validateOffice(name, data, true)
 	}
+}
+
+// SetVideoFormat enables only the fixed, isolated VIDEO_OK_V1 validator.
+func (h *Host) SetVideoFormat(validator string) error {
+	if ValidateHostFile(validator) != nil {
+		return ErrUnavailable
+	}
+	h.videoValidator = validator
+	return nil
 }

@@ -10,7 +10,7 @@ func TestFileWorkDefaultOffAndExplicitConfiguration(t *testing.T) {
 	if _, err := toml.Decode(`name="fictional"`, &legacy); err != nil {
 		t.Fatal(err)
 	}
-	if legacy.FileWork.Enabled || legacy.FileWork.Runtime != "" || legacy.FileWork.DocumentValidator != "" {
+	if legacy.FileWork.Enabled || legacy.FileWork.Runtime != "" || legacy.FileWork.DocumentValidator != "" || legacy.FileWork.VideoValidator != "" {
 		t.Fatal("legacy project enabled file host")
 	}
 	if _, err := toml.Decode("name='fictional'\n[file_work]\nenabled=true\nledger='/protected/fixture.db'\n", &configured); err != nil {

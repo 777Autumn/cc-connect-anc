@@ -96,6 +96,12 @@ func configureFileWork(project config.ProjectConfig, engine *core.Engine, platfo
 			return nil, noop, err
 		}
 	}
+	if cfg.VideoValidator != "" {
+		if err := host.SetVideoFormat(cfg.VideoValidator); err != nil {
+			closeHost()
+			return nil, noop, err
+		}
+	}
 	if cfg.GroupReferences {
 		realm, err := fileGroupRealm(project)
 		if err != nil || host.SetGroupReferences(realm) != nil {
@@ -124,6 +130,13 @@ func configureFileWork(project config.ProjectConfig, engine *core.Engine, platfo
 	if cfg.DocumentValidator != "" {
 		receiver, ok := platforms[0].(interface{ SetFileWorkImagesEnabled(bool) error })
 		if !ok || receiver.SetFileWorkImagesEnabled(true) != nil {
+			closeHost()
+			return nil, noop, errInvalid
+		}
+	}
+	if cfg.VideoValidator != "" {
+		receiver, ok := platforms[0].(interface{ SetFileWorkVideoEnabled(bool) error })
+		if !ok || receiver.SetFileWorkVideoEnabled(true) != nil {
 			closeHost()
 			return nil, noop, errInvalid
 		}

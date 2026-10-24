@@ -18,6 +18,16 @@ import (
 
 var _ core.FileWorkReceiver = (*Platform)(nil)
 
+func (p *Platform) SetFileWorkVideoEnabled(enabled bool) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if enabled && !p.fileWorkEnabled {
+		return errors.New("file video requires controlled file routing")
+	}
+	p.fileWorkVideo = enabled
+	return nil
+}
+
 // Called only by host startup after fixed file routing is enabled.
 func (p *Platform) SetFileWorkImagesEnabled(enabled bool) error {
 	p.mu.Lock()
@@ -119,6 +129,7 @@ func (p *Platform) dispatchFileWork(ctx context.Context, msgType, content string
 	}
 	p.mu.RLock()
 	allowImages := p.fileWorkImages
+	allowVideo := p.fileWorkVideo
 	p.mu.RUnlock()
 	switch msgType {
 	case "text":
@@ -167,6 +178,20 @@ func (p *Platform) dispatchFileWork(ctx context.Context, msgType, content string
 			fail(core.MsgFileInputUnavailable)
 		} else {
 			msg.Files = []core.FileAttachment{p.receiveWorkImage(ctx, msg.MessageID, body.Key, &fileReceiveBudget{})}
+		}
+	case "media":
+		if !allowVideo {
+			fail(core.MsgFileWorkUnavailable)
+			break
+		}
+		var body struct {
+			Key string `json:"file_key"`
+		}
+		if json.Unmarshal([]byte(content), &body) != nil || body.Key == "" {
+			fail(core.MsgFileInputUnavailable)
+		} else {
+			// Download the video resource, never its unrelated cover image.
+			msg.Files = []core.FileAttachment{p.receiveFile(ctx, msg.MessageID, body.Key, "video.mp4", &fileReceiveBudget{})}
 		}
 	case "file":
 		var body struct {
