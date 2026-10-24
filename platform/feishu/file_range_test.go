@@ -31,6 +31,8 @@ func TestControlledResourceRangeKeepsOriginalAndBounds(t *testing.T) {
 		{"changed_entity", "etag", int64(len(payload)), core.MsgFileInputUnavailable},
 		{"missing_entity", "noetag", int64(len(payload)), core.MsgFileInputUnavailable},
 		{"weak_entity", "weaketag", int64(len(payload)), core.MsgFileInputUnavailable},
+		{"multiple_entities", "multietag", int64(len(payload)), core.MsgFileInputUnavailable},
+		{"invalid_entity", "spaceetag", int64(len(payload)), core.MsgFileInputUnavailable},
 		{"chunked_ranges", "chunked", int64(len(payload)), ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -59,6 +61,10 @@ func TestControlledResourceRangeKeepsOriginalAndBounds(t *testing.T) {
 					etag = ""
 				} else if tc.fault == "weaketag" {
 					etag = `W/"fictional-original"`
+				} else if tc.fault == "multietag" {
+					etag = `"v1", "v2"`
+				} else if tc.fault == "spaceetag" {
+					etag = `"v 1"`
 				}
 				if requests > 1 {
 					if r.Header.Get("If-Match") != `"fictional-original"` {

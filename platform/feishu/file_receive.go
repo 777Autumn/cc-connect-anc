@@ -71,7 +71,8 @@ func controlledResourceResponse(client *http.Client, req *http.Request, limit in
 			return nil, core.NewFileInputError(core.MsgFileInputTooLarge)
 		}
 		// Length alone cannot establish that successive ranges are one original.
-		if total > 1 && (len(etag) < 2 || etag[0] != '"' || etag[len(etag)-1] != '"') {
+		if total > 1 && (len(etag) < 2 || etag[0] != '"' || etag[len(etag)-1] != '"' ||
+			strings.IndexFunc(etag[1:len(etag)-1], func(r rune) bool { return r < 0x21 || r == '"' || r == 0x7f }) >= 0) {
 			resp.Body.Close()
 			return nil, core.NewFileInputError(core.MsgFileInputUnavailable)
 		}
