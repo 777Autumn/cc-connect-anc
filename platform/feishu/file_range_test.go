@@ -153,3 +153,17 @@ func TestControlledResourceSingleGetKeepsWorkingWithoutETag(t *testing.T) {
 		t.Fatalf("working single download changed: calls=%d err=%v", requests, err)
 	}
 }
+
+func TestControlledResourceDoesNotRetryOtherAPIErrors(t *testing.T) {
+	requests := 0
+	p := imageReceiverFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":99991672,"msg":"synthetic permission refusal"}`))
+	})
+	data, err := p.downloadFileBounded(context.Background(), "message", "file", 1024)
+	requireFileInputError(t, err, core.MsgFileInputUnavailable)
+	if requests != 1 || data != nil {
+		t.Fatal("permission failure retried or returned as original")
+	}
+}
