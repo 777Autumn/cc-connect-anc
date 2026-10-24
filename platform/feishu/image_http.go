@@ -34,6 +34,9 @@ type boundedImageBody struct {
 
 func (c imageBoundedHTTPClient) Do(req *http.Request) (*http.Response, error) {
 	client := c.client
+	if limit, ok := req.Context().Value(fileDownloadLimitKey{}).(int64); ok && req.Method == http.MethodGet && strings.HasPrefix(req.URL.Path, "/open-apis/im/v1/messages/") && strings.Contains(req.URL.Path, "/resources/") {
+		return controlledResourceResponse(client, req, limit)
+	}
 	if controlled, _ := req.Context().Value(fileDeliveryRequestKey{}).(bool); controlled {
 		copy := *client
 		copy.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }

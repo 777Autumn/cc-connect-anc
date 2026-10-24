@@ -1,9 +1,14 @@
 package feishu
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
+	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/chenhg5/cc-connect/core"
@@ -16,6 +21,70 @@ const (
 )
 
 type fileDownloadLimitKey struct{}
+
+// All ranges share the caller's remaining file/batch budget and 30-second context.
+// Do not retry a failed segment or accept a changed representation mid-download.
+func controlledResourceResponse(client *http.Client, req *http.Request, limit int64) (*http.Response, error) {
+	if limit <= 0 || limit > core.DefaultFileInputLimit {
+		return nil, core.NewFileInputError(core.MsgFileInputTooLarge)
+	}
+	copy := *client
+	copy.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	var data []byte
+	var total int64
+	var etag, modified string
+	for start, end := int64(0), int64(0); ; {
+		part := req.Clone(req.Context())
+		part.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
+		part.Header.Set("Accept-Encoding", "identity")
+		resp, err := copy.Do(part)
+		if err != nil {
+			return nil, err
+		}
+		if start == 0 && resp.StatusCode == http.StatusOK {
+			if resp.ContentLength > limit {
+				resp.Body.Close()
+				return nil, core.NewFileInputError(core.MsgFileInputTooLarge)
+			}
+			resp.Body = boundedImageBody{Reader: io.LimitReader(resp.Body, limit+1), Closer: resp.Body}
+			return resp, nil
+		}
+		// Comparing the complete header also rejects malformed and overlapping ranges.
+		_, size, found := strings.Cut(resp.Header.Get("Content-Range"), "/")
+		declared, parseErr := strconv.ParseInt(size, 10, 64)
+		if start == 0 {
+			total, etag, modified = declared, resp.Header.Get("ETag"), resp.Header.Get("Last-Modified")
+		}
+		if resp.StatusCode != http.StatusPartialContent || !found || parseErr != nil || total <= 0 || declared != total ||
+			resp.Header.Get("Content-Range") != fmt.Sprintf("bytes %d-%d/%d", start, end, total) ||
+			resp.Header.Get("ETag") != etag || resp.Header.Get("Last-Modified") != modified ||
+			(resp.Header.Get("Content-Encoding") != "" && resp.Header.Get("Content-Encoding") != "identity") ||
+			(resp.ContentLength >= 0 && resp.ContentLength != end-start+1) {
+			resp.Body.Close()
+			return nil, core.NewFileInputError(core.MsgFileInputUnavailable)
+		}
+		if total > limit {
+			resp.Body.Close()
+			return nil, core.NewFileInputError(core.MsgFileInputTooLarge)
+		}
+		block, readErr := io.ReadAll(io.LimitReader(resp.Body, end-start+2))
+		closeErr := resp.Body.Close()
+		if readErr != nil || closeErr != nil || int64(len(block)) != end-start+1 || req.Context().Err() != nil {
+			return nil, core.NewFileInputError(core.MsgFileInputUnavailable)
+		}
+		data = append(data, block...)
+		if int64(len(data)) == total {
+			resp.StatusCode, resp.Status = http.StatusOK, "200 OK"
+			resp.ContentLength = total
+			resp.Header.Del("Content-Range")
+			resp.Header.Set("Content-Length", strconv.FormatInt(total, 10))
+			resp.Body = io.NopCloser(bytes.NewReader(data))
+			return resp, nil
+		}
+		start = end + 1
+		end = min(start+(1<<20)-1, total-1)
+	}
+}
 
 // A controlled dispatch shares one budget across current, quoted and forwarded
 // files. These helpers are not enabled on the legacy inbound paths.
