@@ -29,6 +29,9 @@ func TestControlledResourceRangeKeepsOriginalAndBounds(t *testing.T) {
 		{"truncated", "short", int64(len(payload)), core.MsgFileInputUnavailable},
 		{"range_ignored_midway", "mid200", int64(len(payload)), core.MsgFileInputUnavailable},
 		{"changed_entity", "etag", int64(len(payload)), core.MsgFileInputUnavailable},
+		{"missing_entity", "noetag", int64(len(payload)), core.MsgFileInputUnavailable},
+		{"weak_entity", "weaketag", int64(len(payload)), core.MsgFileInputUnavailable},
+		{"chunked_ranges", "chunked", int64(len(payload)), ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			requests := 0
@@ -52,7 +55,15 @@ func TestControlledResourceRangeKeepsOriginalAndBounds(t *testing.T) {
 				body := payload[start : end+1]
 				status := http.StatusPartialContent
 				etag := `"fictional-original"`
+				if tc.fault == "noetag" {
+					etag = ""
+				} else if tc.fault == "weaketag" {
+					etag = `W/"fictional-original"`
+				}
 				if requests > 1 {
+					if r.Header.Get("If-Match") != `"fictional-original"` {
+						t.Error("missing original version precondition")
+					}
 					switch tc.fault {
 					case "start":
 						declaredStart++
@@ -69,8 +80,13 @@ func TestControlledResourceRangeKeepsOriginalAndBounds(t *testing.T) {
 				w.Header().Set("Content-Type", "application/octet-stream")
 				w.Header().Set("ETag", etag)
 				w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", declaredStart, end, total))
-				w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+				if tc.fault != "chunked" {
+					w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+				}
 				w.WriteHeader(status)
+				if tc.fault == "chunked" {
+					w.(http.Flusher).Flush()
+				}
 				_, _ = w.Write(body)
 			})
 			got, err := p.downloadFileBounded(context.Background(), "original-message", "original-file", tc.limit)
@@ -92,6 +108,7 @@ func TestControlledResourceRangeKeepsOriginalAndBounds(t *testing.T) {
 func TestControlledResourceRangeUsesOneDeadline(t *testing.T) {
 	p := imageReceiverFixture(t, func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.Header.Get("Range"), "bytes=0-0") {
+			w.Header().Set("ETag", `"deadline-fixture"`)
 			w.Header().Set("Content-Range", "bytes 0-0/2")
 			w.WriteHeader(206)
 			_, _ = w.Write([]byte("x"))

@@ -37,6 +37,9 @@ func controlledResourceResponse(client *http.Client, req *http.Request, limit in
 		part := req.Clone(req.Context())
 		part.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
 		part.Header.Set("Accept-Encoding", "identity")
+		if start > 0 {
+			part.Header.Set("If-Match", etag)
+		}
 		resp, err := copy.Do(part)
 		if err != nil {
 			return nil, err
@@ -66,6 +69,11 @@ func controlledResourceResponse(client *http.Client, req *http.Request, limit in
 		if total > limit {
 			resp.Body.Close()
 			return nil, core.NewFileInputError(core.MsgFileInputTooLarge)
+		}
+		// Length alone cannot establish that successive ranges are one original.
+		if total > 1 && (len(etag) < 2 || etag[0] != '"' || etag[len(etag)-1] != '"') {
+			resp.Body.Close()
+			return nil, core.NewFileInputError(core.MsgFileInputUnavailable)
 		}
 		block, readErr := io.ReadAll(io.LimitReader(resp.Body, end-start+2))
 		closeErr := resp.Body.Close()
