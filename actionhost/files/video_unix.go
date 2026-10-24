@@ -57,11 +57,18 @@ func validateVideo(ctx context.Context, validator string, data []byte) error {
 		}
 		slog.Warn("file work: video preflight rejected", "reason", code, "validator_exit", exitCode, "tool_exit", toolExit, "timed_out", ctx.Err() != nil)
 		if ctx.Err() == nil && errors.As(err, &rejected) && rejected.ExitCode() == 1 {
-			key := core.MsgFileVideoUnsupported
-			if code == "video_truncated" || code == "video_decode_incomplete" || code == "video_sample_table_mismatch" {
+			var key core.MsgKey
+			switch code {
+			case "video_truncated", "video_decode_incomplete", "video_sample_table_mismatch":
 				key = core.MsgFileVideoIncomplete
+			case "video_structure_budget", "video_size_budget", "video_container_unsupported", "video_external_reference",
+				"video_tracks_unsupported", "video_audio_unsupported", "video_spec_unsupported", "video_variable_rate",
+				"video_source_changed", "video_derived_budget":
+				key = core.MsgFileVideoUnsupported
 			}
-			return errors.Join(ErrInvalid, core.NewFileInputError(key))
+			if key != "" {
+				return errors.Join(ErrInvalid, core.NewFileInputError(key))
+			}
 		}
 		return ErrUnavailable
 	}

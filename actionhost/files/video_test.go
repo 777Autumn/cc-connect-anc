@@ -75,7 +75,8 @@ func TestVideoFixedValidatorProtocolAndTimeout(t *testing.T) {
 		want       error
 	}{
 		{"pass", "cat >/dev/null; test -z \"$PYTHONPATH\" || exit 2; printf 'VIDEO_OK_V1\\n'", nil},
-		{"invalid", "exit 1", ErrInvalid}, {"unavailable", "exit 2", ErrUnavailable},
+		{"invalid", "printf 'VIDEO_ERROR_V1 video_spec_unsupported unknown\\n'; exit 1", ErrInvalid},
+		{"startup_error", "exit 1", ErrUnavailable}, {"unavailable", "exit 2", ErrUnavailable},
 		{"wrong_protocol", "printf PDF_OK_V1", ErrUnavailable},
 		{"oversized_reply", "printf '%0100d' 1", ErrUnavailable},
 		{"timeout", "sleep 30 & wait", ErrUnavailable},
